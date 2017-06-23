@@ -28,6 +28,11 @@ $(call inherit-product-if-exists, external/tools/tools.mk)
 PRODUCT_PACKAGES += \
     vintf
 
+## Dex
+ifeq ($(TARGET_BUILD_VARIANT), user)
+    PRODUCT_SYSTEM_SERVER_DEBUG_INFO := false
+endif
+
 ## Extra
 PRODUCT_PACKAGES += \
     MarkupGoogle \
