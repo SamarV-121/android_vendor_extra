@@ -31,6 +31,7 @@ endif
 
 ## Overlays
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
+PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay
 
 ## PixelLauncher
 PRODUCT_PACKAGES += \
