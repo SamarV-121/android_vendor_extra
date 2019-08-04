@@ -21,6 +21,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     service.adb.root=1
 endif
 
+# Extra
+PRODUCT_PACKAGES += \
+    extra.rc
+
 # SU
 ifeq ($(WITH_SU), true)
 PRODUCT_PACKAGES += Superuser phh-su

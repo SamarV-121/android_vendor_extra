@@ -33,6 +33,14 @@ LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
 LOCAL_OVERRIDES_PACKAGES := SnapdragonCamera Snap Camera2
 include $(BUILD_PREBUILT)
 
+# Extra
+include $(CLEAR_VARS)
+LOCAL_MODULE       := extra.rc
+LOCAL_MODULE_CLASS := ETC
+LOCAL_SRC_FILES    := etc/init/extra.rc
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/init
+include $(BUILD_PREBUILT)
+
 # SU
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := bin/su
