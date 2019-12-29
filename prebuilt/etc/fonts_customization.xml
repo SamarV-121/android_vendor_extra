@@ -21,4 +21,53 @@
     </family>
     <alias name="rubik-medium" to="rubik" weight="500" />
     <alias name="rubik-bold" to="rubik" weight="700" />
+
+    <family customizationType="new-named-family" name="googlesans">
+        <font weight="400" style="normal">GoogleSans-Regular.ttf</font>
+        <font weight="400" style="italic">GoogleSans-Italic.ttf</font>
+        <font weight="500" style="normal">GoogleSans-Medium.ttf</font>
+        <font weight="500" style="italic">GoogleSans-MediumItalic.ttf</font>
+        <font weight="700" style="normal">GoogleSans-Bold.ttf</font>
+        <font weight="700" style="italic">GoogleSans-BoldItalic.ttf</font>
+    </family>
+    <alias name="googlesans-medium" to="google-sans" weight="500" />
+    <alias name="googlesans-semi-bold" to="google-sans" weight="600" />
+    <alias name="googlesans-bold" to="google-sans" weight="700" />
+    <alias name="times" to="google-sans" />
+    <alias name="times new roman" to="google-sans" />
+    <alias name="palatino" to="google-sans" />
+    <alias name="georgia" to="google-sans" />
+    <alias name="baskerville" to="google-sans" />
+    <alias name="goudy" to="google-sans" />
+    <alias name="fantasy" to="google-sans" />
+    <alias name="ITC Stone Serif" to="google-sans" />
+
+    <family customizationType="new-named-family" name="oneplusslate">
+        <font weight="300" style="normal">SlateFromOP-Light.ttf</font>
+        <font weight="400" style="normal">SlateFromOP-Regular.ttf</font>
+    </family>
+    <alias name="oneplusslate-semi-bold" to="oneplusslate" weight="600" />
+    <alias name="oneplusslate-bold" to="oneplusslate" weight="700" />
+    <alias name="times" to="oneplusslate" />
+    <alias name="times new roman" to="oneplusslate" />
+    <alias name="palatino" to="oneplusslate" />
+    <alias name="georgia" to="oneplusslate" />
+    <alias name="baskerville" to="oneplusslate" />
+    <alias name="goudy" to="oneplusslate" />
+    <alias name="fantasy" to="oneplusslate" />
+    <alias name="ITC Stone Serif" to="oneplusslate" />
+
+    <family customizationType="new-named-family" name="samsungone">
+        <font weight="400" style="normal">SamsungOne.ttf</font>
+    </family>
+    <alias name="samsungone-semi-bold" to="samsungone" weight="600" />
+    <alias name="samsungone-bold" to="samsungone" weight="700" />
+    <alias name="times" to="samsungone" />
+    <alias name="times new roman" to="samsungone" />
+    <alias name="palatino" to="samsungone" />
+    <alias name="georgia" to="samsungone" />
+    <alias name="baskerville" to="samsungone" />
+    <alias name="goudy" to="samsungone" />
+    <alias name="fantasy" to="samsungone" />
+    <alias name="ITC Stone Serif" to="samsungone" />
 </fonts-modification>

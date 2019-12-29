@@ -56,7 +56,8 @@ endif
 
 # Fonts
 PRODUCT_COPY_FILES += \
-    vendor/extra/prebuilt/etc/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml
+    vendor/extra/prebuilt/etc/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml \
+    $(call find-copy-subdir-files,*,vendor/extra/prebuilt/fonts,$(TARGET_COPY_OUT_PRODUCT)/fonts)
 
 # StichImage
 PRODUCT_PACKAGES += \
@@ -65,6 +66,11 @@ PRODUCT_PACKAGES += \
 # Overlays
 PRODUCT_PACKAGE_OVERLAYS += \
 	vendor/extra/overlay
+
+PRODUCT_PACKAGES += \
+    FontGoogleSansOverlay \
+    FontOneplusSlateSource \
+    FontSamsungOneSourceOverlay
 
 # IORap app launch prefetching using Perfetto traces and madvise
 PRODUCT_PRODUCT_PROPERTIES += \
