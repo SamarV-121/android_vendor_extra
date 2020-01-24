@@ -3,6 +3,10 @@ ifeq ($(WITH_GMS), true)
 $(call inherit-product, vendor/gapps/gapps.mk)
 endif
 
+# Charger
+PRODUCT_PACKAGES += \
+    product_charger_res_images
+
 # Debugging
 ifeq ($(WITH_DEBUGGING), true)
 PRODUCT_PACKAGES += debugging.rc
