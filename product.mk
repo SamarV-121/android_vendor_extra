@@ -34,6 +34,10 @@ endif
 PRODUCT_PACKAGES += \
     iperf3
 
+# Default ADB shell prompt
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.sys.adb.shell=/system/xbin/bash
+
 # Extra
 PRODUCT_PACKAGES += \
     extra.rc
