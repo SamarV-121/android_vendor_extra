@@ -31,6 +31,8 @@ PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.usb.config=adb \
     service.adb.root=1
 endif
+PRODUCT_PACKAGES += \
+    iperf3
 
 # Extra
 PRODUCT_PACKAGES += \
