@@ -1,0 +1,29 @@
+From 8a451791498a395812773bd3b9966e26866e2f11 Mon Sep 17 00:00:00 2001
+From: TheScarastic <warabhishek@gmail.com>
+Date: Fri, 9 Oct 2020 07:31:35 +0000
+Subject: [PATCH] copy files to zip from system
+
+For some reason in android11 it fails to copy to $OUT/install, so copy to system as a temporary workaround till the root cause is discovered
+
+Change-Id: I064e302c4733e26935a87e2fbcf1304accc52af8
+Signed-off-by: Akhil Narang <me@akhilnarang.dev>
+---
+ core/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/core/Makefile b/core/Makefile
+index 9f5ec70..949f410 100644
+--- a/core/Makefile
++++ b/core/Makefile
+@@ -4681,7 +4681,7 @@ ifneq (,$(INSTALLED_RECOVERYIMAGE_TARGET)$(filter true,$(BOARD_USES_RECOVERY_AS_
+ 	    $(TARGET_RECOVERY_ROOT_OUT),$(zip_root)/$(PRIVATE_RECOVERY_OUT)/RAMDISK)
+ 	@# OTA install helpers
+ 	$(hide) $(call package_files-copy-root, \
+-	    $(PRODUCT_OUT)/install,$(zip_root)/INSTALL)
++	    $(TARGET_OUT)/install,$(zip_root)/INSTALL)
+ ifdef INSTALLED_KERNEL_TARGET
+ 	cp $(INSTALLED_KERNEL_TARGET) $(zip_root)/$(PRIVATE_RECOVERY_OUT)/
+ endif
+-- 
+2.28.0
+

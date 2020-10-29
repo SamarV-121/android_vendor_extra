@@ -1,0 +1,81 @@
+From e8b16f2cc2e4e5c3e04f335aaf3cea46af5d2d30 Mon Sep 17 00:00:00 2001
+From: SamarV-121 <samarvispute121@gmail.com>
+Date: Thu, 22 Oct 2020 13:05:23 +0000
+Subject: [PATCH 1/2] hidl/touch: Add system varient support
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ hidl/touch/Android.bp                         | 22 ++++++++++++++-----
+ .../lineage.touch@1.0-service.samsung.rc      |  4 ++++
+ hidl/touch/service.cpp                        |  4 ++++
+ 3 files changed, 24 insertions(+), 6 deletions(-)
+ create mode 100644 hidl/touch/lineage.touch@1.0-service.samsung.rc
+
+diff --git a/hidl/touch/Android.bp b/hidl/touch/Android.bp
+index 2f837d1..0939160 100644
+--- a/hidl/touch/Android.bp
++++ b/hidl/touch/Android.bp
+@@ -12,14 +12,10 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ 
+-cc_binary {
+-    name: "vendor.lineage.touch@1.0-service.samsung",
+-    init_rc: ["vendor.lineage.touch@1.0-service.samsung.rc"],
++cc_defaults {
++    name: "touch_samsung_defaults",
+     defaults: ["hidl_defaults"],
+     relative_install_path: "hw",
+-    // FIXME: this should be 'vendor: true' for modules that will eventually be
+-    // on AOSP.
+-    proprietary: true,
+     srcs: [
+         "GloveMode.cpp",
+         "KeyDisabler.cpp",
+@@ -35,3 +31,17 @@ cc_binary {
+         "vendor.lineage.touch@1.0",
+     ],
+ }
++
++cc_binary {
++    name: "lineage.touch@1.0-service.samsung",
++    init_rc: ["lineage.touch@1.0-service.samsung.rc"],
++    defaults: ["touch_samsung_defaults"],
++    cflags: ["-DLIVES_IN_SYSTEM"],
++}
++
++cc_binary {
++    name: "vendor.lineage.touch@1.0-service.samsung",
++    init_rc: ["vendor.lineage.touch@1.0-service.samsung.rc"],
++    defaults: ["touch_samsung_defaults"],
++    proprietary: true,
++}
+diff --git a/hidl/touch/lineage.touch@1.0-service.samsung.rc b/hidl/touch/lineage.touch@1.0-service.samsung.rc
+new file mode 100644
+index 0000000..bf201bf
+--- /dev/null
++++ b/hidl/touch/lineage.touch@1.0-service.samsung.rc
+@@ -0,0 +1,4 @@
++service touch-hal-1-0-samsung /system/bin/hw/lineage.touch@1.0-service.samsung
++    class hal
++    user system
++    group system
+diff --git a/hidl/touch/service.cpp b/hidl/touch/service.cpp
+index e12326c..42da35b 100644
+--- a/hidl/touch/service.cpp
++++ b/hidl/touch/service.cpp
+@@ -14,7 +14,11 @@
+  * limitations under the License.
+  */
+ 
++#ifdef LIVES_IN_SYSTEM
++#define LOG_TAG "lineage.touch@1.0-service.samsung"
++#else
+ #define LOG_TAG "vendor.lineage.touch@1.0-service.samsung"
++#endif
+ 
+ #include <android-base/logging.h>
+ #include <binder/ProcessState.h>
+-- 
+2.25.1
+

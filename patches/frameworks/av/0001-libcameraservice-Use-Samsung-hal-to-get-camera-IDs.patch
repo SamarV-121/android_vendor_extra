@@ -1,0 +1,74 @@
+From 41c81f301436427951e690fb76e59e976c36cc7d Mon Sep 17 00:00:00 2001
+From: SamarV-121 <samarvispute121@gmail.com>
+Date: Thu, 22 Oct 2020 13:24:53 +0000
+Subject: [PATCH 1/2] libcameraservice: Use Samsung hal to get camera IDs
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+Change-Id: I751c350962d03aee3a4b6a57a1b63c7ae90cb740
+---
+ services/camera/libcameraservice/Android.bp         |  3 ++-
+ .../common/CameraProviderManager.cpp                | 13 +++++++++++--
+ 2 files changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/services/camera/libcameraservice/Android.bp b/services/camera/libcameraservice/Android.bp
+index 7e981b4..5e0c01b 100644
+--- a/services/camera/libcameraservice/Android.bp
++++ b/services/camera/libcameraservice/Android.bp
+@@ -128,7 +128,8 @@ cc_library_shared {
+         "android.hardware.camera.device@3.3",
+         "android.hardware.camera.device@3.4",
+         "android.hardware.camera.device@3.5",
+-        "android.hardware.camera.device@3.6"
++        "android.hardware.camera.device@3.6",
++        "vendor.samsung.hardware.camera.provider@3.0",
+     ],
+ 
+     static_libs: [
+diff --git a/services/camera/libcameraservice/common/CameraProviderManager.cpp b/services/camera/libcameraservice/common/CameraProviderManager.cpp
+index 32d118d..5e6d04a 100644
+--- a/services/camera/libcameraservice/common/CameraProviderManager.cpp
++++ b/services/camera/libcameraservice/common/CameraProviderManager.cpp
+@@ -21,6 +21,7 @@
+ #include "CameraProviderManager.h"
+ 
+ #include <android/hardware/camera/device/3.5/ICameraDevice.h>
++#include <vendor/samsung/hardware/camera/provider/3.0/ISehCameraProvider.h>
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -1320,6 +1321,9 @@ status_t CameraProviderManager::ProviderInfo::initialize(
+     ALOGI("Connecting to new camera provider: %s, isRemote? %d",
+             mProviderName.c_str(), interface->isRemote());
+ 
++    auto samsungCast = vendor::samsung::hardware::camera::provider::V3_0::ISehCameraProvider::castFrom(interface);
++    auto samsungProvider = samsungCast.isOk() ? static_cast<sp<vendor::samsung::hardware::camera::provider::V3_0::ISehCameraProvider>>(samsungCast) : nullptr;
++
+     // Determine minor version
+     mMinorVersion = 4;
+     auto cast2_6 = provider::V2_6::ICameraProvider::castFrom(interface);
+@@ -1375,7 +1379,7 @@ status_t CameraProviderManager::ProviderInfo::initialize(
+     Status status;
+     // Get initial list of camera devices, if any
+     std::vector<std::string> devices;
+-    hardware::Return<void> ret = interface->getCameraIdList([&status, this, &devices](
++    auto cb = [&status, this, &devices](
+             Status idStatus,
+             const hardware::hidl_vec<hardware::hidl_string>& cameraDeviceNames) {
+         status = idStatus;
+@@ -1392,7 +1396,12 @@ status_t CameraProviderManager::ProviderInfo::initialize(
+                     mProviderPublicCameraIds.push_back(id);
+                 }
+             }
+-        } });
++        } };
++    hardware::Return<void> ret;
++    if(samsungProvider != nullptr)
++        ret = samsungProvider->sehGetCameraIdList(cb);
++    else
++        ret = interface->getCameraIdList(cb);
+     if (!ret.isOk()) {
+         ALOGE("%s: Transaction error in getting camera ID list from provider '%s': %s",
+                 __FUNCTION__, mProviderName.c_str(), linked.description().c_str());
+-- 
+2.25.1
+

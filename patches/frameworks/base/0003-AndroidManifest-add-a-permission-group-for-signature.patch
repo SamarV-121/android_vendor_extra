@@ -1,0 +1,87 @@
+From 92dda4f779fbb9063d102cc15035f7b5f84ab6b7 Mon Sep 17 00:00:00 2001
+From: Vachounet <vachounet@live.fr>
+Date: Wed, 12 Feb 2020 11:34:33 +0100
+Subject: [PATCH 03/13] AndroidManifest: add a permission group for signature
+ spoofing
+
+Needed by PackageInstaller while checking for modern permission group
+
+Change-Id: Ibb402960dcde6d21106d1481ca7c3cd314fd2ac1
+Signed-off-by: Anirudh Gupta <anirudhgupta109@gmail.com>
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ api/current.txt                 | 1 +
+ core/res/AndroidManifest.xml    | 8 ++++++++
+ core/res/res/values/strings.xml | 9 ++++++++-
+ non-updatable-api/current.txt   | 1 +
+ 4 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/api/current.txt b/api/current.txt
+index 73fb59fedab..17cf63d7faa 100644
+--- a/api/current.txt
++++ b/api/current.txt
+@@ -183,6 +183,7 @@ package android {
+     field public static final String CALL_LOG = "android.permission-group.CALL_LOG";
+     field public static final String CAMERA = "android.permission-group.CAMERA";
+     field public static final String CONTACTS = "android.permission-group.CONTACTS";
++    field public static final String FAKE_PACKAGE = "android.permission-group.FAKE_PACKAGE";
+     field public static final String LOCATION = "android.permission-group.LOCATION";
+     field public static final String MICROPHONE = "android.permission-group.MICROPHONE";
+     field public static final String PHONE = "android.permission-group.PHONE";
+diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
+index 4d2f9ba38e0..daf7e74d8ef 100644
+--- a/core/res/AndroidManifest.xml
++++ b/core/res/AndroidManifest.xml
+@@ -2838,9 +2838,17 @@
+         android:description="@string/permdesc_getPackageSize"
+         android:protectionLevel="normal" />
+ 
++    <!-- Dummy user-facing group for faking package signature -->
++    <permission-group android:name="android.permission-group.FAKE_PACKAGE"
++        android:label="@string/permgrouplab_fake_package_signature"
++        android:description="@string/permgroupdesc_fake_package_signature"
++        android:request="@string/permgrouprequest_fake_package_signature"
++        android:priority="100" />
++
+     <!-- Allows an application to change the package signature as
+          seen by applications -->
+     <permission android:name="android.permission.FAKE_PACKAGE_SIGNATURE"
++        android:permissionGroup="android.permission-group.UNDEFINED"
+         android:protectionLevel="dangerous"
+         android:label="@string/permlab_fakePackageSignature"
+         android:description="@string/permdesc_fakePackageSignature" />
+diff --git a/core/res/res/values/strings.xml b/core/res/res/values/strings.xml
+index 8ee0a830217..86a11a50d3a 100644
+--- a/core/res/res/values/strings.xml
++++ b/core/res/res/values/strings.xml
+@@ -851,7 +851,14 @@
+     <string name="permlab_fakePackageSignature">Spoof package signature</string>
+     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+     <string name="permdesc_fakePackageSignature">Allows the app to pretend to be a different app. Malicious applications might be able to use this to access private application data. Legitimate uses include an emulator pretending to be what it emulates. Grant this permission with caution only!</string>
+-    
++    <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
++    <string name="permgrouplab_fake_package_signature">Spoof package signature</string>
++    <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
++    <string name="permgroupdesc_fake_package_signature">allow to spoof package signature</string>
++    <!-- Message shown to the user when the apps requests permission from this group. If ever possible this should stay below 80 characters (assuming the parameters takes 20 characters). Don't abbreviate until the message reaches 120 characters though. [CHAR LIMIT=120] -->
++    <string name="permgrouprequest_fake_package_signature">Allow
++        &lt;b><xliff:g id="app_name" example="Gmail">%1$s</xliff:g>&lt;/b> to spoof package signature?</string>
++
+     <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+     <string name="permlab_statusBar">disable or modify status bar</string>
+     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+diff --git a/non-updatable-api/current.txt b/non-updatable-api/current.txt
+index c29feb9cd7b..57748a8090a 100644
+--- a/non-updatable-api/current.txt
++++ b/non-updatable-api/current.txt
+@@ -183,6 +183,7 @@ package android {
+     field public static final String CALL_LOG = "android.permission-group.CALL_LOG";
+     field public static final String CAMERA = "android.permission-group.CAMERA";
+     field public static final String CONTACTS = "android.permission-group.CONTACTS";
++    field public static final String FAKE_PACKAGE = "android.permission-group.FAKE_PACKAGE";
+     field public static final String LOCATION = "android.permission-group.LOCATION";
+     field public static final String MICROPHONE = "android.permission-group.MICROPHONE";
+     field public static final String PHONE = "android.permission-group.PHONE";
+-- 
+2.28.0
+

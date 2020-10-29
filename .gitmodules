@@ -1,0 +1,3 @@
+[submodule "faceunlock"]
+	path = faceunlock
+	url = https://gitlab.com/SamarV-121/android_external_motorola_faceunlock
