@@ -1,7 +1,7 @@
 From 7214e52a4e53060b641c46695c9ebafc480788a0 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Sat, 19 Sep 2020 21:23:32 -0700
-Subject: [PATCH 09/13] GlobalScreenshot: Speed up actions expansion animation
+Subject: [PATCH 09/15] GlobalScreenshot: Speed up actions expansion animation
 
 400 ms feels too long for this, especially when the actions already take
 so long to show up due to how long saving the screenshot takes.

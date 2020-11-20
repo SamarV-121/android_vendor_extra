@@ -2,7 +2,7 @@ From 75fa1888e46f6dc212bea4f4b339f0323c2c58a8 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=3D=3FUTF-8=3Fq=3FBernhard=3D20Rosenkr=3DC3=3DA4nzer=3F=3D?=
  <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
-Subject: [PATCH 02/13] base: Add permission to allow an APK to fake a
+Subject: [PATCH 02/15] base: Add permission to allow an APK to fake a
  signature.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -69,7 +69,7 @@ index c3173efcafd..5c402aeb113 100644
 +        <!-- The (faked) microg fused location provider (a free reimplementation) -->
 +        <item>com.google.android.gms</item>
      </string-array>
- 
+
      <!-- This string array can be overriden to enable test location providers initially. -->
 diff --git a/core/res/res/values/strings.xml b/core/res/res/values/strings.xml
 index 0c8745392f5..8ee0a830217 100644

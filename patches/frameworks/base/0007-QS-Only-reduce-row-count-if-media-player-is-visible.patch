@@ -1,7 +1,7 @@
 From d18c9ac1c7b76a94a9b7ade85f3029c0b27ccb30 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 17 Sep 2020 23:18:28 -0700
-Subject: [PATCH 07/13] QS: Only reduce row count if media player is visible
+Subject: [PATCH 07/15] QS: Only reduce row count if media player is visible
 
 There's no need to always force qs_less_rows here. The QS layout code
 will automatically reduce the amount of rows in order to fit everything
