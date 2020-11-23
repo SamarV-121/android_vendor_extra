@@ -1,6 +1,7 @@
 on post-fs-data
 
     rm /data/debug.logcat.txt
+    rm /data/debug.logcat.txt
 
 service debug_kernel /system/bin/sh -c "cat /proc/kmsg > /data/debug.kernel.txt"
     class main

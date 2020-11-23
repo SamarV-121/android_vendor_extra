@@ -4,7 +4,14 @@ $(call inherit-product, vendor/gapps/gapps.mk)
 endif
 
 # Debugging
+ifeq ($(WITH_DEBUGGING), true)
 PRODUCT_PACKAGES += debugging.rc
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    ro.adb.secure=0 \
+    persist.service.adb.enable=1 \
+    persist.sys.usb.config=adb \
+    service.adb.root=1
+endif
 
 # Face Unlock
 ifneq ($(TARGET_DISABLE_ALTERNATIVE_FACE_UNLOCK), true)
