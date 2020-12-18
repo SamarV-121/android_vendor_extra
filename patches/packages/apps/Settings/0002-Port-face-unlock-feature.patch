@@ -1,4 +1,4 @@
-From 7065d7129b9d6b8460ed1ef71f8ef111f6efa2ba Mon Sep 17 00:00:00 2001
+From d75007e25d70b23ffed477b3000712d198d250da Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Thu, 26 Mar 2020 04:56:47 -0300
 Subject: [PATCH 2/4] Port face unlock feature
@@ -702,12 +702,12 @@ index d450fef..25f140a 100644
              android:key="security_settings_face_require_attention"
              android:title="@string/security_settings_face_settings_require_attention"
 diff --git a/src/com/android/settings/Utils.java b/src/com/android/settings/Utils.java
-index 64919d9..f970af5 100644
+index a7503e4..38a8e15 100644
 --- a/src/com/android/settings/Utils.java
 +++ b/src/com/android/settings/Utils.java
-@@ -1137,4 +1137,19 @@ public final class Utils extends com.android.settingslib.Utils {
-         drawable.draw(canvas);
-         return roundedBitmap;
+@@ -1177,4 +1177,19 @@ public final class Utils extends com.android.settingslib.Utils {
+         }
+         return input;
      }
 +
 +    public static boolean isFaceDisabledByAdmin(Context context) {
@@ -1108,5 +1108,5 @@ index c8288c6..5d289e6 100644
          securityPreferenceControllers.add(new ChangeScreenLockPreferenceController(context, host));
          controllers.add(new PreferenceCategoryController(context, SECURITY_CATEGORY)
 -- 
-2.28.0
+2.20.1
 

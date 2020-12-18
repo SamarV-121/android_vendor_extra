@@ -1,7 +1,7 @@
-From ef3c575a379d6ea85c21bc570da58dca8ba5ed87 Mon Sep 17 00:00:00 2001
+From e4fa93f27a79a87924d9cd3ada8ddb01c4291c28 Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 14 Oct 2020 11:43:10 +0200
-Subject: [PATCH 01/15] SystemUI: remove black bg from power menu
+Subject: [PATCH 01/14] SystemUI: remove black bg from power menu
 
 And allow blur
 
@@ -15,10 +15,10 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  2 files changed, 1 insertion(+), 7 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
-index 47a63564d01..ac158d7645c 100644
+index 2c4fbd0b..cf8fe621 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
-@@ -2566,7 +2566,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+@@ -2570,7 +2570,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
              initializeWalletView();
              if (mBackgroundDrawable == null) {
                  mBackgroundDrawable = new ScrimDrawable();
@@ -27,7 +27,7 @@ index 47a63564d01..ac158d7645c 100644
              }
              getWindow().setBackgroundDrawable(mBackgroundDrawable);
          }
-@@ -2603,7 +2603,6 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+@@ -2607,7 +2607,6 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
              if (!(mBackgroundDrawable instanceof ScrimDrawable)) {
                  return;
              }
@@ -36,7 +36,7 @@ index 47a63564d01..ac158d7645c 100644
              if (colors.supportsDarkText()) {
                  decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR |
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
-index 0445c9879ac..8018d5aaa5a 100644
+index 0445c987..8018d5aa 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 @@ -174,12 +174,7 @@ class NotificationShadeDepthController @Inject constructor(
@@ -53,5 +53,5 @@ index 0445c9879ac..8018d5aaa5a 100644
  
          // Make blur be 0 if it is necessary to stop blur effect.
 -- 
-2.28.0
+2.20.1
 

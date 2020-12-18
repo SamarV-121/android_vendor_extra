@@ -1,0 +1,51 @@
+From 71bc224a2167a785024de3600c3f3af824d86cb8 Mon Sep 17 00:00:00 2001
+From: maxwen <max.weninger@gmail.com>
+Date: Tue, 9 Oct 2018 13:52:55 +0200
+Subject: [PATCH 3/3] av: camera: catch mad hals that mess up buffer time
+
+e.g. op6 hal does not send correct mTimestampOffset
+so calculate it every time if needed
+
+set TARGET_CAMERA_BOOTTIME_TIMESTAMP := true to enable
+
+Thanks to Luca Stefani <luca.stefani.ge1@gmail.com> for
+showing me the better place in Camera3Device instead
+of Camera3OutputStream
+
+Change-Id: I2971df8bda1ecd842f35ef25a1a63cdfd7c0e521
+---
+ services/camera/libcameraservice/Android.bp                | 1 +
+ services/camera/libcameraservice/device3/Camera3Device.cpp | 5 +++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/services/camera/libcameraservice/Android.bp b/services/camera/libcameraservice/Android.bp
+index 99ca362..a5d5a23 100644
+--- a/services/camera/libcameraservice/Android.bp
++++ b/services/camera/libcameraservice/Android.bp
+@@ -21,6 +21,7 @@ cc_library_shared {
+     defaults: [
+         "no_cameraserver_defaults",
+         "qti_camera_device_defaults",
++	"needs_camera_boottime",
+     ],
+ 
+     // Camera service source
+diff --git a/services/camera/libcameraservice/device3/Camera3Device.cpp b/services/camera/libcameraservice/device3/Camera3Device.cpp
+index d5f136b..fc3a5b4 100644
+--- a/services/camera/libcameraservice/device3/Camera3Device.cpp
++++ b/services/camera/libcameraservice/device3/Camera3Device.cpp
+@@ -321,6 +321,11 @@ status_t Camera3Device::initializeCommonLocked() {
+         mTimestampOffset = getMonoToBoottimeOffset();
+     }
+ 
++#ifdef TARGET_CAMERA_BOOTTIME_TIMESTAMP
++    // Always calculate the offset if requested
++    mTimestampOffset = getMonoToBoottimeOffset();
++#endif
++
+     // Will the HAL be sending in early partial result metadata?
+     camera_metadata_entry partialResultsCount =
+             mDeviceInfo.find(ANDROID_REQUEST_PARTIAL_RESULT_COUNT);
+-- 
+2.20.1
+

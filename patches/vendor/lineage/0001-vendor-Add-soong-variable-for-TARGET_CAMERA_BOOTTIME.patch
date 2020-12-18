@@ -1,0 +1,70 @@
+From 0f6ca84cfe147db7b37db81389efa4ac50a4b46d Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Mon, 23 Nov 2020 14:20:20 +0000
+Subject: [PATCH 1/1] vendor: Add soong variable for
+ TARGET_CAMERA_BOOTTIME_TIMESTAMP
+
+SamarV-121: Move it under lineageGlobalVars config namespace
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+Change-Id: I5a4cfa9dfdda59b48d02b4dd5ec70c4c16511536
+---
+ build/soong/Android.bp     | 19 +++++++++++++++++++
+ config/BoardConfigSoong.mk |  4 +++-
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/build/soong/Android.bp b/build/soong/Android.bp
+index 9d51417..4101eff 100644
+--- a/build/soong/Android.bp
++++ b/build/soong/Android.bp
+@@ -240,6 +240,25 @@ camera_in_mediaserver {
+     },
+ }
+ 
++soong_config_module_type {
++    name: "camera_boottime_timestamp",
++    module_type: "cc_defaults",
++    config_namespace: "lineageGlobalVars",
++    bool_variables: ["needs_camera_boottime_timestamp"],
++    properties: [
++        "cflags",
++    ],
++}
++
++camera_boottime_timestamp {
++    name: "needs_camera_boottime",
++    soong_config_variables: {
++        needs_camera_boottime_timestamp: {
++            cflags: ["-DTARGET_CAMERA_BOOTTIME_TIMESTAMP"],
++        },
++    },
++}
++
+ soong_config_module_type {
+     name: "bootloader_message_offset",
+     module_type: "cc_defaults",
+diff --git a/config/BoardConfigSoong.mk b/config/BoardConfigSoong.mk
+index 8d4ff5e..7b34372 100644
+--- a/config/BoardConfigSoong.mk
++++ b/config/BoardConfigSoong.mk
+@@ -38,7 +38,8 @@ SOONG_CONFIG_lineageGlobalVars += \
+     target_ld_shim_libs \
+     target_process_sdk_version_override \
+     target_surfaceflinger_fod_lib \
+-    uses_camera_parameter_lib
++    uses_camera_parameter_lib \
++    needs_camera_boottime_timestamp
+ 
+ SOONG_CONFIG_NAMESPACES += lineageNvidiaVars
+ SOONG_CONFIG_lineageNvidiaVars += \
+@@ -89,6 +90,7 @@ SOONG_CONFIG_lineageGlobalVars_target_ld_shim_libs := $(subst $(space),:,$(TARGE
+ SOONG_CONFIG_lineageGlobalVars_target_process_sdk_version_override := $(TARGET_PROCESS_SDK_VERSION_OVERRIDE)
+ SOONG_CONFIG_lineageGlobalVars_target_surfaceflinger_fod_lib := $(TARGET_SURFACEFLINGER_FOD_LIB)
+ SOONG_CONFIG_lineageGlobalVars_uses_camera_parameter_lib := $(TARGET_SPECIFIC_CAMERA_PARAMETER_LIBRARY)
++SOONG_CONFIG_lineageGlobalVars_needs_camera_boottime_timestamp := $(TARGET_CAMERA_BOOTTIME_TIMESTAMP)
+ ifneq ($(filter $(UM_PLATFORMS),$(TARGET_BOARD_PLATFORM)),)
+ SOONG_CONFIG_lineageQcomVars_qcom_soong_namespace := $(QCOM_SOONG_NAMESPACE)
+ endif
+-- 
+2.20.1
+

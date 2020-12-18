@@ -1,7 +1,7 @@
-From 01342ce8e5d89fbef07cc71f0da9a3dbdaf08513 Mon Sep 17 00:00:00 2001
+From 23b6522acb1e2c996b67a53ad9b0bd7a810c3ce1 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Wed, 25 Mar 2020 22:08:42 -0300
-Subject: [PATCH 04/15] Port face unlock feature
+Subject: [PATCH 04/14] Port face unlock feature
 
 * From motorola/foles_retail/foles:10/QPF30.130-15-7/38ece7:user/release-keys
 
@@ -10,11 +10,11 @@ Change-Id: Ic324086a5da214106f7e2517d766d4c6c7192aaa
  .../android/hardware/face/FaceManager.java    |  53 ++
  .../android/hardware/face/IFaceService.aidl   |   5 +
  services/core/Android.bp                      |   1 +
- .../server/biometrics/face/FaceService.java   | 456 +++++++++++++++++-
- 4 files changed, 513 insertions(+), 2 deletions(-)
+ .../server/biometrics/face/FaceService.java   | 457 +++++++++++++++++-
+ 4 files changed, 514 insertions(+), 2 deletions(-)
 
 diff --git a/core/java/android/hardware/face/FaceManager.java b/core/java/android/hardware/face/FaceManager.java
-index 23e38aeb51b..385d0e71c13 100644
+index 23e38aeb..385d0e71 100644
 --- a/core/java/android/hardware/face/FaceManager.java
 +++ b/core/java/android/hardware/face/FaceManager.java
 @@ -246,6 +246,59 @@ public class FaceManager implements BiometricAuthenticator, BiometricFaceConstan
@@ -78,7 +78,7 @@ index 23e38aeb51b..385d0e71c13 100644
       * Request face authentication enrollment. This call operates the face authentication hardware
       * and starts capturing images. Progress will be indicated by callbacks to the
 diff --git a/core/java/android/hardware/face/IFaceService.aidl b/core/java/android/hardware/face/IFaceService.aidl
-index e2ab529d1e8..bc82740721a 100644
+index e2ab529d..bc827407 100644
 --- a/core/java/android/hardware/face/IFaceService.aidl
 +++ b/core/java/android/hardware/face/IFaceService.aidl
 @@ -108,4 +108,9 @@ interface IFaceService {
@@ -92,7 +92,7 @@ index e2ab529d1e8..bc82740721a 100644
 +            String opPackageName, in int [] disabledFeatures);
  }
 diff --git a/services/core/Android.bp b/services/core/Android.bp
-index 2510f678381..08418a32ce5 100644
+index 2510f678..08418a32 100644
 --- a/services/core/Android.bp
 +++ b/services/core/Android.bp
 @@ -134,6 +134,7 @@ java_library_static {
@@ -104,7 +104,7 @@ index 2510f678381..08418a32ce5 100644
  }
  
 diff --git a/services/core/java/com/android/server/biometrics/face/FaceService.java b/services/core/java/com/android/server/biometrics/face/FaceService.java
-index 72e1bbbcba6..bb3961ff532 100644
+index e5a18984..5e71986a 100644
 --- a/services/core/java/com/android/server/biometrics/face/FaceService.java
 +++ b/services/core/java/com/android/server/biometrics/face/FaceService.java
 @@ -28,8 +28,14 @@ import android.app.Notification;
@@ -154,7 +154,7 @@ index 72e1bbbcba6..bb3961ff532 100644
  /**
   * A service to manage multiple clients that want to access the face HAL API.
   * The service is responsible for maintaining a list of clients and dispatching all
-@@ -107,6 +120,229 @@ public class FaceService extends BiometricServiceBase {
+@@ -107,6 +120,230 @@ public class FaceService extends BiometricServiceBase {
      private static final String SKIP_KEYGUARD_ACQUIRE_IGNORE_LIST =
              "com.android.server.biometrics.face.skip_keyguard_acquire_ignore_list";
  
@@ -182,12 +182,13 @@ index 72e1bbbcba6..bb3961ff532 100644
 +            mHandler.post(new Runnable() {
 +                @Override
 +                public final void run() {
-+                    Face face = new Face("", faceId, MOTO_DEVICE_ID);
++                    final Face face = new Face("", faceId, MOTO_DEVICE_ID);
 +                    ArrayList<Byte> token_AL = new ArrayList<>(token.length);
 +                    for (byte b : token) {
 +                        token_AL.add(new Byte(b));
 +                    }
-+                    FaceService.super.handleAuthenticated(face, token_AL);
++                    final boolean authenticated = faceId != 0;
++                    FaceService.super.handleAuthenticated(authenticated, face, token_AL);
 +                }
 +            });
 +        }
@@ -384,7 +385,7 @@ index 72e1bbbcba6..bb3961ff532 100644
      /**
       * Events for bugreports.
       */
-@@ -226,11 +462,17 @@ public class FaceService extends BiometricServiceBase {
+@@ -226,11 +463,17 @@ public class FaceService extends BiometricServiceBase {
  
          @Override
          public boolean shouldFrameworkHandleLockout() {
@@ -402,7 +403,7 @@ index 72e1bbbcba6..bb3961ff532 100644
              return mLastAcquire != FaceManager.FACE_ACQUIRED_NOT_DETECTED
                      && mLastAcquire != FaceManager.FACE_ACQUIRED_SENSOR_DIRTY;
          }
-@@ -375,6 +617,42 @@ public class FaceService extends BiometricServiceBase {
+@@ -375,6 +618,42 @@ public class FaceService extends BiometricServiceBase {
              return Status.OK;
          }
  
@@ -445,7 +446,7 @@ index 72e1bbbcba6..bb3961ff532 100644
          @Override // Binder call
          public void enroll(int userId, final IBinder token, final byte[] cryptoToken,
                  final IFaceServiceReceiver receiver, final String opPackageName,
-@@ -558,6 +836,20 @@ public class FaceService extends BiometricServiceBase {
+@@ -558,6 +837,20 @@ public class FaceService extends BiometricServiceBase {
                      UserHandle.getCallingUserId())) {
                  return false;
              }
@@ -466,7 +467,7 @@ index 72e1bbbcba6..bb3961ff532 100644
  
              final long token = Binder.clearCallingIdentity();
              try {
-@@ -984,6 +1276,20 @@ public class FaceService extends BiometricServiceBase {
+@@ -985,6 +1278,20 @@ public class FaceService extends BiometricServiceBase {
      private final DaemonWrapper mDaemonWrapper = new DaemonWrapper() {
          @Override
          public int authenticate(long operationId, int groupId) throws RemoteException {
@@ -487,7 +488,7 @@ index 72e1bbbcba6..bb3961ff532 100644
              IBiometricsFace daemon = getFaceDaemon();
              if (daemon == null) {
                  Slog.w(TAG, "authenticate(): no face HAL!");
-@@ -994,6 +1300,19 @@ public class FaceService extends BiometricServiceBase {
+@@ -995,6 +1302,19 @@ public class FaceService extends BiometricServiceBase {
  
          @Override
          public int cancel() throws RemoteException {
@@ -507,7 +508,7 @@ index 72e1bbbcba6..bb3961ff532 100644
              IBiometricsFace daemon = getFaceDaemon();
              if (daemon == null) {
                  Slog.w(TAG, "cancel(): no face HAL!");
-@@ -1004,6 +1323,20 @@ public class FaceService extends BiometricServiceBase {
+@@ -1005,6 +1325,20 @@ public class FaceService extends BiometricServiceBase {
  
          @Override
          public int remove(int groupId, int biometricId) throws RemoteException {
@@ -528,7 +529,7 @@ index 72e1bbbcba6..bb3961ff532 100644
              IBiometricsFace daemon = getFaceDaemon();
              if (daemon == null) {
                  Slog.w(TAG, "remove(): no face HAL!");
-@@ -1014,6 +1347,26 @@ public class FaceService extends BiometricServiceBase {
+@@ -1015,6 +1349,26 @@ public class FaceService extends BiometricServiceBase {
  
          @Override
          public int enumerate() throws RemoteException {
@@ -555,7 +556,7 @@ index 72e1bbbcba6..bb3961ff532 100644
              IBiometricsFace daemon = getFaceDaemon();
              if (daemon == null) {
                  Slog.w(TAG, "enumerate(): no face HAL!");
-@@ -1025,6 +1378,27 @@ public class FaceService extends BiometricServiceBase {
+@@ -1026,6 +1380,27 @@ public class FaceService extends BiometricServiceBase {
          @Override
          public int enroll(byte[] cryptoToken, int groupId, int timeout,
                  ArrayList<Integer> disabledFeatures) throws RemoteException {
@@ -583,7 +584,7 @@ index 72e1bbbcba6..bb3961ff532 100644
              IBiometricsFace daemon = getFaceDaemon();
              if (daemon == null) {
                  Slog.w(TAG, "enroll(): no face HAL!");
-@@ -1039,6 +1413,20 @@ public class FaceService extends BiometricServiceBase {
+@@ -1040,6 +1415,20 @@ public class FaceService extends BiometricServiceBase {
  
          @Override
          public void resetLockout(byte[] cryptoToken) throws RemoteException {
@@ -604,7 +605,7 @@ index 72e1bbbcba6..bb3961ff532 100644
              IBiometricsFace daemon = getFaceDaemon();
              if (daemon == null) {
                  Slog.w(TAG, "resetLockout(): no face HAL!");
-@@ -1076,6 +1464,8 @@ public class FaceService extends BiometricServiceBase {
+@@ -1077,6 +1466,8 @@ public class FaceService extends BiometricServiceBase {
                  .getIntArray(R.array.config_face_acquire_enroll_ignorelist);
          mEnrollIgnoreListVendor = getContext().getResources()
                  .getIntArray(R.array.config_face_acquire_vendor_enroll_ignorelist);
@@ -613,7 +614,7 @@ index 72e1bbbcba6..bb3961ff532 100644
      }
  
      @Override
-@@ -1091,6 +1481,11 @@ public class FaceService extends BiometricServiceBase {
+@@ -1092,6 +1483,11 @@ public class FaceService extends BiometricServiceBase {
      public void onStart() {
          super.onStart();
          publishBinderService(Context.FACE_SERVICE, new FaceServiceWrapper());
@@ -625,7 +626,7 @@ index 72e1bbbcba6..bb3961ff532 100644
          // Get the face daemon on FaceService's on thread so SystemServerInitThreadPool isn't
          // blocked
          SystemServerInitThreadPool.submit(() -> mHandler.post(this::getFaceDaemon),
-@@ -1139,6 +1534,28 @@ public class FaceService extends BiometricServiceBase {
+@@ -1140,6 +1536,28 @@ public class FaceService extends BiometricServiceBase {
  
      @Override
      protected void updateActiveGroup(int userId, String clientPackage) {
@@ -654,7 +655,7 @@ index 72e1bbbcba6..bb3961ff532 100644
          IBiometricsFace daemon = getFaceDaemon();
  
          if (daemon != null) {
-@@ -1189,7 +1606,16 @@ public class FaceService extends BiometricServiceBase {
+@@ -1190,7 +1608,16 @@ public class FaceService extends BiometricServiceBase {
  
      @Override
      protected void handleUserSwitching(int userId) {
@@ -672,7 +673,7 @@ index 72e1bbbcba6..bb3961ff532 100644
          // Will be updated when we get the callback from HAL
          mCurrentUserLockoutMode = AuthenticationClient.LOCKOUT_NONE;
      }
-@@ -1278,6 +1704,20 @@ public class FaceService extends BiometricServiceBase {
+@@ -1279,6 +1706,20 @@ public class FaceService extends BiometricServiceBase {
      }
  
      private long startGenerateChallenge(IBinder token) {
@@ -693,7 +694,7 @@ index 72e1bbbcba6..bb3961ff532 100644
          IBiometricsFace daemon = getFaceDaemon();
          if (daemon == null) {
              Slog.w(TAG, "startGenerateChallenge: no face HAL!");
-@@ -1292,6 +1732,17 @@ public class FaceService extends BiometricServiceBase {
+@@ -1293,6 +1734,17 @@ public class FaceService extends BiometricServiceBase {
      }
  
      private int startRevokeChallenge(IBinder token) {
@@ -711,7 +712,7 @@ index 72e1bbbcba6..bb3961ff532 100644
          IBiometricsFace daemon = getFaceDaemon();
          if (daemon == null) {
              Slog.w(TAG, "startRevokeChallenge: no face HAL!");
-@@ -1366,7 +1817,8 @@ public class FaceService extends BiometricServiceBase {
+@@ -1367,7 +1819,8 @@ public class FaceService extends BiometricServiceBase {
          // Additionally, this flag allows turning off face for a device
          // (either permanently through the build or on an individual device).
          if (SystemProperties.getBoolean("ro.face.disable_debug_data", false)
@@ -722,5 +723,5 @@ index 72e1bbbcba6..bb3961ff532 100644
          }
  
 -- 
-2.28.0
+2.20.1
 

@@ -1,7 +1,7 @@
-From d18c9ac1c7b76a94a9b7ade85f3029c0b27ccb30 Mon Sep 17 00:00:00 2001
+From a0e414a6fa221c5c5176aa4d78898744417b81a1 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 17 Sep 2020 23:18:28 -0700
-Subject: [PATCH 07/15] QS: Only reduce row count if media player is visible
+Subject: [PATCH 07/14] QS: Only reduce row count if media player is visible
 
 There's no need to always force qs_less_rows here. The QS layout code
 will automatically reduce the amount of rows in order to fit everything
@@ -14,7 +14,7 @@ Change-Id: I99101c6816b402a87d9e429cdcd0be86874bb26b
  1 file changed, 1 insertion(+), 2 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/qs/TileLayout.java b/packages/SystemUI/src/com/android/systemui/qs/TileLayout.java
-index 694492a3352..0a296bc0188 100644
+index 694492a3..0a296bc0 100644
 --- a/packages/SystemUI/src/com/android/systemui/qs/TileLayout.java
 +++ b/packages/SystemUI/src/com/android/systemui/qs/TileLayout.java
 @@ -48,8 +48,7 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
@@ -28,5 +28,5 @@ index 694492a3352..0a296bc0188 100644
  
      }
 -- 
-2.28.0
+2.20.1
 
