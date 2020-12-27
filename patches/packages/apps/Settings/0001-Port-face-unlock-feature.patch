@@ -1,7 +1,7 @@
-From d75007e25d70b23ffed477b3000712d198d250da Mon Sep 17 00:00:00 2001
+From 2c18536483d1f249ea0727fb0e9faa658b9d8dcb Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Thu, 26 Mar 2020 04:56:47 -0300
-Subject: [PATCH 2/4] Port face unlock feature
+Subject: [PATCH 1/4] Port face unlock feature
 
 * From motorola/foles_retail/foles:10/QPF30.130-15-7/38ece7:user/release-keys
 
@@ -739,7 +739,7 @@ index d815f57..cb53893 100644
      private TextView mErrorText;
      protected boolean mConfirmingCredentials;
 diff --git a/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java b/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java
-index 6709a6a..0c50aaa 100644
+index f876bb4..2959b22 100644
 --- a/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java
 +++ b/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java
 @@ -18,9 +18,11 @@ package com.android.settings.biometrics.face;
@@ -764,7 +764,7 @@ index 6709a6a..0c50aaa 100644
  
      private static final String TAG = "FaceIntro";
 @@ -97,6 +101,46 @@ public class FaceEnrollIntroduction extends BiometricEnrollIntroduction {
-                         ? R.string.security_settings_face_enroll_introduction_footer_part_2
+                         ? R.string.aosp_security_settings_face_enroll_introduction_footer_part_2
                          : R.string.security_settings_face_settings_footer_attention_not_supported;
          footer2.setText(footer2TextResource);
 +        if (FaceUnlockUtils.hasMotoFaceUnlock() && mHasPassword && mToken != null) {
@@ -1108,5 +1108,5 @@ index c8288c6..5d289e6 100644
          securityPreferenceControllers.add(new ChangeScreenLockPreferenceController(context, host));
          controllers.add(new PreferenceCategoryController(context, SECURITY_CATEGORY)
 -- 
-2.20.1
+2.29.2
 

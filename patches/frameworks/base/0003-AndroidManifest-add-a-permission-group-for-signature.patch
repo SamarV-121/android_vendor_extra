@@ -1,4 +1,4 @@
-From ea45bf61fba03172615e6f421c0467655486fb8e Mon Sep 17 00:00:00 2001
+From 6f0615f278798a30ccca7d03afa3315c4e67d3c8 Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 12 Feb 2020 11:34:33 +0100
 Subject: [PATCH 03/14] AndroidManifest: add a permission group for signature
@@ -83,5 +83,5 @@ index c29feb9c..57748a80 100644
      field public static final String MICROPHONE = "android.permission-group.MICROPHONE";
      field public static final String PHONE = "android.permission-group.PHONE";
 -- 
-2.20.1
+2.29.2
 

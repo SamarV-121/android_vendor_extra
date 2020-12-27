@@ -1,4 +1,4 @@
-From 0c6b72c7676b4ae16a61f81cd6d26cf8d346a5e3 Mon Sep 17 00:00:00 2001
+From 2fb069fdf9bb0546bac1cd1b61b177b8502f8786 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=3D=3FUTF-8=3Fq=3FBernhard=3D20Rosenkr=3DC3=3DA4nzer=3F=3D?=
  <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
@@ -141,5 +141,5 @@ index 60aae052..0ac63381 100644
      public void checkPackageStartable(String packageName, int userId) {
          final int callingUid = Binder.getCallingUid();
 -- 
-2.20.1
+2.29.2
 

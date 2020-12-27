@@ -1,7 +1,7 @@
-From 0612a7b645cfb15538eda38fd3fd174b8ac33374 Mon Sep 17 00:00:00 2001
+From 4a1b12f1725355159167a8010fab7bc7be6605f7 Mon Sep 17 00:00:00 2001
 From: DennySPb <dennyspb@gmail.com>
 Date: Wed, 14 Oct 2020 09:29:06 +0300
-Subject: [PATCH 11/14] FaceUnlock: drop lockouts completely
+Subject: [PATCH 10/14] FaceUnlock: drop lockouts completely
 
 our faceunlock service is a little buggy,
 after a night standby we see an excess of attempts,
@@ -58,5 +58,5 @@ index 37564d8a..989af286 100644
  
      /** Gets the face daemon */
 -- 
-2.20.1
+2.29.2
 

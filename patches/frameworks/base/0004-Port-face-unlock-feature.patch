@@ -1,4 +1,4 @@
-From 23b6522acb1e2c996b67a53ad9b0bd7a810c3ce1 Mon Sep 17 00:00:00 2001
+From 650869045d6602a211f4370e8149412d8bdc3026 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Wed, 25 Mar 2020 22:08:42 -0300
 Subject: [PATCH 04/14] Port face unlock feature
@@ -723,5 +723,5 @@ index e5a18984..5e71986a 100644
          }
  
 -- 
-2.20.1
+2.29.2
 

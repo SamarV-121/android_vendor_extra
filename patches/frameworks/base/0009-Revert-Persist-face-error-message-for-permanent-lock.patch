@@ -1,7 +1,7 @@
-From b99db023baa95322d6fa2b6f8c71cc399e122714 Mon Sep 17 00:00:00 2001
+From cd8ff75ec96b054b6e0d707c15ce34ec37390d07 Mon Sep 17 00:00:00 2001
 From: DennySPb <dennyspb@gmail.com>
 Date: Wed, 14 Oct 2020 09:20:37 +0300
-Subject: [PATCH 10/14] Revert "Persist face error message for permanent
+Subject: [PATCH 09/14] Revert "Persist face error message for permanent
  lockout"
 
 Restore pre-R FaceUnlok lockdown behaviour
@@ -18,10 +18,10 @@ Signed-off-by: DennySPb <dennyspb@gmail.com>
  3 files changed, 8 insertions(+), 8 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
-index 38cd3a64..5db19252 100644
+index a1305343..a07820df 100644
 --- a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
 +++ b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
-@@ -1961,8 +1961,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+@@ -1972,8 +1972,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
                  && !statusBarShadeLocked;
          final int user = getCurrentUser();
          final int strongAuth = mStrongAuthTracker.getStrongAuthForUser(user);
@@ -33,7 +33,7 @@ index 38cd3a64..5db19252 100644
                          || containsFlag(strongAuth, STRONG_AUTH_REQUIRED_AFTER_USER_LOCKDOWN);
          final boolean isEncryptedOrTimedOut =
                  containsFlag(strongAuth, STRONG_AUTH_REQUIRED_AFTER_BOOT)
-@@ -1976,9 +1977,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
+@@ -1987,9 +1988,9 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
          boolean becauseCannotSkipBouncer = !getUserCanSkipBouncer(user) || canBypass;
  
          // Scan even when encrypted or timeout to show a preemptive bouncer when bypassing.
@@ -83,5 +83,5 @@ index 5e71986a..37564d8a 100644
              } else {
                  mCurrentUserLockoutMode = AuthenticationClient.LOCKOUT_TIMED;
 -- 
-2.20.1
+2.29.2
 

@@ -1,4 +1,4 @@
-From e4fa93f27a79a87924d9cd3ada8ddb01c4291c28 Mon Sep 17 00:00:00 2001
+From eca83098844c42f22d690c2d954d31d626594f4f Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 14 Oct 2020 11:43:10 +0200
 Subject: [PATCH 01/14] SystemUI: remove black bg from power menu
@@ -53,5 +53,5 @@ index 0445c987..8018d5aa 100644
  
          // Make blur be 0 if it is necessary to stop blur effect.
 -- 
-2.20.1
+2.29.2
 

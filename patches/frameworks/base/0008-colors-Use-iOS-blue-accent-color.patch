@@ -1,7 +1,7 @@
-From b310c45d7e95c03f0bdb4f2c8861eeffae975129 Mon Sep 17 00:00:00 2001
+From a588a4af428ccb1b3f93283130016aac0b8a8d7e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 18 Sep 2020 23:02:09 -0700
-Subject: [PATCH 09/14] colors: Use iOS blue accent color
+Subject: [PATCH 08/14] colors: Use iOS blue accent color
 
 This is similar to the stock Pixel blue accent color, but it's slightly
 brighter and less saturated, which looks better in my opinion.
@@ -27,5 +27,5 @@ index 7a8f4119..db44e4b2 100644
  
      <color name="background_device_default_dark">@color/background_material_dark</color>
 -- 
-2.20.1
+2.29.2
 

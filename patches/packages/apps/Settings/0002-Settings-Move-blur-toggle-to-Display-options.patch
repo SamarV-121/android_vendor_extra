@@ -1,7 +1,7 @@
-From 2850477c7eb0f2a92969eceba2b8799c47e4454d Mon Sep 17 00:00:00 2001
+From 0bb0de8fc5a57987c5623d747069f0241b10122a Mon Sep 17 00:00:00 2001
 From: Jyotiraditya <imjyotiraditya@pm.me>
 Date: Tue, 17 Nov 2020 09:31:46 +0530
-Subject: [PATCH 1/4] Settings: Move blur toggle to Display options
+Subject: [PATCH 2/4] Settings: Move blur toggle to Display options
 
 Signed-off-by: Jyotiraditya <imjyotiraditya@pm.me>
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -17,10 +17,10 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  rename src/com/android/settings/{development => display}/EnableBlursPreferenceController.java (79%)
 
 diff --git a/res/xml/development_settings.xml b/res/xml/development_settings.xml
-index 0c43c8f..bf0152e 100644
+index a034279..f7e135a 100644
 --- a/res/xml/development_settings.xml
 +++ b/res/xml/development_settings.xml
-@@ -521,11 +521,6 @@
+@@ -516,11 +516,6 @@
              android:title="@string/hwui_force_dark_title"
              android:summary="@string/hwui_force_dark_summary" />
  
@@ -33,10 +33,10 @@ index 0c43c8f..bf0152e 100644
              android:key="force_msaa"
              android:title="@string/force_msaa"
 diff --git a/res/xml/display_settings.xml b/res/xml/display_settings.xml
-index 8244636..e3fcb6c 100644
+index 5398d2d..d883b7c 100644
 --- a/res/xml/display_settings.xml
 +++ b/res/xml/display_settings.xml
-@@ -187,6 +187,11 @@
+@@ -193,6 +193,11 @@
          android:defaultValue="false"
          lineage:requiresFeature="lineagehardware:FEATURE_HIGH_TOUCH_SENSITIVITY" />
  
@@ -69,10 +69,10 @@ index 20a33f0..3c17c0e 100644
          controllers.add(new VrDisplayPreferenceController(context));
          controllers.add(new ShowOperatorNamePreferenceController(context));
 diff --git a/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java b/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
-index 9add5c9..183fff3 100644
+index 901e5f4..903cee9 100644
 --- a/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
 +++ b/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
-@@ -497,7 +497,6 @@ public class DevelopmentSettingsDashboardFragment extends RestrictedDashboardFra
+@@ -533,7 +533,6 @@ public class DevelopmentSettingsDashboardFragment extends RestrictedDashboardFra
          controllers.add(new DebugGpuOverdrawPreferenceController(context));
          controllers.add(new DebugNonRectClipOperationsPreferenceController(context));
          controllers.add(new ForceDarkPreferenceController(context));
@@ -136,5 +136,5 @@ index 88e0db1..7ee2edb 100644
      }
  }
 -- 
-2.28.0
+2.29.2
 
