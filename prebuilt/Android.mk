@@ -14,6 +14,7 @@
 
 LOCAL_PATH := $(call my-dir)
 
+# Debugging
 include $(CLEAR_VARS)
 LOCAL_MODULE       := debugging.rc
 LOCAL_MODULE_TAGS  := optional
@@ -22,6 +23,7 @@ LOCAL_SRC_FILES    := etc/init/debugging.rc
 LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/init
 include $(BUILD_PREBUILT)
 
+# Flipendo
 include $(CLEAR_VARS)
 LOCAL_MODULE := Flipendo
 LOCAL_MODULE_TAGS := optional
@@ -30,4 +32,20 @@ LOCAL_CERTIFICATE := platform
 LOCAL_MODULE_CLASS := APPS
 LOCAL_SYSTEM_EXT_MODULE := true
 LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
+include $(BUILD_PREBUILT)
+
+# SU
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := bin/su
+LOCAL_MODULE := phh-su
+LOCAL_MODULE_CLASS := EXECUTABLES
+LOCAL_REQUIRED_MODULES := su.rc
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := su.rc
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_SRC_FILES    := etc/init/su.rc
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/init
 include $(BUILD_PREBUILT)

@@ -11,6 +11,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.service.adb.enable=1 \
     persist.sys.usb.config=adb \
     service.adb.root=1
+
+# SU
+PRODUCT_PACKAGES += \
+    phh-su
 endif
 
 # Disable RescueParty due to high risk of data loss
@@ -40,3 +44,5 @@ PRODUCT_COPY_FILES += \
 
 # Properties
 BUILD_FINGERPRINT := google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys
+
+
