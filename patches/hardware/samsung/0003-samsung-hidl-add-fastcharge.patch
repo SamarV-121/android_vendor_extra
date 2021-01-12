@@ -1,0 +1,339 @@
+From ee583d53dcb47e7f393980ed5c2ec45c67d651ad Mon Sep 17 00:00:00 2001
+From: Francescodario Cuzzocrea <bosconovic@gmail.com>
+Date: Thu, 24 Dec 2020 16:00:30 +0100
+Subject: [PATCH 3/6] samsung: hidl: add fastcharge
+
+Change-Id: I369ba9c437b3a83a88c2ce74d603b7d7ddd9cfbb
+---
+ hidl/fastcharge/Android.mk                    | 44 ++++++++++
+ hidl/fastcharge/FastCharge.cpp                | 88 +++++++++++++++++++
+ hidl/fastcharge/FastCharge.h                  | 52 +++++++++++
+ hidl/fastcharge/include/samsung_fastcharge.h  | 22 +++++
+ hidl/fastcharge/service.cpp                   | 50 +++++++++++
+ ....lineage.fastcharge@1.0-service.samsung.rc |  4 +
+ ...lineage.fastcharge@1.0-service.samsung.xml | 11 +++
+ 7 files changed, 271 insertions(+)
+ create mode 100644 hidl/fastcharge/Android.mk
+ create mode 100644 hidl/fastcharge/FastCharge.cpp
+ create mode 100644 hidl/fastcharge/FastCharge.h
+ create mode 100644 hidl/fastcharge/include/samsung_fastcharge.h
+ create mode 100644 hidl/fastcharge/service.cpp
+ create mode 100644 hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.rc
+ create mode 100644 hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.xml
+
+diff --git a/hidl/fastcharge/Android.mk b/hidl/fastcharge/Android.mk
+new file mode 100644
+index 0000000..4250c23
+--- /dev/null
++++ b/hidl/fastcharge/Android.mk
+@@ -0,0 +1,44 @@
++#
++# Copyright (C) 2020 The LineageOS Project
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++
++LOCAL_PATH := $(call my-dir)
++
++include $(CLEAR_VARS)
++
++LOCAL_SRC_FILES := \
++    FastCharge.cpp \
++    service.cpp
++
++LOCAL_C_INCLUDES := \
++    $(LOCAL_PATH)/include \
++
++LOCAL_SHARED_LIBRARIES := \
++    libbase \
++    libbinder \
++    libhidlbase \
++    libhidltransport \
++    libutils \
++    vendor.lineage.fastcharge@1.0
++
++LOCAL_MODULE := vendor.lineage.fastcharge@1.0-service.samsung
++LOCAL_INIT_RC := vendor.lineage.fastcharge@1.0-service.samsung.rc
++LOCAL_MODULE_RELATIVE_PATH := hw
++LOCAL_MODULE_TAGS := optional
++LOCAL_MODULE_OWNER := samsung
++LOCAL_VINTF_FRAGMENTS := vendor.lineage.fastcharge@1.0-service.samsung.xml
++LOCAL_VENDOR_MODULE := true
++
++include $(BUILD_EXECUTABLE)
+diff --git a/hidl/fastcharge/FastCharge.cpp b/hidl/fastcharge/FastCharge.cpp
+new file mode 100644
+index 0000000..f040216
+--- /dev/null
++++ b/hidl/fastcharge/FastCharge.cpp
+@@ -0,0 +1,88 @@
++/*
++ * Copyright (C) 2020 The LineageOS Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#define LOG_TAG "fastcharge@1.0-service.samsung"
++
++#include "FastCharge.h"
++#include <android-base/logging.h>
++#include <fstream>
++#include <iostream>
++#include "samsung_fastcharge.h"
++
++namespace vendor {
++namespace lineage {
++namespace fastcharge {
++namespace V1_0 {
++namespace implementation {
++
++/*
++ * Write value to path and close file.
++ */
++template <typename T>
++static void set(const std::string& path, const T& value) {
++    std::ofstream file(path);
++
++    if (!file) {
++        PLOG(ERROR) << "Failed to open: " << path;
++        return;
++    }
++
++    LOG(DEBUG) << "write: " << path << " value: " << value;
++
++    file << value << std::endl;
++
++    if (!file) {
++        PLOG(ERROR) << "Failed to write: " << path << " value: " << value;
++    }
++}
++
++template <typename T>
++static T get(const std::string& path, const T& def) {
++    std::ifstream file(path);
++
++    if (!file) {
++        PLOG(ERROR) << "Failed to open: " << path;
++        return def;
++    }
++
++    T result;
++
++    file >> result;
++
++    if (file.fail()) {
++        PLOG(ERROR) << "Failed to read: " << path;
++        return def;
++    } else {
++        LOG(DEBUG) << "read: " << path << " value: " << result;
++        return result;
++    }
++}
++
++Return<bool> FastCharge::isEnabled() {
++    return get(FASTCHARGE_PATH, 0) < 1;
++}
++
++Return<bool> FastCharge::setEnabled(bool enable) {
++    set(FASTCHARGE_PATH, enable ? 0 : 1);
++
++    return isEnabled();
++}
++
++}  // namespace implementation
++}  // namespace V1_0
++}  // namespace fastcharge
++}  // namespace lineage
++}  // namespace vendor
+diff --git a/hidl/fastcharge/FastCharge.h b/hidl/fastcharge/FastCharge.h
+new file mode 100644
+index 0000000..ae4d049
+--- /dev/null
++++ b/hidl/fastcharge/FastCharge.h
+@@ -0,0 +1,52 @@
++/*
++ * Copyright (C) 2020 The LineageOS Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef VENDOR_LINEAGE_FASTCHARGE_V1_0_FASTCHARGE_H
++#define VENDOR_LINEAGE_FASTCHARGE_V1_0_FASTCHARGE_H
++
++#include <hidl/MQDescriptor.h>
++#include <hidl/Status.h>
++#include <vendor/lineage/fastcharge/1.0/IFastCharge.h>
++
++namespace vendor {
++namespace lineage {
++namespace fastcharge {
++namespace V1_0 {
++namespace implementation {
++
++using ::android::sp;
++using ::android::hardware::hidl_array;
++using ::android::hardware::hidl_memory;
++using ::android::hardware::hidl_string;
++using ::android::hardware::hidl_vec;
++using ::android::hardware::Return;
++using ::android::hardware::Void;
++
++using ::vendor::lineage::fastcharge::V1_0::IFastCharge;
++
++
++struct FastCharge : public IFastCharge {
++    Return<bool> isEnabled() override;
++    Return<bool> setEnabled(bool enable) override;
++};
++
++}  // namespace implementation
++}  // namespace V1_0
++}  // namespace fastcharge
++}  // namespace lineage
++}  // namespace vendor
++
++#endif  // VENDOR_LINEAGE_FASTCHARGE_V1_0_FASTCHARGE_H
+diff --git a/hidl/fastcharge/include/samsung_fastcharge.h b/hidl/fastcharge/include/samsung_fastcharge.h
+new file mode 100644
+index 0000000..e38c190
+--- /dev/null
++++ b/hidl/fastcharge/include/samsung_fastcharge.h
+@@ -0,0 +1,22 @@
++/*
++ * Copyright (C) 2020 The LineageOS Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef SAMSUNG_FASTCHARGE_H
++#define SAMSUNG_FASTCHARGE_H
++
++#define FASTCHARGE_PATH "/sys/class/sec/switch/afc_disable"
++
++#endif // SAMSUNG_FASTCHARGE_H
+diff --git a/hidl/fastcharge/service.cpp b/hidl/fastcharge/service.cpp
+new file mode 100644
+index 0000000..61b1ed8
+--- /dev/null
++++ b/hidl/fastcharge/service.cpp
+@@ -0,0 +1,50 @@
++/*
++ * Copyright (C) 2020 The LineageOS Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#define LOG_TAG "fastcharge@1.0-service.samsung"
++
++#include <android-base/logging.h>
++#include <hidl/HidlTransportSupport.h>
++
++#include "FastCharge.h"
++
++using android::hardware::configureRpcThreadpool;
++using android::hardware::joinRpcThreadpool;
++
++using vendor::lineage::fastcharge::V1_0::IFastCharge;
++using vendor::lineage::fastcharge::V1_0::implementation::FastCharge;
++
++using android::OK;
++using android::status_t;
++
++int main() {
++    android::sp<FastCharge> service = new FastCharge();
++
++    configureRpcThreadpool(1, true);
++
++    status_t status = service->registerAsService();
++    if (status != OK) {
++        LOG(ERROR) << "Cannot register FastCharge HAL service.";
++        return 1;
++    }
++
++    LOG(INFO) << "FastCharge HAL service ready.";
++
++    joinRpcThreadpool();
++
++    LOG(ERROR) << "FastCharge HAL service failed to join thread pool.";
++    return 1;
++}
+diff --git a/hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.rc b/hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.rc
+new file mode 100644
+index 0000000..df3ee51
+--- /dev/null
++++ b/hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.rc
+@@ -0,0 +1,4 @@
++service vendor.fastcharge-hal-1-0 /vendor/bin/hw/vendor.lineage.fastcharge@1.0-service.samsung
++    class hal
++    user system
++    group system
+diff --git a/hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.xml b/hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.xml
+new file mode 100644
+index 0000000..0c55ea5
+--- /dev/null
++++ b/hidl/fastcharge/vendor.lineage.fastcharge@1.0-service.samsung.xml
+@@ -0,0 +1,11 @@
++<manifest version="1.0" type="device">
++    <hal format="hidl">
++        <name>vendor.lineage.fastcharge</name>
++        <transport>hwbinder</transport>
++        <version>1.0</version>
++        <interface>
++            <name>IFastCharge</name>
++            <instance>default</instance>
++        </interface>
++    </hal>
++</manifest>
+-- 
+2.29.2
+

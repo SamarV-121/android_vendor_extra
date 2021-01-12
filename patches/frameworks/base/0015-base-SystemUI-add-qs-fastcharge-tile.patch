@@ -1,0 +1,277 @@
+From 736c5f51869a9e3dec7cd1d2de1e043b93bac7ab Mon Sep 17 00:00:00 2001
+From: Francescodario Cuzzocrea <bosconovic@gmail.com>
+Date: Thu, 24 Dec 2020 15:57:18 +0100
+Subject: [PATCH 15/16] base: SystemUI: add qs fastcharge tile
+
+Change-Id: I00f56d3b44b1e49bcf72652b35f93b6b3af5d8c7
+---
+ packages/SystemUI/Android.bp                  |   1 +
+ .../res/drawable/ic_qs_fastcharge.xml         |  22 +++
+ packages/SystemUI/res/values/cm_strings.xml   |   3 +
+ packages/SystemUI/res/values/config.xml       |   2 +-
+ .../systemui/qs/tileimpl/QSFactoryImpl.java   |   6 +
+ .../systemui/qs/tiles/FastChargeTile.java     | 139 ++++++++++++++++++
+ 6 files changed, 172 insertions(+), 1 deletion(-)
+ create mode 100644 packages/SystemUI/res/drawable/ic_qs_fastcharge.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/qs/tiles/FastChargeTile.java
+
+diff --git a/packages/SystemUI/Android.bp b/packages/SystemUI/Android.bp
+index c78630c0..891c7a51 100644
+--- a/packages/SystemUI/Android.bp
++++ b/packages/SystemUI/Android.bp
+@@ -72,6 +72,7 @@ android_library {
+         "jsr330",
+         "org.lineageos.platform.internal",
+         "vendor.lineage.biometrics.fingerprint.inscreen-V1.0-java",
++        "vendor.lineage.fastcharge-V1.0-java",
+         "vendor.lineage.powershare-V1.0-java",
+     ],
+     manifest: "AndroidManifest.xml",
+diff --git a/packages/SystemUI/res/drawable/ic_qs_fastcharge.xml b/packages/SystemUI/res/drawable/ic_qs_fastcharge.xml
+new file mode 100644
+index 00000000..887875b7
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/ic_qs_fastcharge.xml
+@@ -0,0 +1,22 @@
++<?xml version="1.0" encoding="utf-8"?><!--
++       Copyright (C) 2020 The LineageOS Project
++       Licensed under the Apache License, Version 2.0 (the "License");
++       you may not use this file except in compliance with the License.
++       You may obtain a copy of the License at
++       http://www.apache.org/licenses/LICENSE-2.0
++       Unless required by applicable law or agreed to in writing, software
++       distributed under the License is distributed on an "AS IS" BASIS,
++       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++       See the License for the specific language governing permissions and
++       limitations under the License.
++-->
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++
++    <path
++        android:fillColor="#ffffff"
++        android:pathData="M11 15H6L13 1V9H18L11 23V15Z" />
++</vector>
+diff --git a/packages/SystemUI/res/values/cm_strings.xml b/packages/SystemUI/res/values/cm_strings.xml
+index 423f0eab..bacb894a 100644
+--- a/packages/SystemUI/res/values/cm_strings.xml
++++ b/packages/SystemUI/res/values/cm_strings.xml
+@@ -46,6 +46,9 @@
+     <string name="global_screenshot_selector_capture_description">Capture partial screenshot</string>
+     <string name="global_screenshot_selector_cancel_description">Cancel partial screenshot</string>
+ 
++    <!-- FastCharge QS tile -->
++    <string name="quick_settings_fastcharge_label">Fast charge</string>
++
+     <!-- PowerShare QS tile -->
+     <string name="quick_settings_powershare_label">Wireless PowerShare</string>
+     <string name="quick_settings_powershare_off_powersave_label">Wireless PowerShare off\nBattery saver</string>
+diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
+index 74906e25..21627a83 100644
+--- a/packages/SystemUI/res/values/config.xml
++++ b/packages/SystemUI/res/values/config.xml
+@@ -114,7 +114,7 @@
+ 
+     <!-- Tiles native to System UI. Order should match "quick_settings_tiles_default" -->
+     <string name="quick_settings_tiles_stock" translatable="false">
+-        wifi,cell,battery,dnd,flashlight,rotation,bt,airplane,nfc,location,hotspot,inversion,saver,dark,work,cast,night,screenrecord,reverse,ambient_display,aod,caffeine,heads_up,livedisplay,powershare,profiles,reading_mode,sync,usb_tether,volume_panel,vpn
++        wifi,cell,battery,dnd,flashlight,rotation,bt,airplane,nfc,location,hotspot,inversion,saver,dark,work,cast,night,screenrecord,reverse,ambient_display,aod,caffeine,heads_up,livedisplay,powershare,profiles,reading_mode,sync,usb_tether,volume_panel,vpn,fastcharge
+     </string>
+ 
+     <!-- The tiles to display in QuickSettings -->
+diff --git a/packages/SystemUI/src/com/android/systemui/qs/tileimpl/QSFactoryImpl.java b/packages/SystemUI/src/com/android/systemui/qs/tileimpl/QSFactoryImpl.java
+index 11a88a02..e1cd8b49 100644
+--- a/packages/SystemUI/src/com/android/systemui/qs/tileimpl/QSFactoryImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/qs/tileimpl/QSFactoryImpl.java
+@@ -38,6 +38,7 @@ import com.android.systemui.qs.tiles.CellularTile;
+ import com.android.systemui.qs.tiles.ColorInversionTile;
+ import com.android.systemui.qs.tiles.DataSaverTile;
+ import com.android.systemui.qs.tiles.DndTile;
++import com.android.systemui.qs.tiles.FastChargeTile;
+ import com.android.systemui.qs.tiles.FlashlightTile;
+ import com.android.systemui.qs.tiles.HeadsUpTile;
+ import com.android.systemui.qs.tiles.HotspotTile;
+@@ -79,6 +80,7 @@ public class QSFactoryImpl implements QSFactory {
+     private final Provider<AirplaneModeTile> mAirplaneModeTileProvider;
+     private final Provider<WorkModeTile> mWorkModeTileProvider;
+     private final Provider<RotationLockTile> mRotationLockTileProvider;
++    private final Provider<FastChargeTile> mFastChargeTileProvider;
+     private final Provider<FlashlightTile> mFlashlightTileProvider;
+     private final Provider<LocationTile> mLocationTileProvider;
+     private final Provider<CastTile> mCastTileProvider;
+@@ -116,6 +118,7 @@ public class QSFactoryImpl implements QSFactory {
+             Provider<AirplaneModeTile> airplaneModeTileProvider,
+             Provider<WorkModeTile> workModeTileProvider,
+             Provider<RotationLockTile> rotationLockTileProvider,
++            Provider<FastChargeTile> fastChargeTileProvider,
+             Provider<FlashlightTile> flashlightTileProvider,
+             Provider<LocationTile> locationTileProvider,
+             Provider<CastTile> castTileProvider,
+@@ -149,6 +152,7 @@ public class QSFactoryImpl implements QSFactory {
+         mAirplaneModeTileProvider = airplaneModeTileProvider;
+         mWorkModeTileProvider = workModeTileProvider;
+         mRotationLockTileProvider = rotationLockTileProvider;
++        mFastChargeTileProvider = fastChargeTileProvider;
+         mFlashlightTileProvider = flashlightTileProvider;
+         mLocationTileProvider = locationTileProvider;
+         mCastTileProvider = castTileProvider;
+@@ -202,6 +206,8 @@ public class QSFactoryImpl implements QSFactory {
+                 return mWorkModeTileProvider.get();
+             case "rotation":
+                 return mRotationLockTileProvider.get();
++            case "fastcharge":
++                return mFastChargeTileProvider.get();
+             case "flashlight":
+                 return mFlashlightTileProvider.get();
+             case "location":
+diff --git a/packages/SystemUI/src/com/android/systemui/qs/tiles/FastChargeTile.java b/packages/SystemUI/src/com/android/systemui/qs/tiles/FastChargeTile.java
+new file mode 100644
+index 00000000..9b8de15b
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/qs/tiles/FastChargeTile.java
+@@ -0,0 +1,139 @@
++/*
++ * Copyright (C) 2020 The LineageOS Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.systemui.qs.tiles;
++
++import android.content.Intent;
++import android.os.RemoteException;
++import android.service.quicksettings.Tile;
++
++import com.android.systemui.R;
++import com.android.systemui.plugins.qs.QSTile.BooleanState;
++import com.android.systemui.qs.QSHost;
++import com.android.systemui.qs.tileimpl.QSTileImpl;
++
++import org.lineageos.internal.logging.LineageMetricsLogger;
++
++import vendor.lineage.fastcharge.V1_0.IFastCharge;
++
++import java.util.NoSuchElementException;
++
++import javax.inject.Inject;
++
++public class FastChargeTile extends QSTileImpl<BooleanState> {
++
++    private IFastCharge mFastCharge;
++
++    @Inject
++    public FastChargeTile(QSHost host) {
++        super(host);
++        mFastCharge = getFastCharge();
++        if (mFastCharge == null) {
++            return;
++        }
++    }
++
++    private void updateFastChargeState() {
++        if (!isAvailable()) {
++            return;
++        }
++    }
++
++    @Override
++    public boolean isAvailable() {
++        return mFastCharge != null;
++    }
++
++    @Override
++    public BooleanState newTileState() {
++        BooleanState state = new BooleanState();
++        state.handlesLongClick = false;
++        return state;
++    }
++
++    @Override
++    public void handleClick() {
++        try {
++            boolean fastChargeEnabled = mFastCharge.isEnabled();
++
++            if (mFastCharge.setEnabled(!fastChargeEnabled) != fastChargeEnabled) {
++                refreshState();
++            }
++        } catch (RemoteException ex) {
++            ex.printStackTrace();
++        }
++    }
++
++    @Override
++    public Intent getLongClickIntent() {
++        return null;
++    }
++
++    @Override
++    public CharSequence getTileLabel() {
++        return mContext.getString(R.string.quick_settings_fastcharge_label);
++    }
++
++    @Override
++    protected void handleUpdateState(BooleanState state, Object arg) {
++        if (!isAvailable()) {
++            return;
++        }
++
++        if (state.slash == null) {
++            state.slash = new SlashState();
++        }
++
++        state.icon = ResourceIcon.get(R.drawable.ic_qs_fastcharge);
++        try {
++            state.value = mFastCharge.isEnabled();
++        } catch (RemoteException ex) {
++            state.value = false;
++            ex.printStackTrace();
++        }
++        state.slash.isSlashed = state.value;
++        state.label = mContext.getString(R.string.quick_settings_fastcharge_label);
++
++        if (!state.value) {
++            state.state = Tile.STATE_INACTIVE;
++        } else {
++            state.state = Tile.STATE_ACTIVE;
++        }
++
++    }
++
++    @Override
++    public int getMetricsCategory() {
++        return LineageMetricsLogger.TILE_FASTCHARGE;
++    }
++
++    @Override
++    public void handleSetListening(boolean listening) {
++    }
++
++    private synchronized IFastCharge getFastCharge() {
++        try {
++            return IFastCharge.getService();
++        } catch (RemoteException ex) {
++            ex.printStackTrace();
++        } catch (NoSuchElementException ex) {
++            // service not available
++        }
++
++        return null;
++    }
++
++}
+-- 
+2.29.2
+

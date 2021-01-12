@@ -1,0 +1,26 @@
+From a7f2e489b176e9ac019cf6281b503070edc8b140 Mon Sep 17 00:00:00 2001
+From: SamarV-121 <samarvispute121@gmail.com>
+Date: Tue, 12 Jan 2021 14:14:20 +0530
+Subject: [PATCH 6/6] hidl/thermal: Add `override="true"` in manifest
+
+ * So we can override stock thermal@1.0 manifest entry
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ hidl/thermal/android.hardware.thermal@2.0-service.samsung.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/hidl/thermal/android.hardware.thermal@2.0-service.samsung.xml b/hidl/thermal/android.hardware.thermal@2.0-service.samsung.xml
+index bcd6344..dabec45 100644
+--- a/hidl/thermal/android.hardware.thermal@2.0-service.samsung.xml
++++ b/hidl/thermal/android.hardware.thermal@2.0-service.samsung.xml
+@@ -1,5 +1,5 @@
+ <manifest version="1.0" type="device">
+-    <hal format="hidl">
++    <hal format="hidl" override="true">
+         <name>android.hardware.thermal</name>
+         <transport>hwbinder</transport>
+         <version>1.0</version>
+-- 
+2.29.2
+

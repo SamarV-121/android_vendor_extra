@@ -1,7 +1,7 @@
-From a8552a1db3fb421c28b27ab4b74036c83a913b27 Mon Sep 17 00:00:00 2001
+From f33bd5c8603cfda0500eaaa16dd05dbd70ebddb7 Mon Sep 17 00:00:00 2001
 From: Pierre-Hugues Husson <phh@phh.me>
 Date: Mon, 2 Nov 2020 08:34:35 +0530
-Subject: [PATCH] init: Panic into recovery rather than bootloader
+Subject: [PATCH 1/7] init: Panic into recovery rather than bootloader
  Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 
 Change-Id: I93dc41b40077b975179169d0eadaf9b8f2696137
@@ -23,5 +23,5 @@ index 76460a5..fcc8d17 100644
  
  void SetFatalRebootTarget() {
 -- 
-2.28.0
+2.29.2
 

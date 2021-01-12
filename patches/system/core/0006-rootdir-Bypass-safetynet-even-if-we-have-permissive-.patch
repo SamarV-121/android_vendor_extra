@@ -1,0 +1,29 @@
+From 8d9fb76098d7ddaf826600f58771afc2d13fc1d3 Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Sun, 12 Nov 2017 19:29:06 -0200
+Subject: [PATCH 6/7] rootdir: Bypass safetynet even if we have permissive
+ selinux
+
+Change-Id: Ib44cdbd15b53af3a1768cb0912f2dbcc56a8d97e
+---
+ rootdir/init.rc | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index a9af0b0..6158a65 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -834,6 +834,10 @@ on zygote-start && property:ro.crypto.state=encrypted && property:ro.crypto.type
+     start zygote_secondary
+ 
+ on boot
++    # selinux nodes, hide permissive state
++    chmod 0640 /sys/fs/selinux/enforce
++    chmod 0440 /sys/fs/selinux/policy
++
+     # basic network init
+     ifup lo
+     hostname localhost
+-- 
+2.29.2
+

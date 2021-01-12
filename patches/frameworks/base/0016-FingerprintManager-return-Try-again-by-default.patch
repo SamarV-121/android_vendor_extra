@@ -1,0 +1,50 @@
+From 3c0e3f02872370fa6bca93c44115dd692380e09e Mon Sep 17 00:00:00 2001
+From: Park Ju Hyung <qkrwngud825@gmail.com>
+Date: Sat, 4 Jan 2020 21:25:16 +0900
+Subject: [PATCH 16/16] FingerprintManager: return "Try again" by default
+
+If HAL returns an unknown string by the framework, the SystemUI crashes
+because it received a null string.
+
+Simply display "Try again" by default.
+
+Change-Id: Id10b37c76acea70a22500c1de61f4bcf7a5e494a
+Signed-off-by: Park Ju Hyung <qkrwngud825@gmail.com>
+---
+ .../android/hardware/fingerprint/FingerprintManager.java  | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/core/java/android/hardware/fingerprint/FingerprintManager.java b/core/java/android/hardware/fingerprint/FingerprintManager.java
+index 6900105c..1d2f56e4 100644
+--- a/core/java/android/hardware/fingerprint/FingerprintManager.java
++++ b/core/java/android/hardware/fingerprint/FingerprintManager.java
+@@ -1006,13 +1006,15 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
+      * @hide
+      */
+     public static String getErrorString(Context context, int errMsg, int vendorCode) {
++        final String retry = context.getString(
++                    com.android.internal.R.string.fingerprint_error_unable_to_process);
++
+         switch (errMsg) {
+             case FINGERPRINT_ERROR_HW_UNAVAILABLE:
+                 return context.getString(
+                         com.android.internal.R.string.fingerprint_error_hw_not_available);
+             case FINGERPRINT_ERROR_UNABLE_TO_PROCESS:
+-                return context.getString(
+-                    com.android.internal.R.string.fingerprint_error_unable_to_process);
++                return retry;
+             case FINGERPRINT_ERROR_TIMEOUT:
+                 return context.getString(com.android.internal.R.string.fingerprint_error_timeout);
+             case FINGERPRINT_ERROR_NO_SPACE:
+@@ -1046,7 +1048,7 @@ public class FingerprintManager implements BiometricAuthenticator, BiometricFing
+                 }
+         }
+         Slog.w(TAG, "Invalid error message: " + errMsg + ", " + vendorCode);
+-        return null;
++        return retry;
+     }
+ 
+     /**
+-- 
+2.29.2
+

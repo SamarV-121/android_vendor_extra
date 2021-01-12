@@ -1,0 +1,65 @@
+From 2aaa9ab7798f40db36104a282e6e73021feb3408 Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Fri, 20 Nov 2020 11:34:54 -0300
+Subject: [PATCH 5/7] init: Weaken property override security only when
+ spoofing safetynet
+
+Change-Id: I740afaa27de82bec1e6d58b58d431141ca6b4e3f
+
+Former-commit-id: ca62a22d017f44c9f63553a44f5017eb5b8e9095
+---
+ init/property_service.cpp | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/init/property_service.cpp b/init/property_service.cpp
+index 4e37c0a..d863707 100644
+--- a/init/property_service.cpp
++++ b/init/property_service.cpp
+@@ -816,6 +816,9 @@ static const char *snet_prop_value[] = {
+ };
+ 
+ static void workaround_snet_properties() {
++    // Weaken property override security to set safetynet props
++    weaken_prop_override_security = true;
++
+ 	std::string error;
+ 	LOG(INFO) << "snet: Hiding sensitive props";
+ 
+@@ -823,6 +826,9 @@ static void workaround_snet_properties() {
+ 	for (int i = 0; snet_prop_key[i]; ++i) {
+ 		PropertySet(snet_prop_key[i], snet_prop_value[i], &error);
+ 	}
++
++    // Restore the normal property override security after safetynet props have been set
++    weaken_prop_override_security = false;
+ }
+ 
+ // If the ro.product.[brand|device|manufacturer|model|name] properties have not been explicitly
+@@ -967,22 +973,16 @@ void PropertyLoadBootDefaults() {
+         }
+     }
+ 
+-    // Weaken property override security during execution of the vendor init extension
+-    weaken_prop_override_security = true;
+-
+     // Update with vendor-specific property runtime overrides
+     vendor_load_properties();
+ 
+     property_initialize_ro_product_props();
+     property_derive_build_fingerprint();
+ 
++    update_sys_usb_config();
++
+     // Workaround SafetyNet
+     workaround_snet_properties();
+-
+-    // Restore the normal property override security after init extension is executed
+-    weaken_prop_override_security = false;
+-
+-    update_sys_usb_config();
+ }
+ 
+ bool LoadPropertyInfoFromFile(const std::string& filename,
+-- 
+2.29.2
+

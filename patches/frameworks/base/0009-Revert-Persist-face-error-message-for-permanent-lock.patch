@@ -1,7 +1,7 @@
-From cd8ff75ec96b054b6e0d707c15ce34ec37390d07 Mon Sep 17 00:00:00 2001
+From 2d45c8a8cb517e41128a12c70e1a1b4377d03104 Mon Sep 17 00:00:00 2001
 From: DennySPb <dennyspb@gmail.com>
 Date: Wed, 14 Oct 2020 09:20:37 +0300
-Subject: [PATCH 09/14] Revert "Persist face error message for permanent
+Subject: [PATCH 09/16] Revert "Persist face error message for permanent
  lockout"
 
 Restore pre-R FaceUnlok lockdown behaviour

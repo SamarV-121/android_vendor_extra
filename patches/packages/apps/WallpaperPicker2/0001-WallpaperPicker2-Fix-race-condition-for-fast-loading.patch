@@ -1,0 +1,98 @@
+From 4a13d0ca3e5f93cc78ccb47303048810fde325bc Mon Sep 17 00:00:00 2001
+From: Danny Lin <danny@kdrag0n.dev>
+Date: Tue, 15 Dec 2020 18:59:20 -0800
+Subject: [PATCH] WallpaperPicker2: Fix race condition for fast-loading
+ wallpapers
+
+System-static wallpapers loaded from partner stub APK resources load too
+fast. This causes the picker to crash due to a race condition where it
+tries to show the wallpaper before the view is ready:
+
+FATAL EXCEPTION: main
+Process: com.android.wallpaper, PID: 4864
+java.lang.NullPointerException: Attempt to invoke virtual method 'void com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView.setMinimumScaleType(int)' on a null object reference
+	at com.android.wallpaper.picker.ImagePreviewFragment.initFullResView(ImagePreviewFragment.java:280)
+	at com.android.wallpaper.picker.ImagePreviewFragment.lambda$RaBjTEvfm2i30bFpCcUjYw_1BDU(Unknown Source:0)
+	at com.android.wallpaper.picker.-$$Lambda$ImagePreviewFragment$RaBjTEvfm2i30bFpCcUjYw_1BDU.run(Unknown Source:2)
+	at com.android.wallpaper.picker.PreviewFragment.lambda$setUpExploreIntentAndLabel$0$PreviewFragment(PreviewFragment.java:240)
+	at com.android.wallpaper.picker.-$$Lambda$PreviewFragment$npbExW2iAAviwY49N2_aNAid7Ng.onReceiveExploreIntent(Unknown Source:4)
+	at com.android.wallpaper.picker.WallpaperInfoHelper.loadExploreIntent(WallpaperInfoHelper.java:54)
+	at com.android.wallpaper.picker.PreviewFragment.setUpExploreIntentAndLabel(PreviewFragment.java:235)
+	at com.android.wallpaper.picker.ImagePreviewFragment.lambda$onBottomActionBarReady$1$ImagePreviewFragment(ImagePreviewFragment.java:270)
+	at com.android.wallpaper.picker.-$$Lambda$ImagePreviewFragment$7qLwwxCCQAeJYZjhYOD-FrUSX0U.onDimensionsDecoded(Unknown Source:2)
+	at com.android.wallpaper.asset.StreamableAsset$DecodeDimensionsAsyncTask.onPostExecute(StreamableAsset.java:388)
+	at com.android.wallpaper.asset.StreamableAsset$DecodeDimensionsAsyncTask.onPostExecute(StreamableAsset.java:374)
+	at android.os.AsyncTask.finish(AsyncTask.java:771)
+	at android.os.AsyncTask.access$900(AsyncTask.java:199)
+	at android.os.AsyncTask$InternalHandler.handleMessage(AsyncTask.java:788)
+	at android.os.Handler.dispatchMessage(Handler.java:106)
+	at android.os.Looper.loop(Looper.java:223)
+	at android.app.ActivityThread.main(ActivityThread.java:7660)
+	at java.lang.reflect.Method.invoke(Native Method)
+	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:592)
+	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:947)
+
+Only show the wallpaper once both callbacks have completed to fix the
+crash.
+
+Change-Id: I26738dd3911562ae3992a4a58523cb3bc3d570e1
+---
+ .../picker/ImagePreviewFragment.java          | 21 ++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/src/com/android/wallpaper/picker/ImagePreviewFragment.java b/src/com/android/wallpaper/picker/ImagePreviewFragment.java
+index c827b5a..6d73c90 100755
+--- a/src/com/android/wallpaper/picker/ImagePreviewFragment.java
++++ b/src/com/android/wallpaper/picker/ImagePreviewFragment.java
+@@ -84,6 +84,7 @@ public class ImagePreviewFragment extends PreviewFragment {
+     private final WallpaperSurfaceCallback mWallpaperSurfaceCallback =
+             new WallpaperSurfaceCallback();
+ 
++    private boolean mFullResViewInitialized;
+     private SubsamplingScaleImageView mFullResImageView;
+     private Asset mWallpaperAsset;
+     private Point mScreenSize;
+@@ -267,7 +268,14 @@ public class ImagePreviewFragment extends PreviewFragment {
+ 
+             mRawWallpaperSize = dimensions;
+ 
+-            setUpExploreIntentAndLabel(ImagePreviewFragment.this::initFullResView);
++            setUpExploreIntentAndLabel(() -> {
++                synchronized (this) {
++                    /* Init if we finish after WallpaperSurfaceCallback */
++                    if (mFullResImageView != null && !mFullResViewInitialized) {
++                        initFullResView();
++                    }
++                }
++            });
+         });
+     }
+ 
+@@ -276,6 +284,10 @@ public class ImagePreviewFragment extends PreviewFragment {
+      * initializing a zoom-scroll observer and click listener.
+      */
+     private void initFullResView() {
++        synchronized (this) {
++            mFullResViewInitialized = true;
++        }
++
+         // Minimum scale will only be respected under this scale type.
+         mFullResImageView.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CUSTOM);
+         // When we set a minimum scale bigger than the scale with which the full image is shown,
+@@ -494,6 +506,13 @@ public class ImagePreviewFragment extends PreviewFragment {
+                 mHost.setView(wallpaperPreviewContainer, wallpaperPreviewContainer.getWidth(),
+                         wallpaperPreviewContainer.getHeight());
+                 mWallpaperSurface.setChildSurfacePackage(mHost.getSurfacePackage());
++
++                synchronized (this) {
++                    /* Init if we finish after decodeRawDimensions */
++                    if (mRawWallpaperSize != null && !mFullResViewInitialized) {
++                        initFullResView();
++                    }
++                }
+             }
+         }
+ 
+-- 
+2.29.2
+

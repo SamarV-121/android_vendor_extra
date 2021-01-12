@@ -1,0 +1,36 @@
+From 9ee8c84ecf1421cc0ea82a8d1dcb59163b3e2856 Mon Sep 17 00:00:00 2001
+From: Francescodario Cuzzocrea <bosconovic@gmail.com>
+Date: Tue, 12 Jan 2021 14:19:03 +0530
+Subject: [PATCH] lineage-sdk: add fastcharge qs tile
+
+ * Several OEMs let the user decide whether to enable or disable quick
+   charging technology when using a quickcharge charger.
+   Samsung, for example, exposes a sysfs node to disable it at
+   will, depending on what the user sets in battery settings UI.
+
+ * Disabling fast charge may be useful for reducing the heat produced by
+   the device while charging, or for extending the lifespan of the battery.
+
+ * This commit adds the fastcharge QS tile to LineageMetricsLogger.
+
+Change-Id: I00a564ff12ccac382e1792668fbe3f58f51787be
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+Change-Id: I2784b54c96bf249c5e08c004e369fc0c349b2ee3
+---
+ .../org/lineageos/internal/logging/LineageMetricsLogger.java     | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/sdk/src/java/org/lineageos/internal/logging/LineageMetricsLogger.java b/sdk/src/java/org/lineageos/internal/logging/LineageMetricsLogger.java
+index 52181af..cae6cd7 100644
+--- a/sdk/src/java/org/lineageos/internal/logging/LineageMetricsLogger.java
++++ b/sdk/src/java/org/lineageos/internal/logging/LineageMetricsLogger.java
+@@ -73,4 +73,5 @@ public class LineageMetricsLogger extends MetricsLogger {
+     public static final int TILE_READING_MODE = BASE + 45;
+     public static final int TILE_AOD = BASE + 46;
+     public static final int TILE_POWERSHARE = BASE + 47;
++    public static final int TILE_FASTCHARGE= BASE + 48;
+ }
+-- 
+2.29.2
+

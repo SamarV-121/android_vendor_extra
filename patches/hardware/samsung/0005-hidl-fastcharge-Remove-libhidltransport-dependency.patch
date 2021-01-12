@@ -1,0 +1,25 @@
+From 7dd80554536747ed2edf0fdba56e759eca9cec0d Mon Sep 17 00:00:00 2001
+From: SamarV-121 <samarvispute121@gmail.com>
+Date: Tue, 29 Dec 2020 17:58:53 +0530
+Subject: [PATCH 5/6] hidl/fastcharge: Remove libhidltransport dependency
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ hidl/fastcharge/Android.bp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/hidl/fastcharge/Android.bp b/hidl/fastcharge/Android.bp
+index 3c9756c..8304745 100644
+--- a/hidl/fastcharge/Android.bp
++++ b/hidl/fastcharge/Android.bp
+@@ -28,7 +28,6 @@ cc_defaults {
+         "libbase",
+         "libbinder",
+         "libhidlbase",
+-        "libhidltransport",
+         "libutils",
+         "vendor.lineage.fastcharge@1.0",
+     ],
+-- 
+2.29.2
+

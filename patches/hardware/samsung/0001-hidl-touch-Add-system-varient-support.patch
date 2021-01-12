@@ -1,7 +1,7 @@
-From e8b16f2cc2e4e5c3e04f335aaf3cea46af5d2d30 Mon Sep 17 00:00:00 2001
+From 3007ad2cb50900549c1b23422c35261695984f5c Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
 Date: Thu, 22 Oct 2020 13:05:23 +0000
-Subject: [PATCH 1/2] hidl/touch: Add system varient support
+Subject: [PATCH 1/6] hidl/touch: Add system varient support
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 ---
@@ -12,7 +12,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  create mode 100644 hidl/touch/lineage.touch@1.0-service.samsung.rc
 
 diff --git a/hidl/touch/Android.bp b/hidl/touch/Android.bp
-index 2f837d1..0939160 100644
+index 2f837d1..7cecbfc 100644
 --- a/hidl/touch/Android.bp
 +++ b/hidl/touch/Android.bp
 @@ -12,14 +12,10 @@
@@ -77,5 +77,5 @@ index e12326c..42da35b 100644
  #include <android-base/logging.h>
  #include <binder/ProcessState.h>
 -- 
-2.25.1
+2.29.2
 

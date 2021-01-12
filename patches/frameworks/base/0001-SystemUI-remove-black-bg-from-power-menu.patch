@@ -1,7 +1,7 @@
-From eca83098844c42f22d690c2d954d31d626594f4f Mon Sep 17 00:00:00 2001
+From 54908cd8bb427dc1b2fa0472417aa8a6839dc90a Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 14 Oct 2020 11:43:10 +0200
-Subject: [PATCH 01/14] SystemUI: remove black bg from power menu
+Subject: [PATCH 01/16] SystemUI: remove black bg from power menu
 
 And allow blur
 

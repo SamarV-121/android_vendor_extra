@@ -1,7 +1,7 @@
-From bd70f063779cb07fd5ee1c58610d20f085f1a4a9 Mon Sep 17 00:00:00 2001
+From 343d808aac7eb46c3b17fd558f980a56814d96eb Mon Sep 17 00:00:00 2001
 From: Pierre-Hugues Husson <phh@phh.me>
 Date: Wed, 14 Aug 2019 23:36:45 +0200
-Subject: [PATCH 14/14] Add support for com.samsung.sensor.physical_proximity
+Subject: [PATCH 14/16] Add support for com.samsung.sensor.physical_proximity
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 Change-Id: I258a6e83b5114c429b4e565f914123b631200183
