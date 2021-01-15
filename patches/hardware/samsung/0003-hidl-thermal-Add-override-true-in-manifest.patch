@@ -1,7 +1,7 @@
-From a7f2e489b176e9ac019cf6281b503070edc8b140 Mon Sep 17 00:00:00 2001
+From ebe590fbb9398fcde43cb11a36b8cddcfd8c6294 Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
-Date: Tue, 12 Jan 2021 14:14:20 +0530
-Subject: [PATCH 6/6] hidl/thermal: Add `override="true"` in manifest
+Date: Thu, 14 Jan 2021 20:43:53 +0530
+Subject: [PATCH 3/4] hidl/thermal: Add `override="true"` in manifest
 
  * So we can override stock thermal@1.0 manifest entry
 

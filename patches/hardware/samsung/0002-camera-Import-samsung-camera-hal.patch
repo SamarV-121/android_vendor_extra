@@ -1,7 +1,7 @@
-From ac22c2ec442ba309e2b719617cf1535658009053 Mon Sep 17 00:00:00 2001
+From e6358d7e8ed44bdd72a8ada1447033dea2682e1d Mon Sep 17 00:00:00 2001
 From: Erfan Abdi <erfangplus@gmail.com>
 Date: Sat, 26 Sep 2020 13:34:45 +0330
-Subject: [PATCH 2/6] camera: Import samsung camera hal
+Subject: [PATCH 2/4] camera: Import samsung camera hal
 
 Change-Id: I0d4ed03f6b56e8ab7a598cc2f8860894db01cfe6
 ---

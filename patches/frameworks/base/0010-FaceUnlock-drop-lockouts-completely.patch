@@ -1,7 +1,7 @@
-From 4626c7deebf0966d77ad50f77b7fea2b2672e1e8 Mon Sep 17 00:00:00 2001
+From 21b4ccbf07e92ff4edd7b8e91d07fa34f9d35903 Mon Sep 17 00:00:00 2001
 From: DennySPb <dennyspb@gmail.com>
 Date: Wed, 14 Oct 2020 09:29:06 +0300
-Subject: [PATCH 10/16] FaceUnlock: drop lockouts completely
+Subject: [PATCH 10/15] FaceUnlock: drop lockouts completely
 
 our faceunlock service is a little buggy,
 after a night standby we see an excess of attempts,

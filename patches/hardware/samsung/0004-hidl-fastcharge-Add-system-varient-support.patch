@@ -1,17 +1,18 @@
-From ad93fb751281aef44ed21cbc54da3f20a98ec007 Mon Sep 17 00:00:00 2001
+From 5c8147d03a4bf0fe53ef014f40483a612f244017 Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
-Date: Sun, 27 Dec 2020 15:23:00 +0530
-Subject: [PATCH 4/6] hidl/fastcharge: Add system varient support
+Date: Thu, 14 Jan 2021 20:42:45 +0530
+Subject: [PATCH 4/4] hidl/fastcharge: Add system varient support
 
  * also switch to bluprint
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+Change-Id: I5f121d8eb4678a5b0c0b78cb672d9c4fd4ba9738
 ---
- hidl/fastcharge/Android.bp                    | 50 +++++++++++++++++++
- hidl/fastcharge/Android.mk                    | 44 ----------------
+ hidl/fastcharge/Android.bp                    | 49 +++++++++++++++++++
+ hidl/fastcharge/Android.mk                    | 43 ----------------
  .../lineage.fastcharge@1.0-service.samsung.rc |  4 ++
- ...lineage.fastcharge@1.0-service.samsung.xml | 11 ++++
- 4 files changed, 65 insertions(+), 44 deletions(-)
+ ...lineage.fastcharge@1.0-service.samsung.xml | 11 +++++
+ 4 files changed, 64 insertions(+), 43 deletions(-)
  create mode 100644 hidl/fastcharge/Android.bp
  delete mode 100644 hidl/fastcharge/Android.mk
  create mode 100644 hidl/fastcharge/lineage.fastcharge@1.0-service.samsung.rc
@@ -19,10 +20,10 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 
 diff --git a/hidl/fastcharge/Android.bp b/hidl/fastcharge/Android.bp
 new file mode 100644
-index 0000000..3c9756c
+index 0000000..8304745
 --- /dev/null
 +++ b/hidl/fastcharge/Android.bp
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,49 @@
 +//
 +// Copyright (C) 2020 The LineageOS Project
 +//
@@ -53,7 +54,6 @@ index 0000000..3c9756c
 +        "libbase",
 +        "libbinder",
 +        "libhidlbase",
-+        "libhidltransport",
 +        "libutils",
 +        "vendor.lineage.fastcharge@1.0",
 +    ],
@@ -75,10 +75,10 @@ index 0000000..3c9756c
 +}
 diff --git a/hidl/fastcharge/Android.mk b/hidl/fastcharge/Android.mk
 deleted file mode 100644
-index 4250c23..0000000
+index 6401fab..0000000
 --- a/hidl/fastcharge/Android.mk
 +++ /dev/null
-@@ -1,44 +0,0 @@
+@@ -1,43 +0,0 @@
 -#
 -# Copyright (C) 2020 The LineageOS Project
 -#
@@ -110,7 +110,6 @@ index 4250c23..0000000
 -    libbase \
 -    libbinder \
 -    libhidlbase \
--    libhidltransport \
 -    libutils \
 -    vendor.lineage.fastcharge@1.0
 -
