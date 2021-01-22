@@ -1,8 +1,8 @@
-From 43ab871cb267b49abd8b60ef147659f2a671500b Mon Sep 17 00:00:00 2001
+From e9124b4dc1a2f4f35678b48f6fb0ea7bf4c14740 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=3D=3FUTF-8=3Fq=3FBernhard=3D20Rosenkr=3DC3=3DA4nzer=3F=3D?=
  <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
-Subject: [PATCH 02/15] base: Add permission to allow an APK to fake a
+Subject: [PATCH 02/18] base: Add permission to allow an APK to fake a
  signature.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -41,10 +41,10 @@ index 952ccdad..73fb59fe 100644
      field public static final String GET_ACCOUNTS = "android.permission.GET_ACCOUNTS";
      field public static final String GET_ACCOUNTS_PRIVILEGED = "android.permission.GET_ACCOUNTS_PRIVILEGED";
 diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
-index d0c02faf..b53c243c 100644
+index fa6c273a..b03142dd 100644
 --- a/core/res/AndroidManifest.xml
 +++ b/core/res/AndroidManifest.xml
-@@ -2838,6 +2838,13 @@
+@@ -2841,6 +2841,13 @@
          android:description="@string/permdesc_getPackageSize"
          android:protectionLevel="normal" />
  
@@ -100,10 +100,10 @@ index 5f15216e..c29feb9c 100644
      field public static final String GET_ACCOUNTS = "android.permission.GET_ACCOUNTS";
      field public static final String GET_ACCOUNTS_PRIVILEGED = "android.permission.GET_ACCOUNTS_PRIVILEGED";
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index 60aae052..0ac63381 100644
+index 0105349d..4f3acd16 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
-@@ -4453,8 +4453,9 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -4454,8 +4454,9 @@ public class PackageManagerService extends IPackageManager.Stub
                  });
              }
  
@@ -115,7 +115,7 @@ index 60aae052..0ac63381 100644
  
              if (packageInfo == null) {
                  return null;
-@@ -4490,6 +4491,24 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -4491,6 +4492,24 @@ public class PackageManagerService extends IPackageManager.Stub
          }
      }
  

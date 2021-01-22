@@ -1,4 +1,4 @@
-From bbd476a35dfe6ad088561204c45563aea2db6f58 Mon Sep 17 00:00:00 2001
+From 13928f2bdfac81fc68909ccf9b37efeff917c5d1 Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
 Date: Thu, 22 Oct 2020 13:05:23 +0000
 Subject: [PATCH 1/4] hidl/touch: Add system varient support

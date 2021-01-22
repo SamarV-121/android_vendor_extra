@@ -1,7 +1,7 @@
-From 0bb0de8fc5a57987c5623d747069f0241b10122a Mon Sep 17 00:00:00 2001
+From 25ed673e80283e8b5b1508a184d05c582b2f85ed Mon Sep 17 00:00:00 2001
 From: Jyotiraditya <imjyotiraditya@pm.me>
 Date: Tue, 17 Nov 2020 09:31:46 +0530
-Subject: [PATCH 2/4] Settings: Move blur toggle to Display options
+Subject: [PATCH 2/5] Settings: Move blur toggle to Display options
 
 Signed-off-by: Jyotiraditya <imjyotiraditya@pm.me>
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -69,7 +69,7 @@ index 20a33f0..3c17c0e 100644
          controllers.add(new VrDisplayPreferenceController(context));
          controllers.add(new ShowOperatorNamePreferenceController(context));
 diff --git a/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java b/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
-index 901e5f4..903cee9 100644
+index 8eb1dd3..a910794 100644
 --- a/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
 +++ b/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
 @@ -533,7 +533,6 @@ public class DevelopmentSettingsDashboardFragment extends RestrictedDashboardFra

@@ -1,11 +1,14 @@
-From 2c18536483d1f249ea0727fb0e9faa658b9d8dcb Mon Sep 17 00:00:00 2001
+From 7790c8be158490a4d19bd26397f892fe2c9ab38d Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Thu, 26 Mar 2020 04:56:47 -0300
-Subject: [PATCH 1/4] Port face unlock feature
+Subject: [PATCH 1/5] Port face unlock feature
 
 * From motorola/foles_retail/foles:10/QPF30.130-15-7/38ece7:user/release-keys
-
 Change-Id: I906317e3d9c993fc5001ed9939dc25e67d3e636f
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+Change-Id: Ic6ca76d400b2482030c96dcbab468585fce8d27f
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 ---
  Android.bp                                    |  1 +
  res/values-ar-rSA/moto_strings.xml            |  5 ++
@@ -125,13 +128,13 @@ Change-Id: I906317e3d9c993fc5001ed9939dc25e67d3e636f
  create mode 100644 src/com/android/settings/biometrics/face/FaceSettingsManagePreferenceController.java
 
 diff --git a/Android.bp b/Android.bp
-index 2a811a4..6de4823 100644
+index aac82c6..6cd0993 100644
 --- a/Android.bp
 +++ b/Android.bp
-@@ -56,6 +56,7 @@ android_library {
-         "android.hardware.dumpstate-V1.0-java",
+@@ -57,6 +57,7 @@ android_library {
          "android.hardware.dumpstate-V1.1-java",
          "org.lineageos.platform.internal",
+         "vendor.lineage.fastcharge-V1.0-java",
 +        "faceunlock_utils",
      ],
  
