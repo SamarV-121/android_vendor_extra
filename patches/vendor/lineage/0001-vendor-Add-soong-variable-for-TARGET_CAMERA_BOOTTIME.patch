@@ -1,7 +1,7 @@
-From 9ed9dd878122a37bdc6b6a51ddd08a4c30d9461c Mon Sep 17 00:00:00 2001
+From ebbc6c1ffc2177358f7374681e72ef097d2b404f Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Mon, 23 Nov 2020 14:20:20 +0000
-Subject: [PATCH] vendor: Add soong variable for
+Subject: [PATCH 1/2] vendor: Add soong variable for
  TARGET_CAMERA_BOOTTIME_TIMESTAMP
 
 SamarV-121: Move it under lineageGlobalVars config namespace
