@@ -1,7 +1,7 @@
-From 3c06a97fb8cbb62640b1613d61e57ebfbe4b2507 Mon Sep 17 00:00:00 2001
+From e16e41833183b08a2a66a48841eea8a9353c5b54 Mon Sep 17 00:00:00 2001
 From: Henrique Silva <jhenrique09.mcz@hotmail.com>
 Date: Wed, 8 May 2019 11:52:38 -0300
-Subject: [PATCH 17/25] base: SwipeToScreenshot: Import MIUI implementation
+Subject: [PATCH 15/23] base: SwipeToScreenshot: Import MIUI implementation
 
 Reverse engineered from Xiaomi/beryllium/beryllium:9/PKQ1.180729.001/9.2.25:user/release-keys
 

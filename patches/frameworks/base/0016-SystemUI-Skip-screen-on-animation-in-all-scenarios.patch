@@ -1,7 +1,7 @@
-From 26d429952ac755de3db3dac5441d40e9ced14580 Mon Sep 17 00:00:00 2001
+From c60bd245e1c9f32972c894fe5b6c379b890c134e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 15 Dec 2020 16:58:40 -0800
-Subject: [PATCH 18/25] SystemUI: Skip screen-on animation in all scenarios
+Subject: [PATCH 16/23] SystemUI: Skip screen-on animation in all scenarios
 
 Unlike turning the screen off, turning it on is a time-critical
 operation that should be done as fast as possible without a slow

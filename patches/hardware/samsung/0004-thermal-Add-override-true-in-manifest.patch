@@ -1,11 +1,12 @@
-From 65cf8370aebd638ced21a2193792b243810f4d76 Mon Sep 17 00:00:00 2001
+From 5deab92ff45368f1f1530c43b82d02279026e36b Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
 Date: Thu, 14 Jan 2021 20:43:53 +0530
-Subject: [PATCH 3/4] hidl/thermal: Add `override="true"` in manifest
+Subject: [PATCH 4/5] thermal: Add `override="true"` in manifest
 
  * So we can override stock thermal@1.0 manifest entry
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+Change-Id: If7e24dbfd55888910f3b53e3f5e60167b2154373
 ---
  hidl/thermal/android.hardware.thermal@2.0-service.samsung.xml | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)

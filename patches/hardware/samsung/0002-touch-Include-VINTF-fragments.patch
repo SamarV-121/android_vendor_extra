@@ -1,0 +1,71 @@
+From 6ae8a822ae4f2b5d40f3d9c2a253f4205f38fe05 Mon Sep 17 00:00:00 2001
+From: SamarV-121 <samarvispute121@gmail.com>
+Date: Tue, 26 Jan 2021 22:12:11 +0530
+Subject: [PATCH 2/5] touch: Include VINTF fragments
+
+Change-Id: I0f73bef7587c58f6158d0ded305c2ec2a0abd886
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ hidl/touch/Android.bp                                 |  2 ++
+ hidl/touch/lineage.touch@1.0-service.samsung.xml      | 11 +++++++++++
+ .../vendor.lineage.touch@1.0-service.samsung.xml      | 11 +++++++++++
+ 3 files changed, 24 insertions(+)
+ create mode 100644 hidl/touch/lineage.touch@1.0-service.samsung.xml
+ create mode 100644 hidl/touch/vendor.lineage.touch@1.0-service.samsung.xml
+
+diff --git a/hidl/touch/Android.bp b/hidl/touch/Android.bp
+index cbf4700..2a3cf07 100644
+--- a/hidl/touch/Android.bp
++++ b/hidl/touch/Android.bp
+@@ -35,12 +35,14 @@ cc_defaults {
+ cc_binary {
+     name: "lineage.touch@1.0-service.samsung",
+     init_rc: ["lineage.touch@1.0-service.samsung.rc"],
++    vintf_fragments: ["lineage.touch@1.0-service.samsung.xml"],
+     defaults: ["touch_samsung_defaults"],
+ }
+ 
+ cc_binary {
+     name: "vendor.lineage.touch@1.0-service.samsung",
+     init_rc: ["vendor.lineage.touch@1.0-service.samsung.rc"],
++    vintf_fragments: [vendor.lineage.touch@1.0-service.samsung.xml"],
+     defaults: ["touch_samsung_defaults"],
+     proprietary: true,
+ }
+diff --git a/hidl/touch/lineage.touch@1.0-service.samsung.xml b/hidl/touch/lineage.touch@1.0-service.samsung.xml
+new file mode 100644
+index 0000000..17f74e0
+--- /dev/null
++++ b/hidl/touch/lineage.touch@1.0-service.samsung.xml
+@@ -0,0 +1,11 @@
++<manifest version="1.0" type="framework">
++    <hal format="hidl">
++        <name>vendor.lineage.touch</name>
++        <transport>hwbinder</transport>
++        <version>1.0</version>
++        <interface>
++            <name>IGloveMode</name>
++            <instance>default</instance>
++        </interface>
++    </hal>
++</manifest>
+diff --git a/hidl/touch/vendor.lineage.touch@1.0-service.samsung.xml b/hidl/touch/vendor.lineage.touch@1.0-service.samsung.xml
+new file mode 100644
+index 0000000..0b0f2a8
+--- /dev/null
++++ b/hidl/touch/vendor.lineage.touch@1.0-service.samsung.xml
+@@ -0,0 +1,11 @@
++<manifest version="1.0" type="device">
++    <hal format="hidl">
++        <name>vendor.lineage.touch</name>
++        <transport>hwbinder</transport>
++        <version>1.0</version>
++        <interface>
++            <name>IGloveMode</name>
++            <instance>default</instance>
++        </interface>
++    </hal>
++</manifest>
+-- 
+2.29.2
+
