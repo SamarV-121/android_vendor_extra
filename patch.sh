@@ -12,9 +12,9 @@ else
 
 fi
 
-for repository in $(find vendor/extra/patches -mindepth 2 -type d | sed 's#.*patches/##'); do
+for repository in $(find vendor/extra/patches -mindepth 2 -type d -printf '%P\n'); do
 
-	LAST_COMMIT_HASH="$ROOT/$(sed 's#/#_#g' <<<"$repository").log"
+	LAST_COMMIT_HASH="$ROOT/${repository//\//_}.log"
 	PATCHES="$ROOT/vendor/extra/patches/$repository"
 
 	cd "$ROOT/$repository" || exit
