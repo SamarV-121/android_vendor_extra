@@ -1,4 +1,4 @@
-From 6ae8a822ae4f2b5d40f3d9c2a253f4205f38fe05 Mon Sep 17 00:00:00 2001
+From 27bca20cf020679f46c6ba49a71cab4b65527612 Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
 Date: Tue, 26 Jan 2021 22:12:11 +0530
 Subject: [PATCH 2/5] touch: Include VINTF fragments
@@ -14,7 +14,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  create mode 100644 hidl/touch/vendor.lineage.touch@1.0-service.samsung.xml
 
 diff --git a/hidl/touch/Android.bp b/hidl/touch/Android.bp
-index cbf4700..2a3cf07 100644
+index cbf4700..91d5ea1 100644
 --- a/hidl/touch/Android.bp
 +++ b/hidl/touch/Android.bp
 @@ -35,12 +35,14 @@ cc_defaults {
@@ -28,7 +28,7 @@ index cbf4700..2a3cf07 100644
  cc_binary {
      name: "vendor.lineage.touch@1.0-service.samsung",
      init_rc: ["vendor.lineage.touch@1.0-service.samsung.rc"],
-+    vintf_fragments: [vendor.lineage.touch@1.0-service.samsung.xml"],
++    vintf_fragments: ["vendor.lineage.touch@1.0-service.samsung.xml"],
      defaults: ["touch_samsung_defaults"],
      proprietary: true,
  }

@@ -1,4 +1,4 @@
-From 9016d8b97236ad3dd0281a7293269fc722834faa Mon Sep 17 00:00:00 2001
+From e901949eb85cb4706ee1573f623f9de7af02bc54 Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 12 Feb 2020 11:34:33 +0100
 Subject: [PATCH 02/23] AndroidManifest: add a permission group for signature
@@ -12,9 +12,9 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 ---
  api/current.txt                 | 1 +
  core/res/AndroidManifest.xml    | 8 ++++++++
- core/res/res/values/strings.xml | 9 ++++++++-
+ core/res/res/values/strings.xml | 7 +++++++
  non-updatable-api/current.txt   | 1 +
- 4 files changed, 18 insertions(+), 1 deletion(-)
+ 4 files changed, 17 insertions(+)
 
 diff --git a/api/current.txt b/api/current.txt
 index 73fb59fe..17cf63d7 100644
@@ -51,14 +51,13 @@ index b03142dd..cc7a617c 100644
          android:label="@string/permlab_fakePackageSignature"
          android:description="@string/permdesc_fakePackageSignature" />
 diff --git a/core/res/res/values/strings.xml b/core/res/res/values/strings.xml
-index e8913ec0..d5b3f54a 100644
+index 7ec15dde..d5b3f54a 100644
 --- a/core/res/res/values/strings.xml
 +++ b/core/res/res/values/strings.xml
-@@ -851,7 +851,14 @@
+@@ -851,6 +851,13 @@
      <string name="permlab_fakePackageSignature">Spoof package signature</string>
      <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
      <string name="permdesc_fakePackageSignature">Allows the app to pretend to be a different app. Malicious applications might be able to use this to access private application data. Legitimate uses include an emulator pretending to be what it emulates. Grant this permission with caution only!</string>
--    
 +    <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
 +    <string name="permgrouplab_fake_package_signature">Spoof package signature</string>
 +    <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
@@ -66,10 +65,9 @@ index e8913ec0..d5b3f54a 100644
 +    <!-- Message shown to the user when the apps requests permission from this group. If ever possible this should stay below 80 characters (assuming the parameters takes 20 characters). Don't abbreviate until the message reaches 120 characters though. [CHAR LIMIT=120] -->
 +    <string name="permgrouprequest_fake_package_signature">Allow
 +        &lt;b><xliff:g id="app_name" example="Gmail">%1$s</xliff:g>&lt;/b> to spoof package signature?</string>
-+
+ 
      <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
      <string name="permlab_statusBar">disable or modify status bar</string>
-     <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
 diff --git a/non-updatable-api/current.txt b/non-updatable-api/current.txt
 index c29feb9c..57748a80 100644
 --- a/non-updatable-api/current.txt

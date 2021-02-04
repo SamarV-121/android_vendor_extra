@@ -26629,8 +26629,8 @@ index 0000000..c08156a
 +    android:key="swipe_to_screenshot_screen"
 +    android:title="@string/three_finger_gesture">
 +
-+    <com.android.settings.widget.VideoPreference 
-+        android:key="swipe_to_screenshot_video" 
++    <com.android.settings.widget.VideoPreference
++        android:key="swipe_to_screenshot_video"
 +        app:animation="@raw/swipe_to_screenshot"
 +        app:preview="@drawable/swipe_to_screenshot" />
 +
