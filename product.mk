@@ -45,7 +45,8 @@ PRODUCT_PACKAGE_OVERLAYS += \
 	vendor/extra/overlay
 
 # Properties
-BUILD_FINGERPRINT := google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.build.fingerprint=google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys
 
 # Updater
 PRODUCT_PROPERTY_OVERRIDES += lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
