@@ -1,7 +1,7 @@
-From 0c03e206b8fed683e6e28a3445037185ce791092 Mon Sep 17 00:00:00 2001
+From c7dc32e90361e04d1ddfb9c389871f0276d6eecd Mon Sep 17 00:00:00 2001
 From: Alex Naidis <alex.naidis@linux.com>
 Date: Sun, 9 Apr 2017 01:29:27 +0200
-Subject: [PATCH 2/7] init: Weaken property override security for the init
+Subject: [PATCH 2/6] init: Weaken property override security for the init
  extension
 
 Sometimes we need to override ro.* properties by using our vendor init
@@ -22,7 +22,7 @@ Former-commit-id: 91d12168b9500a44211a7d5a092e0ebcfed48d4d
  1 file changed, 10 insertions(+), 2 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 2852f4f..7631bac 100644
+index 42dd5af..058758a 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
 @@ -108,6 +108,8 @@ struct PropertyAuditData {
@@ -61,9 +61,9 @@ index 2852f4f..7631bac 100644
 +    // Restore the normal property override security after init extension is executed
 +    weaken_prop_override_security = false;
 +
-     update_sys_usb_config();
- }
- 
+     if (android::base::GetBoolProperty("ro.persistent_properties.ready", false)) {
+         update_sys_usb_config();
+     }
 -- 
 2.29.2
 

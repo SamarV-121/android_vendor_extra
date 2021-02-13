@@ -1,7 +1,7 @@
-From 4f00c047ce1c91c227cc68d4329d2137891640b9 Mon Sep 17 00:00:00 2001
+From c6a69c0f95031dd16270134ab1a5bfe7cca56bfa Mon Sep 17 00:00:00 2001
 From: Chris Renshaw <osm0sis@outlook.com>
 Date: Sat, 9 May 2020 06:53:32 -0300
-Subject: [PATCH 4/7] init: add vendor.* keys to spoof safetynet
+Subject: [PATCH 4/6] init: add vendor.* keys to spoof safetynet
 
 aswinas@pixysos: add some more props from magisk hide to userspace hack by arter97
 
@@ -11,7 +11,7 @@ Former-commit-id: fc79269db601c9cd0dad3781d4e6ee8f209c55fc
  1 file changed, 8 insertions(+)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 7ab7a8e..4e37c0a 100644
+index a9458ab..49cdb62 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
 @@ -787,6 +787,10 @@ static const char *snet_prop_key[] = {

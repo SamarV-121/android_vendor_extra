@@ -1,7 +1,7 @@
-From 9d7c7a4b12e8dd8c6b9ed7f72a98706ba6780558 Mon Sep 17 00:00:00 2001
+From 2fd7d3f27a5803fd2429862514434ccc21872389 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 20 Nov 2020 20:33:21 -0300
-Subject: [PATCH 7/7] init: Only set safetynet props if not eng build
+Subject: [PATCH 6/6] init: Only set safetynet props if not eng build
 
 Change-Id: Ic07539b4a7a97316720defd000425d1b6d15fd67
 
@@ -12,7 +12,7 @@ Change-Id: Ic34d95c23afd8caf95c7b2a2517650dbf116fdde
  1 file changed, 9 insertions(+), 5 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index d863707..bc288e7 100644
+index 2e9ccf0..bca7df7 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
 @@ -816,16 +816,20 @@ static const char *snet_prop_value[] = {

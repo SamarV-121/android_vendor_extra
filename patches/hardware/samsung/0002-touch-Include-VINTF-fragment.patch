@@ -1,7 +1,7 @@
 From 27bca20cf020679f46c6ba49a71cab4b65527612 Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
 Date: Tue, 26 Jan 2021 22:12:11 +0530
-Subject: [PATCH 2/5] touch: Include VINTF fragments
+Subject: [PATCH 2/5] touch: Include VINTF fragment
 
 Change-Id: I0f73bef7587c58f6158d0ded305c2ec2a0abd886
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>

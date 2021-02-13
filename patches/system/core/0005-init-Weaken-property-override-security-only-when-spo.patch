@@ -1,18 +1,18 @@
-From 2aaa9ab7798f40db36104a282e6e73021feb3408 Mon Sep 17 00:00:00 2001
+From 6d9e9a7c150cad3aa2cfe882ed4824e7a4214908 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 20 Nov 2020 11:34:54 -0300
-Subject: [PATCH 5/7] init: Weaken property override security only when
+Subject: [PATCH 5/6] init: Weaken property override security only when
  spoofing safetynet
 
 Change-Id: I740afaa27de82bec1e6d58b58d431141ca6b4e3f
 
 Former-commit-id: ca62a22d017f44c9f63553a44f5017eb5b8e9095
 ---
- init/property_service.cpp | 16 ++++++++--------
- 1 file changed, 8 insertions(+), 8 deletions(-)
+ init/property_service.cpp | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 4e37c0a..d863707 100644
+index 49cdb62..2e9ccf0 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
 @@ -816,6 +816,9 @@ static const char *snet_prop_value[] = {
@@ -35,7 +35,7 @@ index 4e37c0a..d863707 100644
  }
  
  // If the ro.product.[brand|device|manufacturer|model|name] properties have not been explicitly
-@@ -967,22 +973,16 @@ void PropertyLoadBootDefaults() {
+@@ -967,24 +973,18 @@ void PropertyLoadBootDefaults() {
          }
      }
  
@@ -48,15 +48,18 @@ index 4e37c0a..d863707 100644
      property_initialize_ro_product_props();
      property_derive_build_fingerprint();
  
-+    update_sys_usb_config();
-+
-     // Workaround SafetyNet
-     workaround_snet_properties();
+-    // Workaround SafetyNet
+-    workaround_snet_properties();
 -
 -    // Restore the normal property override security after init extension is executed
 -    weaken_prop_override_security = false;
 -
--    update_sys_usb_config();
+     if (android::base::GetBoolProperty("ro.persistent_properties.ready", false)) {
+         update_sys_usb_config();
+     }
++
++    // Workaround SafetyNet
++    workaround_snet_properties();
  }
  
  bool LoadPropertyInfoFromFile(const std::string& filename,
