@@ -23,8 +23,7 @@ endif
 
 # SU
 ifeq ($(WITH_SU), true)
-PRODUCT_PACKAGES += \
-    phh-su
+PRODUCT_PACKAGES += Superuser phh-su
 endif
 
 # Disable RescueParty due to high risk of data loss
