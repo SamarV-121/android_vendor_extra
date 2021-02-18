@@ -58,4 +58,6 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.boot.vendor.overlay.static=false
 
 # Updater
-PRODUCT_PROPERTY_OVERRIDES += lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
+PRODUCT_PROPERTY_OVERRIDES += \
+    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json \
+    lineage.updater.allow_downgrading=true
