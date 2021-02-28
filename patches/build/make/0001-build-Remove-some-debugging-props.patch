@@ -1,0 +1,54 @@
+From 88f11299f55d7b21fa76e855362247eb4618a640 Mon Sep 17 00:00:00 2001
+From: Henrique Silva <jhenrique09.mcz@hotmail.com>
+Date: Thu, 17 Jan 2019 00:36:22 -0200
+Subject: [PATCH] build: Remove some debugging props
+
+* Workaround for some banking apps wrongly telling that we are rooted
+
+Change-Id: I96ef74a6d69cd44867b22bfbd0e788aabdf21662
+---
+ core/Makefile | 11 +----------
+ core/main.mk  |  5 ++++-
+ 2 files changed, 5 insertions(+), 11 deletions(-)
+
+diff --git a/core/Makefile b/core/Makefile
+index 4f047bd..834c029 100644
+--- a/core/Makefile
++++ b/core/Makefile
+@@ -319,16 +319,7 @@ BUILD_VERSION_TAGS := $(BUILD_VERSION_TAGS)
+ ifeq ($(TARGET_BUILD_TYPE),debug)
+   BUILD_VERSION_TAGS += debug
+ endif
+-# The "test-keys" tag marks builds signed with the old test keys,
+-# which are available in the SDK.  "dev-keys" marks builds signed with
+-# non-default dev keys (usually private keys from a vendor directory).
+-# Both of these tags will be removed and replaced with "release-keys"
+-# when the target-files is signed in a post-build step.
+-ifeq ($(DEFAULT_SYSTEM_DEV_CERTIFICATE),build/make/target/product/security/testkey)
+-BUILD_KEYS := test-keys
+-else
+-BUILD_KEYS := dev-keys
+-endif
++BUILD_KEYS := release-keys
+ BUILD_VERSION_TAGS += $(BUILD_KEYS)
+ BUILD_VERSION_TAGS := $(subst $(space),$(comma),$(sort $(BUILD_VERSION_TAGS)))
+ 
+diff --git a/core/main.mk b/core/main.mk
+index b91c51a..f550909 100644
+--- a/core/main.mk
++++ b/core/main.mk
+@@ -258,7 +258,10 @@ endif
+ 
+ ## user/userdebug ##
+ 
+-user_variant := $(filter user userdebug,$(TARGET_BUILD_VARIANT))
++user_variant := user
++ifeq ($(TARGET_BUILD_VARIANT),eng)
++user_variant :=
++endif
+ enable_target_debugging := true
+ tags_to_install :=
+ ifneq (,$(user_variant))
+-- 
+2.29.2
+

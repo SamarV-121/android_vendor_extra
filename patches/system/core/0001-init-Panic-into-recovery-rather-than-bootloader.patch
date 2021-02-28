@@ -1,7 +1,7 @@
 From 19412cb05509eb98b572262f684158cb58168ab7 Mon Sep 17 00:00:00 2001
 From: Pierre-Hugues Husson <phh@phh.me>
 Date: Mon, 2 Nov 2020 08:34:35 +0530
-Subject: [PATCH 1/6] init: Panic into recovery rather than bootloader
+Subject: [PATCH 1/7] init: Panic into recovery rather than bootloader
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 Change-Id: I93dc41b40077b975179169d0eadaf9b8f2696137
