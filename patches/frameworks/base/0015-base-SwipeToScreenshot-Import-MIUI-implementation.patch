@@ -1,7 +1,7 @@
-From e16e41833183b08a2a66a48841eea8a9353c5b54 Mon Sep 17 00:00:00 2001
+From 9ad73a07a5b941a6ca3db7c4faf0242a0a84c351 Mon Sep 17 00:00:00 2001
 From: Henrique Silva <jhenrique09.mcz@hotmail.com>
 Date: Wed, 8 May 2019 11:52:38 -0300
-Subject: [PATCH 15/23] base: SwipeToScreenshot: Import MIUI implementation
+Subject: [PATCH 15/24] base: SwipeToScreenshot: Import MIUI implementation
 
 Reverse engineered from Xiaomi/beryllium/beryllium:9/PKQ1.180729.001/9.2.25:user/release-keys
 
@@ -16,10 +16,10 @@ Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
  create mode 100644 services/core/java/com/android/server/policy/SwipeToScreenshotListener.java
 
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index f17ddd46..c42b787f 100644
+index e085d3db..9ffb6453 100644
 --- a/services/core/java/com/android/server/am/ActivityManagerService.java
 +++ b/services/core/java/com/android/server/am/ActivityManagerService.java
-@@ -20406,7 +20406,7 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -20407,7 +20407,7 @@ public class ActivityManagerService extends IActivityManager.Stub
      @Override
      public boolean isSwipeToScreenshotGestureActive() {
          synchronized (this) {
@@ -189,7 +189,7 @@ index e4af1a03..00000000
 -    }
 -}
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 0230cb34..26804adc 100644
+index 3e2a352f..2f880ead 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -721,7 +721,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {

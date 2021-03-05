@@ -1,3 +1,6 @@
-[submodule "faceunlock"]
-	path = faceunlock
+[submodule "external/motorola/faceunlock"]
+	path = external/motorola/faceunlock
 	url = https://gitlab.com/SamarV-121/android_external_motorola_faceunlock
+[submodule "external/asus/stitchimage"]
+	path = external/asus/stitchimage
+	url = https://github.com/syberia-project/platform_external_asus_stitchimage

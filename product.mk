@@ -43,6 +43,10 @@ endif
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.face.moto_unlock_service=$(TARGET_FACE_UNLOCK_SUPPORTED)
 
+# StichImage
+PRODUCT_PACKAGES += \
+    StitchImage
+
 # Overlays
 PRODUCT_PACKAGE_OVERLAYS += \
 	vendor/extra/overlay

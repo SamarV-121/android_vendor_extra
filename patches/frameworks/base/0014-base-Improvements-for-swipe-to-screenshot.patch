@@ -1,7 +1,7 @@
-From 180c1222968077506103ab4545565f8d7b326090 Mon Sep 17 00:00:00 2001
+From bab63da8249cd5f9102ecda7d990b0197945d873 Mon Sep 17 00:00:00 2001
 From: Henrique Silva <jhenrique09.mcz@hotmail.com>
 Date: Tue, 7 May 2019 13:29:38 -0300
-Subject: [PATCH 14/23] base: Improvements for swipe to screenshot
+Subject: [PATCH 14/24] base: Improvements for swipe to screenshot
 
 * Cancel touch events when tap with three fingers
 
@@ -60,7 +60,7 @@ index 3763728f..51a97271 100644
          mSendNextFrameToWm = false;
          if (mNextReportConsumeBLAST) {
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index 091c77ec..f17ddd46 100644
+index 7acb1bf4..e085d3db 100644
 --- a/services/core/java/com/android/server/am/ActivityManagerService.java
 +++ b/services/core/java/com/android/server/am/ActivityManagerService.java
 @@ -1672,6 +1672,10 @@ public class ActivityManagerService extends IActivityManager.Stub
@@ -91,7 +91,7 @@ index 091c77ec..f17ddd46 100644
          mInternal = new LocalService();
          mPendingStartActivityUids = new PendingStartActivityUids(mContext);
      }
-@@ -9507,6 +9514,7 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -9508,6 +9515,7 @@ public class ActivityManagerService extends IActivityManager.Stub
              mWaitForNetworkTimeoutMs = waitForNetworkTimeoutMs;
              mPssDeferralTime = pssDeferralMs;
          }
@@ -99,7 +99,7 @@ index 091c77ec..f17ddd46 100644
      }
  
      /**
-@@ -20368,4 +20376,37 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -20369,4 +20377,37 @@ public class ActivityManagerService extends IActivityManager.Stub
              throw new SecurityException("Caller uid " + callerUid + " cannot set freezer state ");
          }
      }
