@@ -1,7 +1,7 @@
-From 7a9c8be741b426177f4baf3d46d42d0c49a0cf4f Mon Sep 17 00:00:00 2001
+From 553389e9bd1cce66eb4e5600972f8eba0fdd65d3 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Tue, 24 Mar 2020 16:46:29 -0300
-Subject: [PATCH 04/24] base: Remove restrictions for system audio record
+Subject: [PATCH 04/26] base: Remove restrictions for system audio record
 
 * Give freedom to screen recorder apps
 
@@ -68,5 +68,5 @@ index 158482a6..c3fdc895 100644
      }
  
 -- 
-2.29.2
+2.30.1
 

@@ -1,7 +1,7 @@
-From 842a8818f88d089d67a8bdffa06c57ca3043c95c Mon Sep 17 00:00:00 2001
+From 01450cc59b68fac8f5a65310337884514565a125 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 18 Sep 2020 09:16:19 -0700
-Subject: [PATCH 23/24] NotificationShade: Make blur crossfading more gradual
+Subject: [PATCH 23/26] NotificationShade: Make blur crossfading more gradual
 
 The default value results in a sudden jump from sharp to blurred.
 
@@ -24,5 +24,5 @@ index 5bec6854..cf34a5b7 100644
          private const val TAG = "DepthController"
      }
 -- 
-2.29.2
+2.30.1
 

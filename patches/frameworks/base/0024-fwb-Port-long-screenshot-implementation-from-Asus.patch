@@ -1,7 +1,7 @@
-From 8c7a5c847c8a622ed16eb457998acbe5fd11c6d3 Mon Sep 17 00:00:00 2001
+From e3b1752033a6021cc755bfe29e8d1cab2ec1ddcf Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Tue, 13 Aug 2019 09:08:00 -0300
-Subject: [PATCH 24/24] fwb: Port long screenshot implementation from Asus
+Subject: [PATCH 24/26] fwb: Port long screenshot implementation from Asus
 
 From asus/WW_I001D/ASUS_I001_1:10/QKQ1.190825.002/17.0210.2001.60-0:user/release-keys
 
@@ -421,5 +421,5 @@ index a3fcda9c..c68cd2f6 100644
 +    }
  }
 -- 
-2.29.2
+2.30.1
 

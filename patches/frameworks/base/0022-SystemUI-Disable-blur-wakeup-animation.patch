@@ -1,7 +1,7 @@
-From bf882486fd1a8c4e276990360e339e6df11c0683 Mon Sep 17 00:00:00 2001
+From 832237ad0f8f34ac64a3fdd7208c27782b1ada75 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 6 Nov 2020 12:52:59 -0800
-Subject: [PATCH 22/24] SystemUI: Disable blur wakeup animation
+Subject: [PATCH 22/26] SystemUI: Disable blur wakeup animation
 
 This animation looks distracting and prevents the user from seeing
 anything during the unlock animation.
@@ -25,5 +25,5 @@ index 20ab4057..5bec6854 100644
          private const val MAX_VELOCITY = 3000f
          private const val MIN_VELOCITY = -MAX_VELOCITY
 -- 
-2.29.2
+2.30.1
 

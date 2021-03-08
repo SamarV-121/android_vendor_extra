@@ -1,7 +1,7 @@
-From ccd23885fed61f8c5125e4f9937174912e844096 Mon Sep 17 00:00:00 2001
+From 524cc760cb04b7dfba5abe3f11ad7df620b09dce Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 29 Oct 2020 20:36:31 -0700
-Subject: [PATCH 09/24] graphics: Adjust ripple animation for immediate
+Subject: [PATCH 09/26] graphics: Adjust ripple animation for immediate
  feedback
 
 Lack of immediate feedback when interacting with UI elements that use
@@ -42,5 +42,5 @@ index 0f376957..10c66ae8 100644
      // Parent-relative values for starting position.
      private float mStartingX;
 -- 
-2.29.2
+2.30.1
 

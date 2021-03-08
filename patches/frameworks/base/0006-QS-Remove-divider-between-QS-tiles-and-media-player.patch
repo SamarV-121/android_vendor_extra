@@ -1,7 +1,7 @@
-From 2b078075f15f64e7b5fff1f4d6b9ad718e744a6e Mon Sep 17 00:00:00 2001
+From edd62b2c42946c39b43f7cffec68c77117fa0b7b Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Wed, 23 Sep 2020 16:12:05 -0700
-Subject: [PATCH 06/24] QS: Remove divider between QS tiles and media player
+Subject: [PATCH 06/26] QS: Remove divider between QS tiles and media player
 
 The color used for this divider in dark mode contrasts too much with the
 pure black background in the QS, and even in light mode, the divider
@@ -146,5 +146,5 @@ index ed5106aa..97dd0f47 100644
       * Update the margins of the media hosts
       */
 -- 
-2.29.2
+2.30.1
 

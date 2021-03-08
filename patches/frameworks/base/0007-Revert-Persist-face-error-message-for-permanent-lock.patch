@@ -1,7 +1,7 @@
-From c6003b9ba115986ed9e06b737e409dd9e85fa456 Mon Sep 17 00:00:00 2001
+From 0318066bacec7476d0a9a0f454ee4083ff7b8248 Mon Sep 17 00:00:00 2001
 From: DennySPb <dennyspb@gmail.com>
 Date: Wed, 14 Oct 2020 09:20:37 +0300
-Subject: [PATCH 07/24] Revert "Persist face error message for permanent
+Subject: [PATCH 07/26] Revert "Persist face error message for permanent
  lockout"
 
 Restore pre-R FaceUnlok lockdown behaviour
@@ -83,5 +83,5 @@ index 5e71986a..37564d8a 100644
              } else {
                  mCurrentUserLockoutMode = AuthenticationClient.LOCKOUT_TIMED;
 -- 
-2.29.2
+2.30.1
 
