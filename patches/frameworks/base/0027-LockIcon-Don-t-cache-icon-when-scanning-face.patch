@@ -1,0 +1,45 @@
+From 48599ec016f2da6c7726c738b4018f8f72534684 Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Mon, 8 Feb 2021 16:11:45 -0300
+Subject: [PATCH 27/31] LockIcon: Don't cache icon when scanning face
+
+Change-Id: I739773e8ac717b782ea8d1f93c3c0bc137d7efa5
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ .../src/com/android/systemui/statusbar/phone/LockIcon.java  | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java
+index ec54b302..40b329d3 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java
+@@ -56,6 +56,7 @@ public class LockIcon extends KeyguardAffordanceView {
+     private boolean mDozing;
+     private boolean mKeyguardJustShown;
+     private boolean mPredrawRegistered;
++    private Drawable mFaceScanningAnim;
+     private final SparseArray<Drawable> mDrawableCache = new SparseArray<>();
+ 
+     private final OnPreDrawListener mOnPreDrawListener = new OnPreDrawListener() {
+@@ -100,6 +101,7 @@ public class LockIcon extends KeyguardAffordanceView {
+ 
+     public LockIcon(Context context, AttributeSet attrs) {
+         super(context, attrs);
++        mFaceScanningAnim = getResources().getDrawable(getThemedAnimationResId(SCANNING));
+     }
+ 
+     @Override
+@@ -163,6 +165,10 @@ public class LockIcon extends KeyguardAffordanceView {
+     }
+ 
+     private Drawable getIcon(int newState) {
++        if (newState == STATE_SCANNING_FACE) {
++            return mFaceScanningAnim;
++        }
++
+         @LockAnimIndex final int lockAnimIndex =
+                 getAnimationIndexForTransition(mOldState, newState, mPulsing, mDozing,
+                         mKeyguardJustShown);
+-- 
+2.30.1
+

@@ -1,0 +1,63 @@
+From f9a5f36b7bf3b40f5de1e41b7bb568d46ace0d24 Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Mon, 8 Feb 2021 00:06:36 -0300
+Subject: [PATCH 4/4] libcameraservice: Remove restrictions for faceunlock
+ service
+
+Change-Id: I6248937629cd8190f46503eef31a1db7c5d54510
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ services/camera/libcameraservice/CameraService.cpp | 8 ++++++--
+ services/camera/libcameraservice/CameraService.h   | 3 +++
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp
+index 5f71b80..da9cb2b 100644
+--- a/services/camera/libcameraservice/CameraService.cpp
++++ b/services/camera/libcameraservice/CameraService.cpp
+@@ -2867,6 +2867,10 @@ String16 CameraService::BasicClient::getPackageName() const {
+     return mClientPackageName;
+ }
+ 
++bool CameraService::BasicClient::isFaceUnlockPackage() const {
++    std::string cpn = String8(mClientPackageName).string();
++    return cpn.compare("org.pixelexperience.faceunlock") == 0;
++}
+ 
+ int CameraService::BasicClient::getClientPid() const {
+     return mClientPid;
+@@ -2927,7 +2931,7 @@ status_t CameraService::BasicClient::startCameraOps() {
+                 mClientPackageName, /*startIfModeDefault*/ false, mClientFeatureId,
+                 String16("start camera ") + String16(mCameraIdStr));
+ 
+-        if (res == AppOpsManager::MODE_ERRORED) {
++        if (!isFaceUnlockPackage() && res == AppOpsManager::MODE_ERRORED) {
+             ALOGI("Camera %s: Access for \"%s\" has been revoked",
+                     mCameraIdStr.string(), String8(mClientPackageName).string());
+             return PERMISSION_DENIED;
+@@ -2935,7 +2939,7 @@ status_t CameraService::BasicClient::startCameraOps() {
+ 
+         // If the calling Uid is trusted (a native service), the AppOpsManager could
+         // return MODE_IGNORED. Do not treat such case as error.
+-        if (!mUidIsTrusted && res == AppOpsManager::MODE_IGNORED) {
++        if (!isFaceUnlockPackage() && !mUidIsTrusted && res == AppOpsManager::MODE_IGNORED) {
+             ALOGI("Camera %s: Access for \"%s\" has been restricted",
+                     mCameraIdStr.string(), String8(mClientPackageName).string());
+             // Return the same error as for device policy manager rejection
+diff --git a/services/camera/libcameraservice/CameraService.h b/services/camera/libcameraservice/CameraService.h
+index 685ed5e..a192202 100644
+--- a/services/camera/libcameraservice/CameraService.h
++++ b/services/camera/libcameraservice/CameraService.h
+@@ -295,6 +295,9 @@ public:
+         // Override rotate-and-crop AUTO behavior
+         virtual status_t setRotateAndCropOverride(uint8_t rotateAndCrop) = 0;
+ 
++        // Return if current package is face unlock
++        virtual bool isFaceUnlockPackage() const;
++
+     protected:
+         BasicClient(const sp<CameraService>& cameraService,
+                 const sp<IBinder>& remoteCallback,
+-- 
+2.30.1
+
