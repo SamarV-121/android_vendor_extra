@@ -1,4 +1,4 @@
-From 1c32c2d22be655dcf47260c65a6ef932cbe24fce Mon Sep 17 00:00:00 2001
+From 8d948a3d33e63a1367d7bbd4227a00d919dff9ed Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Feb 2021 21:14:30 -0300
 Subject: [PATCH 5/6] Port faceunlock feature
@@ -54,21 +54,21 @@ index aac82c6..b99b164 100644
  
      libs: [
 diff --git a/AndroidManifest.xml b/AndroidManifest.xml
-index 8642047..d0b0698 100644
+index 6ead75a..b06435e 100644
 --- a/AndroidManifest.xml
 +++ b/AndroidManifest.xml
-@@ -104,6 +104,10 @@
-     <uses-permission android:name="android.permission.INSTALL_DYNAMIC_SYSTEM" />
-     <uses-permission android:name="android.permission.BIND_CELL_BROADCAST_SERVICE" />
-     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-+
+@@ -107,6 +107,10 @@
+     <uses-permission android:name="android.permission.READ_DREAM_STATE" />
+     <uses-permission android:name="android.permission.READ_DREAM_SUPPRESSION" />
+ 
 +    <!-- Face Unlock -->
 +    <uses-permission android:name="com.android.settings.FACE_UNLOCK"/>
 +    <permission android:name="com.android.settings.FACE_UNLOCK" android:protectionLevel="signatureOrSystem"/>
-     
++
      <application android:label="@string/settings_label"
              android:icon="@mipmap/ic_launcher"
-@@ -3426,6 +3430,16 @@
+             android:theme="@style/Theme.Settings"
+@@ -3437,6 +3441,16 @@
              </intent-filter>
          </activity>
  
@@ -162,10 +162,10 @@ index 98459f0..0000000
 -</LinearLayout>
 \ No newline at end of file
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index 337eaa0..abc72c1 100644
+index 0b8baca..960b715 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -166,4 +166,13 @@
+@@ -170,4 +170,13 @@
      <!-- Three-fingers-swipe to screenshot -->
      <string name="three_finger_gesture">Swipe to screenshot</string>
      <string name="three_finger_gesture_summary">Swipe down with three fingers to take a screenshot</string>
@@ -177,7 +177,7 @@ index 337eaa0..abc72c1 100644
 +    <string name="security_settings_face_unlock_redo_face_scan_title">Redo face scan</string>
 +    <string name="security_dashboard_summary_face_and_fingerprint">Screen lock, fingerprint, face unlock</string>
 +    <string name="face_redo_confirm_btn">Redo</string>
-+    <string name="face_redo_warning_msg">Do you want to remove the existing face scan and create a new one?</string>    
++    <string name="face_redo_warning_msg">Do you want to remove the existing face scan and create a new one?</string>
  </resources>
 diff --git a/res/xml/security_settings_face.xml b/res/xml/security_settings_face.xml
 index d450fef..2721278 100644
@@ -929,7 +929,7 @@ index 0000000..3e5c1e9
 +}
 diff --git a/src/com/android/settings/custom/biometrics/face/FaceSettingsRedoPreferenceController.java b/src/com/android/settings/custom/biometrics/face/FaceSettingsRedoPreferenceController.java
 new file mode 100644
-index 0000000..958912b
+index 0000000..a04c8cc
 --- /dev/null
 +++ b/src/com/android/settings/custom/biometrics/face/FaceSettingsRedoPreferenceController.java
 @@ -0,0 +1,132 @@
@@ -963,7 +963,7 @@ index 0000000..958912b
 +    private final FaceManager.RemovalCallback mRemovalCallback;
 +    private int mUserId;
 +
-+    @Override 
++    @Override
 +    public String getPreferenceKey() {
 +        return KEY;
 +    }

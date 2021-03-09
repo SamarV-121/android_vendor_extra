@@ -116,7 +116,7 @@ index 7c25d281..12da0dac 100644
 +
 +            if (!Utils.canAuthenticateWithFace(mContext, mUserId)){
 +                mUseFaceButton.setVisibility(View.GONE);
-+            }        
++            }
      }
  
      /**

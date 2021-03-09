@@ -1,4 +1,4 @@
-From 55d711d8ed910b70c90d0e3d6091ca5c0853d3aa Mon Sep 17 00:00:00 2001
+From 115d1407b9920c52745709c973d217c96b986f2f Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Thu, 7 Nov 2019 19:06:00 +0100
 Subject: [PATCH 4/6] Settings: Add three-fingers-swipe to screenshot [2/2]
@@ -26572,13 +26572,13 @@ literal 0
 HcmV?d00001
 
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index b73d11d..337eaa0 100644
+index 649f91b..0b8baca 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -162,4 +162,8 @@
-     <!-- FastCharge feature -->
-     <string name="fast_charging_title">Fast charging</string>
-     <string name="fast_charging_summary">Disable to reduce the heat produced by the device while charging or to extend the lifespan of the battery</string>
+@@ -166,4 +166,8 @@
+     <!-- Fingerprint unlock keystore -->
+     <string name="fp_unlock_keystore_title">Fingerprint unlock</string>
+     <string name="fp_unlock_keystore_summary">Unlock device with fingerprint after reboot without PIN/Password/Pattern\nNote: at your own risk!</string>
 +
 +    <!-- Three-fingers-swipe to screenshot -->
 +    <string name="three_finger_gesture">Swipe to screenshot</string>
