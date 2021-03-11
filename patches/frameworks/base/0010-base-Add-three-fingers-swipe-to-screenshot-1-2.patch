@@ -1,7 +1,7 @@
-From 3589e09b6c68a00a9859c8b8f96adfc87b381057 Mon Sep 17 00:00:00 2001
+From 76e9c1e7127d5ca5305d86c74fa39c7781668150 Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Sun, 9 Aug 2015 01:23:33 +0800
-Subject: [PATCH 10/31] base: Add three-fingers-swipe to screenshot [1/2]
+Subject: [PATCH 10/32] base: Add three-fingers-swipe to screenshot [1/2]
 
 The feature is ported from Oppo ColorOS.
 With the options on, users can swipe down
@@ -20,7 +20,7 @@ Signed-off-by: Sujit Roy <kumarsujitroy@gmail.com>
  create mode 100644 services/core/java/com/android/server/policy/OPGesturesListener.java
 
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index c91e5cf9..3ba7866c 100755
+index 190db1b1..50c48bd9 100755
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -4473,6 +4473,12 @@ public final class Settings {
@@ -197,7 +197,7 @@ index 00000000..e4af1a03
 +    }
 +}
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 4fd6286d..3e2a352f 100644
+index 2689703d..de72d5e1 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -655,6 +655,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -227,7 +227,7 @@ index 4fd6286d..3e2a352f 100644
              updateSettings();
          }
  
-@@ -2042,6 +2046,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2049,6 +2053,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          }
  
          mHandler = new PolicyHandler();
@@ -240,7 +240,7 @@ index 4fd6286d..3e2a352f 100644
          mWakeGestureListener = new MyWakeGestureListener(mContext, mHandler);
          mSettingsObserver = new SettingsObserver(mHandler);
  
-@@ -2199,6 +2209,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2206,6 +2216,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              finishedGoingToSleep(WindowManagerPolicy.OFF_BECAUSE_OF_USER);
          }
  
@@ -248,7 +248,7 @@ index 4fd6286d..3e2a352f 100644
          mWindowManagerInternal.registerAppTransitionListener(new AppTransitionListener() {
              @Override
              public int onAppTransitionStartingLocked(int transit, long duration,
-@@ -2265,6 +2276,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2272,6 +2283,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          context.registerReceiver(torchReceiver, filter);
      }
  
@@ -267,7 +267,7 @@ index 4fd6286d..3e2a352f 100644
      private void updateKeyAssignments() {
          int activeHardwareKeys = mDeviceHardwareKeys;
  
-@@ -2428,6 +2451,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2435,6 +2458,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                      LineageSettings.System.CLICK_PARTIAL_SCREENSHOT, 0,
                      UserHandle.USER_CURRENT) == 1;
  
@@ -280,5 +280,5 @@ index 4fd6286d..3e2a352f 100644
              boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
                      Settings.Secure.WAKE_GESTURE_ENABLED, 0,
 -- 
-2.30.1
+2.25.1
 

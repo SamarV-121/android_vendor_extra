@@ -1,7 +1,7 @@
-From f70f4b20b2d1725b29283ae9bac383ee81be0ba1 Mon Sep 17 00:00:00 2001
+From 8e3c07c3608f4abc8805e81f6b5d7cee1729bd7e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Sun, 13 Dec 2020 19:45:47 -0800
-Subject: [PATCH 18/31] SystemUI: Improve volume panel expansion/contraction
+Subject: [PATCH 18/32] SystemUI: Improve volume panel expansion/contraction
  animation
 
 - Always decelerate instead of accelerating for a more responsive feel
@@ -16,10 +16,10 @@ Change-Id: I31c2fe3da2a237addbb6052bdf83f53949ee13e3
  1 file changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
-index add29ce5..59136386 100644
+index 0d18fabe..b9dba3df 100644
 --- a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
 +++ b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
-@@ -613,9 +613,8 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -614,9 +614,8 @@ public class VolumeDialogImpl implements VolumeDialog,
                  }
              }
          });
@@ -32,5 +32,5 @@ index add29ce5..59136386 100644
      }
  
 -- 
-2.30.1
+2.25.1
 

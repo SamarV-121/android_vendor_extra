@@ -1,7 +1,7 @@
-From 320e57a68c4db60887c1d7d2d1da0ca1358252f1 Mon Sep 17 00:00:00 2001
+From 14ed88b8206d1a5952c3acf6af2228e1f471ab99 Mon Sep 17 00:00:00 2001
 From: Henrique Silva <jhenrique09.mcz@hotmail.com>
 Date: Tue, 7 May 2019 13:29:38 -0300
-Subject: [PATCH 11/31] base: Improvements for swipe to screenshot
+Subject: [PATCH 11/32] base: Improvements for swipe to screenshot
 
 * Cancel touch events when tap with three fingers
 
@@ -28,7 +28,7 @@ index 2fe7eea3..0703226f 100644
 +    boolean isSwipeToScreenshotGestureActive();
  }
 diff --git a/core/java/android/view/ViewRootImpl.java b/core/java/android/view/ViewRootImpl.java
-index 3763728f..51a97271 100644
+index 18e9ef0e..381364be 100644
 --- a/core/java/android/view/ViewRootImpl.java
 +++ b/core/java/android/view/ViewRootImpl.java
 @@ -5740,6 +5740,11 @@ public final class ViewRootImpl implements ViewParent,
@@ -60,7 +60,7 @@ index 3763728f..51a97271 100644
          mSendNextFrameToWm = false;
          if (mNextReportConsumeBLAST) {
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index 7acb1bf4..e085d3db 100644
+index 3f4878e3..8c7ef623 100644
 --- a/services/core/java/com/android/server/am/ActivityManagerService.java
 +++ b/services/core/java/com/android/server/am/ActivityManagerService.java
 @@ -1672,6 +1672,10 @@ public class ActivityManagerService extends IActivityManager.Stub
@@ -99,7 +99,7 @@ index 7acb1bf4..e085d3db 100644
      }
  
      /**
-@@ -20369,4 +20377,37 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -20373,4 +20381,37 @@ public class ActivityManagerService extends IActivityManager.Stub
              throw new SecurityException("Caller uid " + callerUid + " cannot set freezer state ");
          }
      }
@@ -138,5 +138,5 @@ index 7acb1bf4..e085d3db 100644
 +    }
  }
 -- 
-2.30.1
+2.25.1
 

@@ -1,7 +1,7 @@
-From d40c1c1ed93b9296f7df326b62487b9aa2eeff96 Mon Sep 17 00:00:00 2001
+From 70d155e2fd388665812f9130abc74de26d6d90e6 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Tue, 13 Aug 2019 09:08:00 -0300
-Subject: [PATCH 21/31] fwb: Port long screenshot implementation from Asus
+Subject: [PATCH 21/32] fwb: Port long screenshot implementation from Asus
 
 From asus/WW_I001D/ASUS_I001_1:10/QKQ1.190825.002/17.0210.2001.60-0:user/release-keys
 
@@ -241,7 +241,7 @@ index 88740836..abd4ca40 100644
                  synchronized (mScreenshotLock) {
                      if (mScreenshotConnection != null) {
 diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
-index c68be502..cee6db11 100644
+index 6bee1974..d77e46c0 100644
 --- a/packages/SystemUI/AndroidManifest.xml
 +++ b/packages/SystemUI/AndroidManifest.xml
 @@ -276,6 +276,9 @@
@@ -331,10 +331,10 @@ index da1ef2f0..ac8655b5 100644
                  final CastDevice device = new CastDevice();
                  device.id = mProjection.getPackageName();
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 2f880ead..2abb1aec 100644
+index 8162cb20..788d2de7 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-@@ -6527,4 +6527,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6534,4 +6534,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          }
      }
  
@@ -360,10 +360,10 @@ index e8ae95ba..08fa21a9 100644
 +    void takeAlternativeScreenshot();
  }
 diff --git a/services/core/java/com/android/server/uri/UriGrantsManagerService.java b/services/core/java/com/android/server/uri/UriGrantsManagerService.java
-index 8eefd8fa..adaf0c90 100644
+index e8a03794..2a25c432 100644
 --- a/services/core/java/com/android/server/uri/UriGrantsManagerService.java
 +++ b/services/core/java/com/android/server/uri/UriGrantsManagerService.java
-@@ -109,6 +109,8 @@ import java.util.Iterator;
+@@ -113,6 +113,8 @@ import java.util.Iterator;
  import java.util.List;
  import java.util.Objects;
  
@@ -372,7 +372,7 @@ index 8eefd8fa..adaf0c90 100644
  /** Manages uri grants. */
  public class UriGrantsManagerService extends IUriGrantsManager.Stub {
      private static final boolean DEBUG = false;
-@@ -1084,12 +1086,14 @@ public class UriGrantsManagerService extends IUriGrantsManager.Stub {
+@@ -1126,12 +1128,14 @@ public class UriGrantsManagerService extends IUriGrantsManager.Stub {
          final int callingAppId = UserHandle.getAppId(callingUid);
          if ((callingAppId == SYSTEM_UID) || (callingAppId == ROOT_UID)) {
              if ("com.android.settings.files".equals(grantUri.uri.getAuthority())
@@ -389,10 +389,10 @@ index 8eefd8fa..adaf0c90 100644
                  Slog.w(TAG, "For security reasons, the system cannot issue a Uri permission"
                          + " grant to " + grantUri + "; use startActivityAsCaller() instead");
 diff --git a/services/core/java/com/android/server/wm/DisplayPolicy.java b/services/core/java/com/android/server/wm/DisplayPolicy.java
-index 2541411b..2b6fe63a 100644
+index 97e4a959..0c6afbdc 100644
 --- a/services/core/java/com/android/server/wm/DisplayPolicy.java
 +++ b/services/core/java/com/android/server/wm/DisplayPolicy.java
-@@ -4127,10 +4127,12 @@ public class DisplayPolicy {
+@@ -4124,10 +4124,12 @@ public class DisplayPolicy {
       */
      public void takeScreenshot(int screenshotType, int source) {
          if (mScreenshotHelper != null) {
@@ -421,5 +421,5 @@ index a3fcda9c..c68cd2f6 100644
 +    }
  }
 -- 
-2.30.1
+2.25.1
 

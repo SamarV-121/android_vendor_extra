@@ -1,7 +1,7 @@
-From 75509492e107affb6c6dc4caa46c424c16bbfbc9 Mon Sep 17 00:00:00 2001
+From a20513ab4af12e44a5e164a0fee06722fa91f542 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 6 Mar 2021 15:27:11 -0300
-Subject: [PATCH 29/31] Allow using face as auth method for apps
+Subject: [PATCH 29/32] Allow using face as auth method for apps
 
 Change-Id: I008370cefe9584c86e058b718e2ef79518b95eb6
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -67,7 +67,7 @@ index 423f0eab..9b395623 100644
 +    <string name="biometric_dialog_button_use_face">Use Face</string>
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
-index 7c25d281..12da0dac 100644
+index 7c25d281..1a6f2cf7 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 @@ -98,6 +98,7 @@ public abstract class AuthBiometricView extends LinearLayout {
@@ -121,7 +121,7 @@ index 7c25d281..12da0dac 100644
  
      /**
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
-index dbe5a779..95aefe52 100644
+index c1233fe6..f8718d0d 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
 @@ -235,6 +235,9 @@ public class AuthContainerView extends LinearLayout
@@ -492,5 +492,5 @@ index 1a79610e..51f8eda4 100644
      }
  
 -- 
-2.30.1
+2.25.1
 

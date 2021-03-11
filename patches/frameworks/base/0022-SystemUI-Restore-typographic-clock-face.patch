@@ -1,7 +1,7 @@
-From 841a96d88078a8b68915f8b375843b765c035d56 Mon Sep 17 00:00:00 2001
+From 390f8dc1bd3ffec2ff0e07f85b35eb379c6a0e88 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 3 Nov 2020 13:17:29 -0800
-Subject: [PATCH 22/31] SystemUI: Restore typographic clock face
+Subject: [PATCH 22/32] SystemUI: Restore typographic clock face
 
 This reverts commits 583067c4e4799b0a633d8e861698c8fc2a5c7a6f and
 37fe8022174fc809ef4622f7d6c69f9bdff06913.
@@ -214,10 +214,10 @@ index 00000000..73bb4b9a
 +    android:textSize="40dp"
 +    />
 diff --git a/packages/SystemUI/res-keyguard/values/strings.xml b/packages/SystemUI/res-keyguard/values/strings.xml
-index f7e9fedd..e7a9479d 100644
+index 4b662137..91df3905 100644
 --- a/packages/SystemUI/res-keyguard/values/strings.xml
 +++ b/packages/SystemUI/res-keyguard/values/strings.xml
-@@ -315,11 +315,113 @@ number">%d</xliff:g> remaining attempt before SIM becomes permanently unusable.
+@@ -318,11 +318,113 @@ number">%d</xliff:g> remaining attempt before SIM becomes permanently unusable.
  number">%d</xliff:g> remaining attempts before SIM becomes permanently unusable. Contact carrier for details.</item>
      </plurals>
  
@@ -729,5 +729,5 @@ index 00000000..c84c5984
 +    }
 +}
 -- 
-2.30.1
+2.25.1
 

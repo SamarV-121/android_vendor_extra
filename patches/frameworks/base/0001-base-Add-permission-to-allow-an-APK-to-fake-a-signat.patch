@@ -1,7 +1,7 @@
-From 1ef98e91a885de813aed4d7e9595f8dea0508537 Mon Sep 17 00:00:00 2001
+From f17fd4b3da85344e89d78e3674a0076d08120f04 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20Rosenkr=C3=A4nzer?= <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
-Subject: [PATCH 01/31] base: Add permission to allow an APK to fake a
+Subject: [PATCH 01/32] base: Add permission to allow an APK to fake a
  signature.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -40,10 +40,10 @@ index 952ccdad..73fb59fe 100644
      field public static final String GET_ACCOUNTS = "android.permission.GET_ACCOUNTS";
      field public static final String GET_ACCOUNTS_PRIVILEGED = "android.permission.GET_ACCOUNTS_PRIVILEGED";
 diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
-index fa6c273a..b03142dd 100644
+index 962d6ce7..899f317c 100644
 --- a/core/res/AndroidManifest.xml
 +++ b/core/res/AndroidManifest.xml
-@@ -2841,6 +2841,13 @@
+@@ -2842,6 +2842,13 @@
          android:description="@string/permdesc_getPackageSize"
          android:protectionLevel="normal" />
  
@@ -99,7 +99,7 @@ index 5f15216e..c29feb9c 100644
      field public static final String GET_ACCOUNTS = "android.permission.GET_ACCOUNTS";
      field public static final String GET_ACCOUNTS_PRIVILEGED = "android.permission.GET_ACCOUNTS_PRIVILEGED";
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index 0105349d..4f3acd16 100644
+index cbf2300d..c9cafa76 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -4454,8 +4454,9 @@ public class PackageManagerService extends IPackageManager.Stub
@@ -140,5 +140,5 @@ index 0105349d..4f3acd16 100644
      public void checkPackageStartable(String packageName, int userId) {
          final int callingUid = Binder.getCallingUid();
 -- 
-2.30.1
+2.25.1
 
