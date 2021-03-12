@@ -1,7 +1,7 @@
-From 29c72d42a8d484141ee7e3bda51a91095f0e95f6 Mon Sep 17 00:00:00 2001
+From 6290ca98177e451e2e4ef2760797ad4be0661138 Mon Sep 17 00:00:00 2001
 From: Pierre-Hugues Husson <phh@phh.me>
 Date: Thu, 14 May 2020 19:54:55 +0200
-Subject: [PATCH 1/4] libcameraservice: Use Samsung hal to get camera IDs
+Subject: [PATCH 1/5] libcameraservice: Use Samsung hal to get camera IDs
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 Change-Id: I751c350962d03aee3a4b6a57a1b63c7ae90cb740

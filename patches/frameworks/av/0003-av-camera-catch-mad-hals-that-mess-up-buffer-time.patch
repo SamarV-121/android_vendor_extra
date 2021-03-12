@@ -1,7 +1,7 @@
-From c3cbe6068daeef4a331509dac4f20904a6e12212 Mon Sep 17 00:00:00 2001
+From 19a18de03e8265c45ca88cb56facca7abd7b4195 Mon Sep 17 00:00:00 2001
 From: maxwen <max.weninger@gmail.com>
 Date: Tue, 9 Oct 2018 13:52:55 +0200
-Subject: [PATCH 3/4] av: camera: catch mad hals that mess up buffer time
+Subject: [PATCH 3/5] av: camera: catch mad hals that mess up buffer time
 
 e.g. op6 hal does not send correct mTimestampOffset
 so calculate it every time if needed

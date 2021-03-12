@@ -1,0 +1,59 @@
+From 96958fb3f6c6f0f23a51ac71948c55f584226750 Mon Sep 17 00:00:00 2001
+From: Pierre-Hugues Husson <phh@phh.me>
+Date: Sun, 7 Mar 2021 01:30:54 +0100
+Subject: [PATCH 5/5] Don't fail AAC decoding if DRC parameter isn't available
+
+The DRC parameter has been introduced by
+I50fcc5ef35cb7e96592c2267652228b5fa074ba9, and is parsed by vendor.
+Vendors prior to this commit are supposed to fail this request.
+
+Anyway, assume this isn't an error, and simply ignore DRC parameters if
+vendor doesn't support this.
+
+Change-Id: I117411ad7063e24a7d01de90774d5ca1f5dc4bea
+---
+ media/libstagefright/ACodec.cpp | 27 +++++++++++++--------------
+ 1 file changed, 13 insertions(+), 14 deletions(-)
+
+diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
+index 8754209..a076699 100644
+--- a/media/libstagefright/ACodec.cpp
++++ b/media/libstagefright/ACodec.cpp
+@@ -5294,21 +5294,20 @@ status_t ACodec::getPortFormat(OMX_U32 portIndex, sp<AMessage> &notify) {
+                             err = mOMXNode->getParameter(
+                                     (OMX_INDEXTYPE)OMX_IndexParamAudioAndroidAacDrcPresentation,
+                                     &presentation, sizeof(presentation));
+-                            if (err != OK) {
+-                                return err;
++                            if (err == OK) {
++                                notify->setInt32("aac-encoded-target-level",
++                                                 presentation.nEncodedTargetLevel);
++                                notify->setInt32("aac-drc-cut-level", presentation.nDrcCut);
++                                notify->setInt32("aac-drc-boost-level", presentation.nDrcBoost);
++                                notify->setInt32("aac-drc-heavy-compression",
++                                                 presentation.nHeavyCompression);
++                                notify->setInt32("aac-target-ref-level",
++                                                 presentation.nTargetReferenceLevel);
++                                notify->setInt32("aac-drc-effect-type", presentation.nDrcEffectType);
++                                notify->setInt32("aac-drc-album-mode", presentation.nDrcAlbumMode);
++                                notify->setInt32("aac-drc-output-loudness",
++                                                 presentation.nDrcOutputLoudness);
+                             }
+-                            notify->setInt32("aac-encoded-target-level",
+-                                             presentation.nEncodedTargetLevel);
+-                            notify->setInt32("aac-drc-cut-level", presentation.nDrcCut);
+-                            notify->setInt32("aac-drc-boost-level", presentation.nDrcBoost);
+-                            notify->setInt32("aac-drc-heavy-compression",
+-                                             presentation.nHeavyCompression);
+-                            notify->setInt32("aac-target-ref-level",
+-                                             presentation.nTargetReferenceLevel);
+-                            notify->setInt32("aac-drc-effect-type", presentation.nDrcEffectType);
+-                            notify->setInt32("aac-drc-album-mode", presentation.nDrcAlbumMode);
+-                            notify->setInt32("aac-drc-output-loudness",
+-                                             presentation.nDrcOutputLoudness);
+                         }
+                     }
+                     break;
+-- 
+2.30.1
+

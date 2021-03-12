@@ -1,7 +1,7 @@
-From fcd2fb63ceef7d34eea1c787158713585e3d48c8 Mon Sep 17 00:00:00 2001
+From 143828c1b763b3fb4ca9d19a1fb01f5abe4de6a6 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Tue, 24 Mar 2020 16:36:07 -0300
-Subject: [PATCH 2/4] av: Remove restrictions for system audio record
+Subject: [PATCH 2/5] av: Remove restrictions for system audio record
 
 * Give freedom to screen recorder apps
 
