@@ -1,10 +1,10 @@
-From 5605706bbffd7bf7216c54950fea23389eacbde5 Mon Sep 17 00:00:00 2001
+From 6f068357f78416ae4eac4587250de1d1a764c1d6 Mon Sep 17 00:00:00 2001
 From: SamarV-121 <samarvispute121@gmail.com>
 Date: Thu, 22 Oct 2020 13:05:23 +0000
-Subject: [PATCH 1/5] touch: Add system varient support
+Subject: [PATCH 1/5] touch: Add system variant support
 
-Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 Change-Id: Ief5f1f86ca672e9c934502f6cfa51bc90b372075
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 ---
  hidl/touch/Android.bp                         | 21 +++++++++++++------
  .../lineage.touch@1.0-service.samsung.rc      |  4 ++++
@@ -60,5 +60,5 @@ index 0000000..bf201bf
 +    user system
 +    group system
 -- 
-2.29.2
+2.30.1
 
