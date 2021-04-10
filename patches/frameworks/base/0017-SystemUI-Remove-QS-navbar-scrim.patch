@@ -1,7 +1,7 @@
-From 136a2fe870c487cf413b526f42bab28f2c4c4435 Mon Sep 17 00:00:00 2001
+From 716456c4f81177ec0774015e33ea0a3ed704fe1b Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 25 Sep 2020 14:30:21 -0700
-Subject: [PATCH 17/32] SystemUI: Remove QS navbar scrim
+Subject: [PATCH 17/47] SystemUI: Remove QS navbar scrim
 
 In the age of flat material design, this scrim looks outdated and
 out-of-place. It's also quite ugly in the QS edit screen, where it
@@ -112,5 +112,5 @@ index 8e9d2367..618dabe4 100644
          if (mAccessibilityManager.isEnabled()) {
              mView.setAccessibilityPaneTitle(determineAccessibilityPaneTitle());
 -- 
-2.25.1
+2.30.1
 

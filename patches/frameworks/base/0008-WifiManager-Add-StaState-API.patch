@@ -1,7 +1,7 @@
-From 66ea3e793ac599449ef0007053d1798a67a35375 Mon Sep 17 00:00:00 2001
+From 261f2461b010695d510411c5d3822e885a14bcb7 Mon Sep 17 00:00:00 2001
 From: Kshitij Gupta <kshitijgm@gmail.com>
 Date: Wed, 10 Jun 2020 14:19:12 +0000
-Subject: [PATCH 08/32] WifiManager: Add StaState API
+Subject: [PATCH 08/47] WifiManager: Add StaState API
 
 - Reversed out from miui_BEGONIAININGlobal_V11.0.2.0.QGGINXM_7e11a54a70_10.0
 
@@ -145,5 +145,5 @@ index 4a61db89..21bdca5a 100644
       * Helper method to update the local verbose logging flag based on the verbose logging
       * level from wifi service.
 -- 
-2.25.1
+2.30.1
 

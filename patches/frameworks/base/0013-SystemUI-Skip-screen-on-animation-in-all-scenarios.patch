@@ -1,7 +1,7 @@
-From 329a2d26d7f28d4fd82aa4b7cbe5e5c72aef7746 Mon Sep 17 00:00:00 2001
+From 3ac1bbe5036aabf0e3f8f45056106135a5a520ef Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 15 Dec 2020 16:58:40 -0800
-Subject: [PATCH 13/32] SystemUI: Skip screen-on animation in all scenarios
+Subject: [PATCH 13/47] SystemUI: Skip screen-on animation in all scenarios
 
 Unlike turning the screen off, turning it on is a time-critical
 operation that should be done as fast as possible without a slow
@@ -28,5 +28,5 @@ index f47a2328..ef590472 100644
          if (mBouncerShowing) {
              // Bouncer needs the front scrim when it's on top of an activity,
 -- 
-2.25.1
+2.30.1
 

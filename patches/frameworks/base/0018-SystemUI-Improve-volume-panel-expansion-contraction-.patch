@@ -1,7 +1,7 @@
-From 8e3c07c3608f4abc8805e81f6b5d7cee1729bd7e Mon Sep 17 00:00:00 2001
+From d8240b92e083daa2ad13816d2e9d822a313e562e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Sun, 13 Dec 2020 19:45:47 -0800
-Subject: [PATCH 18/32] SystemUI: Improve volume panel expansion/contraction
+Subject: [PATCH 18/47] SystemUI: Improve volume panel expansion/contraction
  animation
 
 - Always decelerate instead of accelerating for a more responsive feel
@@ -32,5 +32,5 @@ index 0d18fabe..b9dba3df 100644
      }
  
 -- 
-2.25.1
+2.30.1
 

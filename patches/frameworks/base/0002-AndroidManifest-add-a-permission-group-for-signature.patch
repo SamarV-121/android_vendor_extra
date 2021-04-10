@@ -1,7 +1,7 @@
-From 7bf66ca554bbd2e0c0c7060bcdb37aac5439258c Mon Sep 17 00:00:00 2001
+From 90870803b185c32ef6858d47249553fed2540e3d Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 12 Feb 2020 11:34:33 +0100
-Subject: [PATCH 02/32] AndroidManifest: add a permission group for signature
+Subject: [PATCH 02/47] AndroidManifest: add a permission group for signature
  spoofing
 
 Needed by PackageInstaller while checking for modern permission group
@@ -81,5 +81,5 @@ index c29feb9c..57748a80 100644
      field public static final String MICROPHONE = "android.permission-group.MICROPHONE";
      field public static final String PHONE = "android.permission-group.PHONE";
 -- 
-2.25.1
+2.30.1
 

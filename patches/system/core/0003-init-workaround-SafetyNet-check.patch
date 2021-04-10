@@ -1,7 +1,7 @@
-From 9bb83e0ec9426f0720ee4388cb99dc69ba3fdcdb Mon Sep 17 00:00:00 2001
+From 37b3d7904fbdf4cade40d9ebed14e4437061eee6 Mon Sep 17 00:00:00 2001
 From: Park Ju Hyung <qkrwngud825@gmail.com>
 Date: Mon, 6 Nov 2017 20:30:39 +0900
-Subject: [PATCH 3/7] init: workaround SafetyNet check
+Subject: [PATCH 3/8] init: workaround SafetyNet check
 
 Doing this in the userspace allows more properties to be spoofed
 and eliminate the needs for a hack in the kernel.
@@ -77,5 +77,5 @@ index 058758a..a9458ab 100644
      weaken_prop_override_security = false;
  
 -- 
-2.29.2
+2.30.1
 

@@ -1,0 +1,63 @@
+From c901692fea7e009bf769ff2edbf77b56ccbf00a6 Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Fri, 12 Feb 2021 20:22:30 -0800
+Subject: [PATCH] Add Zygotehooks.indefiniteThreadSuspensionOK
+
+Bug: 159631815
+Bug: 174211442
+Test: Boot AOSP with zygote that needs this
+Change-Id: I5f0626a74e43c8b1ac69164ce64b625f0654a7e2
+---
+ .../src/main/java/dalvik/system/ZygoteHooks.java | 16 ++++++++++++++++
+ .../api/platform/current-api.txt                 |  1 +
+ 2 files changed, 17 insertions(+)
+
+diff --git a/dalvik/src/main/java/dalvik/system/ZygoteHooks.java b/dalvik/src/main/java/dalvik/system/ZygoteHooks.java
+index 7e8fe36..f05ea2c 100644
+--- a/dalvik/src/main/java/dalvik/system/ZygoteHooks.java
++++ b/dalvik/src/main/java/dalvik/system/ZygoteHooks.java
+@@ -153,6 +153,20 @@ public final class ZygoteHooks {
+         Daemons.startPostZygoteFork();
+     }
+ 
++    /**
++     * Is it safe to keep all ART daemon threads stopped indefinitely in the zygote?
++     * The answer may change from false to true dynamically, but not in the other
++     * direction.
++     */
++    @libcore.api.CorePlatformApi
++    public static boolean indefiniteThreadSuspensionOK() {
++        // TODO: Make this return true if we're done with JIT compilation.
++        //
++        // We only care about JIT compilation that affects other processes.
++        // The zygote itself doesn't run appreciable amounts of Java code when
++        // running single-threaded.
++        return !nativeZygoteJitEnabled();
++    }
+ 
+     // Hook for SystemServer specific early initialization post-forking.
+     private static native void nativePostForkSystemServer(int runtimeFlags);
+@@ -165,6 +179,8 @@ public final class ZygoteHooks {
+                                                    boolean isSystemServer, boolean isZygote,
+                                                    String instructionSet);
+ 
++    private static native boolean nativeZygoteJitEnabled();
++
+     /**
+      * We must not fork until we're single-threaded again. Wait until /proc shows we're
+      * down to just one thread.
+diff --git a/mmodules/core_platform_api/api/platform/current-api.txt b/mmodules/core_platform_api/api/platform/current-api.txt
+index 15a0a48..104e479 100644
+--- a/mmodules/core_platform_api/api/platform/current-api.txt
++++ b/mmodules/core_platform_api/api/platform/current-api.txt
+@@ -745,6 +745,7 @@ package dalvik.system {
+ 
+   public final class ZygoteHooks {
+     method public static void gcAndFinalize();
++    method public static boolean indefiniteThreadSuspensionOK();
+     method public static void onBeginPreload();
+     method public static void onEndPreload();
+     method public static void postForkChild(int, boolean, boolean, String);
+-- 
+2.30.1
+

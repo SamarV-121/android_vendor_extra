@@ -12,7 +12,7 @@ else
 
 fi
 
-find vendor/extra/patches -mindepth 2 -type d -printf '%P\n' | while IFS= read -r repository; do
+find vendor/extra/patches -mindepth 1 -type d -printf '%P\n' | while IFS= read -r repository; do
 
 	LAST_COMMIT_HASH="$ROOT/${repository//\//_}.log"
 	PATCHES="$ROOT/vendor/extra/patches/$repository"

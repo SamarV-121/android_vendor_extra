@@ -11,6 +11,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     product_charger_res_images
 
+# Config
+PRODUCT_PACKAGES += \
+    SimpleDeviceConfig
+
 # Debugging
 ifeq ($(WITH_DEBUGGING), true)
 PRODUCT_PACKAGES += debugging.rc

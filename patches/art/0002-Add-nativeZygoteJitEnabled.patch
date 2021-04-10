@@ -1,0 +1,85 @@
+From 09dea8e4501976f3e913df66d5a953d811a72721 Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Fri, 12 Feb 2021 20:17:20 -0800
+Subject: [PATCH 2/2] Add nativeZygoteJitEnabled
+
+... to allow the zygote to check whether it needs to keep the jit thread
+around.
+
+Bug: 159631815
+Bug: 174211442
+Test: Boot AOSP
+Change-Id: I4d32aee36993cf063d2464d839f2cabda1ee8ff5
+---
+ runtime/jit/jit.cc                          | 7 ++++++-
+ runtime/jit/jit.h                           | 3 +++
+ runtime/native/dalvik_system_ZygoteHooks.cc | 9 +++++++++
+ 3 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/jit/jit.cc b/runtime/jit/jit.cc
+index 8d434b8..0610f6d 100644
+--- a/runtime/jit/jit.cc
++++ b/runtime/jit/jit.cc
+@@ -1193,6 +1193,11 @@ static bool HasImageWithProfile() {
+   return false;
+ }
+ 
++bool Jit::InZygoteUsingJit() {
++  Runtime* runtime = Runtime::Current();
++  return runtime->IsZygote() && HasImageWithProfile() && runtime->UseJitCompilation();
++}
++
+ void Jit::CreateThreadPool() {
+   // There is a DCHECK in the 'AddSamples' method to ensure the tread pool
+   // is not null when we instrument.
+@@ -1222,7 +1227,7 @@ void Jit::CreateThreadPool() {
+     thread_pool_->AddTask(Thread::Current(), new ZygoteVerificationTask());
+   }
+ 
+-  if (runtime->IsZygote() && HasImageWithProfile() && UseJitCompilation()) {
++  if (InZygoteUsingJit()) {
+     // If we have an image with a profile, request a JIT task to
+     // compile all methods in that profile.
+     thread_pool_->AddTask(Thread::Current(), new ZygoteTask());
+diff --git a/runtime/jit/jit.h b/runtime/jit/jit.h
+index e9fd915..40a6eb7 100644
+--- a/runtime/jit/jit.h
++++ b/runtime/jit/jit.h
+@@ -393,6 +393,9 @@ class Jit {
+   // Called when system finishes booting.
+   void BootCompleted();
+ 
++  // Are we in a zygote using JIT compilation?
++  static bool InZygoteUsingJit();
++
+   // Compile methods from the given profile (.prof extension). If `add_to_queue`
+   // is true, methods in the profile are added to the JIT queue. Otherwise they are compiled
+   // directly.
+diff --git a/runtime/native/dalvik_system_ZygoteHooks.cc b/runtime/native/dalvik_system_ZygoteHooks.cc
+index c37b8bb..bc19503 100644
+--- a/runtime/native/dalvik_system_ZygoteHooks.cc
++++ b/runtime/native/dalvik_system_ZygoteHooks.cc
+@@ -434,11 +434,20 @@ static void ZygoteHooks_stopZygoteNoThreadCreation(JNIEnv* env ATTRIBUTE_UNUSED,
+   Runtime::Current()->SetZygoteNoThreadSection(false);
+ }
+ 
++static jboolean ZygoteHooks_nativeZygoteJitEnabled(JNIEnv* env ATTRIBUTE_UNUSED,
++                                                   jclass klass ATTRIBUTE_UNUSED) {
++  // Only called in zygote. Thus static is OK here.
++  static bool result = jit::Jit::InZygoteUsingJit();
++  return result ? JNI_TRUE : JNI_FALSE;
++}
++
++
+ static JNINativeMethod gMethods[] = {
+   NATIVE_METHOD(ZygoteHooks, nativePreFork, "()J"),
+   NATIVE_METHOD(ZygoteHooks, nativePostZygoteFork, "()V"),
+   NATIVE_METHOD(ZygoteHooks, nativePostForkSystemServer, "(I)V"),
+   NATIVE_METHOD(ZygoteHooks, nativePostForkChild, "(JIZZLjava/lang/String;)V"),
++  NATIVE_METHOD(ZygoteHooks, nativeZygoteJitEnabled, "()Z"),
+   NATIVE_METHOD(ZygoteHooks, startZygoteNoThreadCreation, "()V"),
+   NATIVE_METHOD(ZygoteHooks, stopZygoteNoThreadCreation, "()V"),
+ };
+-- 
+2.30.1
+

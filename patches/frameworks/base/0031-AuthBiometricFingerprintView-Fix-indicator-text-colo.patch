@@ -1,7 +1,7 @@
-From 342949ae00cd942d78b659c59b46ebc1d9995635 Mon Sep 17 00:00:00 2001
+From 4ce93a8558fc4d131333f071e0f1d5d2126d42f5 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Mon, 8 Mar 2021 10:28:18 -0300
-Subject: [PATCH 31/32] AuthBiometricFingerprintView: Fix indicator text color
+Subject: [PATCH 31/47] AuthBiometricFingerprintView: Fix indicator text color
  on dark theme
 
 Congrats Google
@@ -27,5 +27,5 @@ index 176e9e6b..bdfac4a0 100644
  
      private void updateIcon(int lastState, int newState) {
 -- 
-2.25.1
+2.30.1
 

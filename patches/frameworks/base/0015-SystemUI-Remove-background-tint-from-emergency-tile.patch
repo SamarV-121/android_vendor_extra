@@ -1,7 +1,7 @@
-From abf9b6714fa2d0a3d932557fa4dcf8cddb2a94bc Mon Sep 17 00:00:00 2001
+From 50b5f592b240b690a4a93c26219b81ab859d8949 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 6 Nov 2020 13:28:56 -0800
-Subject: [PATCH 15/32] SystemUI: Remove background tint from emergency tile
+Subject: [PATCH 15/47] SystemUI: Remove background tint from emergency tile
 
 Translucent colors don't work well with tinting and our background color
 is the same for this tile anyway.
@@ -25,5 +25,5 @@ index 21220fd3..876560e2 100644
                      com.android.systemui.R.color.global_actions_emergency_text);
              TextView messageView = v.findViewById(R.id.message);
 -- 
-2.25.1
+2.30.1
 

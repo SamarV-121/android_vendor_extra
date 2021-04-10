@@ -1,7 +1,7 @@
-From a20513ab4af12e44a5e164a0fee06722fa91f542 Mon Sep 17 00:00:00 2001
+From f1b45f6db01b25be73cc8f6866a2a3c129c6c2ee Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 6 Mar 2021 15:27:11 -0300
-Subject: [PATCH 29/32] Allow using face as auth method for apps
+Subject: [PATCH 29/47] Allow using face as auth method for apps
 
 Change-Id: I008370cefe9584c86e058b718e2ef79518b95eb6
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -492,5 +492,5 @@ index 1a79610e..51f8eda4 100644
      }
  
 -- 
-2.25.1
+2.30.1
 

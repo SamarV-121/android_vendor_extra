@@ -1,0 +1,2626 @@
+From 4dd0e7b88d95eb00c93b0a8a1680a6a011667099 Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Mon, 9 Nov 2020 18:21:29 -0800
+Subject: [PATCH 33/47] Add zygote native fork loop
+
+Do not return to Java mode between consecutive fork operations.
+This greatly reduces the Zygote overhead, since we no longer need to
+stop and restart Java daemons.
+
+By not switching back to Java mode, and being careful about what memory
+we touch between forks, we also keep the Zygote heaps much more stable,
+facilitating page sharing between the zygote and all its children.
+Under normal operation we should no longer allocate any memory in the
+zygote between forks. That applies to both the Java and C++ heap.
+This makes the zygote behave much more like the mental model many
+of us had assumed: It has nearly constant memory contents, which are
+copy-on-right cloned at each fork. This does not apply to the initial
+system server and webzygote forks, that are currently still handled
+differently.
+
+This includes
+
+1. Add ZygoteCommandBuffer, and switch the argument parsing code to use it.
+This slightly reduces allocation and enables (3).
+
+2. Support process specialization in the child, even when the arguments
+are already know, Leverages existing Usap code.
+
+3. Add support for forking multiple child processes directly to the
+ZygoteCommandBuffer data structure. This directly uses the buffer
+internals, and avoids returning to Java so long as it can handle the
+zygote commands it sees.
+
+FUNCTIONALITY CHANGE:
+
+We now limit the total size of the zygote command, rather than the
+number of arguments.
+
+Initial performance observations:
+
+[ These are not perfect, since I'm comparing to numbers before I
+started. There may have been other moving parts, but they should be
+minor. ]
+
+System-server-observed launch latency:
+
+[Not the best metric, but easy to measure. In particular, this
+does not represent a significant reduction in application launch
+time.]
+
+Based on measuring the last 10 launches in a lightly used cf AOSP
+instance, the system server latency from requesting an app launch to
+response with the pid (which does not require the child to execute
+anything) went from an average of about 10.7(25) msecs to 6.8(9) and
+7.9(16) in two tries with the CL. (The parenthetical numbers are
+maxima from among the 10; the variance appears to have decreased
+appreciably.)
+
+Dirty pages:
+
+The number of private dirty pages in the zygote itself appears to have
+decreased from about 4000 to about 2200. The number of dalvik-main
+private dirty pages went from about 1500 to nearly zero.
+
+Initially ART benchmarking service claim -1.88% in PSS. But this is not
+consistently repeatable.
+
+Drive-by fix:
+
+Call setAllowNetworkingForProcess on usap / native loop path.
+
+Bug: 159631815
+Bug: 174211442
+Test: Boots AOSP
+Change-Id: I90d2e381bada1b6c9857666d5e87372b6a4c1a70
+---
+ core/java/android/os/ZygoteProcess.java       |   2 +-
+ core/java/com/android/internal/os/Zygote.java | 360 ++++++------
+ .../android/internal/os/ZygoteArguments.java  |  83 ++-
+ .../internal/os/ZygoteCommandBuffer.java      | 187 +++++++
+ .../android/internal/os/ZygoteConnection.java | 329 ++++++-----
+ .../os/ZygoteConnectionConstants.java         |   3 -
+ .../com/android/internal/os/ZygoteInit.java   |  11 +-
+ .../com/android/internal/os/ZygoteServer.java |  14 +-
+ core/jni/Android.bp                           |   1 +
+ core/jni/AndroidRuntime.cpp                   |   2 +
+ core/jni/com_android_internal_os_Zygote.cpp   | 355 ++++++------
+ core/jni/com_android_internal_os_Zygote.h     |  78 +++
+ ...ndroid_internal_os_ZygoteCommandBuffer.cpp | 512 ++++++++++++++++++
+ 13 files changed, 1427 insertions(+), 510 deletions(-)
+ create mode 100644 core/java/com/android/internal/os/ZygoteCommandBuffer.java
+ create mode 100644 core/jni/com_android_internal_os_Zygote.h
+ create mode 100644 core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp
+
+diff --git a/core/java/android/os/ZygoteProcess.java b/core/java/android/os/ZygoteProcess.java
+index 39038f55..e6197e9f 100644
+--- a/core/java/android/os/ZygoteProcess.java
++++ b/core/java/android/os/ZygoteProcess.java
+@@ -426,7 +426,7 @@ public class ZygoteProcess {
+         // avoid writing a partial response to the zygote.
+         for (String arg : args) {
+             // Making two indexOf calls here is faster than running a manually fused loop due
+-            // to the fact that indexOf is a optimized intrinsic.
++            // to the fact that indexOf is an optimized intrinsic.
+             if (arg.indexOf('\n') >= 0) {
+                 throw new ZygoteStartFailedEx("Embedded newlines not allowed");
+             } else if (arg.indexOf('\r') >= 0) {
+diff --git a/core/java/com/android/internal/os/Zygote.java b/core/java/com/android/internal/os/Zygote.java
+index a7d98278..52ceeec1 100644
+--- a/core/java/com/android/internal/os/Zygote.java
++++ b/core/java/com/android/internal/os/Zygote.java
+@@ -18,8 +18,8 @@ package com.android.internal.os;
+ 
+ import static android.system.OsConstants.O_CLOEXEC;
+ 
+-import static com.android.internal.os.ZygoteConnectionConstants.MAX_ZYGOTE_ARGC;
+-
++import android.annotation.NonNull;
++import android.annotation.Nullable;
+ import android.content.pm.ApplicationInfo;
+ import android.net.Credentials;
+ import android.net.LocalServerSocket;
+@@ -35,17 +35,16 @@ import android.system.ErrnoException;
+ import android.system.Os;
+ import android.util.Log;
+ 
++import dalvik.annotation.optimization.CriticalNative;
+ import dalvik.annotation.optimization.FastNative;
+ import dalvik.system.ZygoteHooks;
+ 
+ import libcore.io.IoUtils;
+ 
+-import java.io.BufferedReader;
+ import java.io.ByteArrayOutputStream;
+ import java.io.DataOutputStream;
+ import java.io.FileDescriptor;
+ import java.io.IOException;
+-import java.io.InputStreamReader;
+ 
+ /** @hide */
+ public final class Zygote {
+@@ -242,6 +241,8 @@ public final class Zygote {
+      */
+     public static final String CHILD_ZYGOTE_UID_RANGE_END = "--uid-range-end=";
+ 
++    private static final String TAG = "Zygote";
++
+     /** Prefix prepended to socket names created by init */
+     private static final String ANDROID_SOCKET_PREFIX = "ANDROID_SOCKET_";
+ 
+@@ -412,6 +413,10 @@ public final class Zygote {
+         // Note that this event ends at the end of handleChildProc.
+         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "PostFork");
+ 
++        if (gids != null && gids.length > 0) {
++            NetworkUtils.setAllowNetworkingForProcess(containsInetGid(gids));
++        }
++
+         // Set the Java Language thread priority to the default value for new apps.
+         Thread.currentThread().setPriority(Thread.NORM_PRIORITY);
+ 
+@@ -584,114 +589,163 @@ public final class Zygote {
+     private static native int nativeGetUsapPoolEventFD();
+ 
+     /**
+-     * Fork a new unspecialized app process from the zygote
++     * Fork a new unspecialized app process from the zygote. Adds the Usap to the native
++     * Usap table.
+      *
+      * @param usapPoolSocket  The server socket the USAP will call accept on
+-     * @param sessionSocketRawFDs  Anonymous session sockets that are currently open
+-     * @param isPriorityFork  Value controlling the process priority level until accept is called
+-     * @return In the Zygote process this function will always return null; in unspecialized app
+-     *         processes this function will return a Runnable object representing the new
+-     *         application that is passed up from usapMain.
++     * @param sessionSocketRawFDs  Anonymous session sockets that are currently open.
++     *         These are closed in the child.
++     * @param isPriorityFork Raise the initial process priority level because this is on the
++     *         critical path for application startup.
++     * @return In the child process, this returns a Runnable that waits for specialization
++     *         info to start an app process. In the sygote/parent process this returns null.
+      */
+-    static Runnable forkUsap(LocalServerSocket usapPoolSocket,
+-                             int[] sessionSocketRawFDs,
+-                             boolean isPriorityFork) {
+-        FileDescriptor[] pipeFDs = null;
++    static @Nullable Runnable forkUsap(LocalServerSocket usapPoolSocket,
++                                       int[] sessionSocketRawFDs,
++                                       boolean isPriorityFork) {
++        FileDescriptor readFD;
++        FileDescriptor writeFD;
+ 
+         try {
+-            pipeFDs = Os.pipe2(O_CLOEXEC);
++            FileDescriptor[] pipeFDs = Os.pipe2(O_CLOEXEC);
++            readFD = pipeFDs[0];
++            writeFD = pipeFDs[1];
+         } catch (ErrnoException errnoEx) {
+             throw new IllegalStateException("Unable to create USAP pipe.", errnoEx);
+         }
+ 
+-        int pid =
+-                nativeForkUsap(pipeFDs[0].getInt$(), pipeFDs[1].getInt$(),
+-                               sessionSocketRawFDs, isPriorityFork);
+-
++        int pid = nativeForkApp(readFD.getInt$(), writeFD.getInt$(),
++                                sessionSocketRawFDs, /*argsKnown=*/ false, isPriorityFork);
+         if (pid == 0) {
+-            IoUtils.closeQuietly(pipeFDs[0]);
+-            return usapMain(usapPoolSocket, pipeFDs[1]);
++            IoUtils.closeQuietly(readFD);
++            return childMain(null, usapPoolSocket, writeFD);
++        } else if (pid == -1) {
++            // Fork failed.
++            return null;
+         } else {
+-            // The read-end of the pipe will be closed by the native code.
+-            // See removeUsapTableEntry();
+-            IoUtils.closeQuietly(pipeFDs[1]);
++            // readFD will be closed by the native code. See removeUsapTableEntry();
++            IoUtils.closeQuietly(writeFD);
++            nativeAddUsapTableEntry(pid, readFD.getInt$());
+             return null;
+         }
+     }
+ 
+-    private static native int nativeForkUsap(int readPipeFD,
+-                                             int writePipeFD,
+-                                             int[] sessionSocketRawFDs,
+-                                             boolean isPriorityFork);
++    private static native int nativeForkApp(int readPipeFD,
++                                            int writePipeFD,
++                                            int[] sessionSocketRawFDs,
++                                            boolean argsKnown,
++                                            boolean isPriorityFork);
++
++    /**
++     * Add an entry for a new Usap to the table maintained in native code.
++     */
++    @CriticalNative
++    private static native void nativeAddUsapTableEntry(int pid, int readPipeFD);
++
++    /**
++     * Fork a new app process from the zygote. argBuffer contains a fork command that
++     * request neither a child zygote, nor a wrapped process. Continue to accept connections
++     * on the specified socket, use those to refill argBuffer, and continue to process
++     * sufficiently simple fork requests. We presume that the only open file descriptors
++     * requiring special treatment are the session socket embedded in argBuffer, and
++     * zygoteSocket.
++     * @param argBuffer containing initial command and the connected socket from which to
++     *         read more
++     * @param zygoteSocket socket from which to obtain new connections when current argBuffer
++     *         one is disconnected
++     * @param expectedUId Uid of peer for initial requests. Subsequent requests from a different
++     *               peer will cause us to return rather than perform the requested fork.
++     * @param minUid Minimum Uid enforced for all but first fork request. The caller checks
++     *               the Uid policy for the initial request.
++     * @param firstNiceName name of first created process. Used for error reporting only.
++     * @return A Runnable in each child process, null in the parent.
++     * If this returns in then argBuffer still contains a command needing to be executed.
++     */
++    static @Nullable Runnable forkSimpleApps(@NonNull ZygoteCommandBuffer argBuffer,
++                                             @NonNull FileDescriptor zygoteSocket,
++                                             int expectedUid,
++                                             int minUid,
++                                             @Nullable String firstNiceName) {
++        boolean in_child =
++                argBuffer.forkRepeatedly(zygoteSocket, expectedUid, minUid, firstNiceName);
++        if (in_child) {
++            return childMain(argBuffer, /*usapPoolSocket=*/null, /*writePipe=*/null);
++        } else {
++            return null;
++        }
++    }
+ 
+     /**
+-     * This function is used by unspecialized app processes to wait for specialization requests from
+-     * the system server.
++     * Specialize the current process into one described by argBuffer or the command read from
++     * usapPoolSocket. Exactly one of those must be null. If we are given an argBuffer, we close
++     * it. Used both for a specializing a USAP process, and for process creation without USAPs.
++     * In both cases, we specialize the process after first returning to Java code.
+      *
+      * @param writePipe  The write end of the reporting pipe used to communicate with the poll loop
+      *                   of the ZygoteServer.
+      * @return A runnable oject representing the new application.
+      */
+-    private static Runnable usapMain(LocalServerSocket usapPoolSocket,
+-                                     FileDescriptor writePipe) {
++    private static Runnable childMain(@Nullable ZygoteCommandBuffer argBuffer,
++                                      @Nullable LocalServerSocket usapPoolSocket,
++                                      FileDescriptor writePipe) {
+         final int pid = Process.myPid();
+-        Process.setArgV0(Process.is64Bit() ? "usap64" : "usap32");
+ 
+-        LocalSocket sessionSocket = null;
+         DataOutputStream usapOutputStream = null;
+-        Credentials peerCredentials = null;
+         ZygoteArguments args = null;
+ 
+-        // Change the priority to max before calling accept so we can respond to new specialization
+-        // requests as quickly as possible.  This will be reverted to the default priority in the
+-        // native specialization code.
+-        boostUsapPriority();
+-
+-        while (true) {
+-            try {
+-                sessionSocket = usapPoolSocket.accept();
+-
+-                // Block SIGTERM so we won't be killed if the Zygote flushes the USAP pool.
+-                blockSigTerm();
+-
+-                BufferedReader usapReader =
+-                        new BufferedReader(new InputStreamReader(sessionSocket.getInputStream()));
+-                usapOutputStream =
+-                        new DataOutputStream(sessionSocket.getOutputStream());
++        // Block SIGTERM so we won't be killed if the Zygote flushes the USAP pool.
++        blockSigTerm();
+ 
+-                peerCredentials = sessionSocket.getPeerCredentials();
++        LocalSocket sessionSocket = null;
++        if (argBuffer == null) {
++            // Read arguments from usapPoolSocket instead.
+ 
+-                String[] argStrings = readArgumentList(usapReader);
++            Process.setArgV0(Process.is64Bit() ? "usap64" : "usap32");
+ 
+-                if (argStrings != null) {
+-                    args = new ZygoteArguments(argStrings);
++            // Change the priority to max before calling accept so we can respond to new
++            // specialization requests as quickly as possible.  This will be reverted to the
++            // default priority in the native specialization code.
++            boostUsapPriority();
+ 
++            while (true) {
++                ZygoteCommandBuffer tmpArgBuffer = null;
++                try {
++                    sessionSocket = usapPoolSocket.accept();
++
++                    usapOutputStream =
++                            new DataOutputStream(sessionSocket.getOutputStream());
++                    Credentials peerCredentials = sessionSocket.getPeerCredentials();
++                    tmpArgBuffer = new ZygoteCommandBuffer(sessionSocket);
++                    args = ZygoteArguments.getInstance(argBuffer);
++                    applyUidSecurityPolicy(args, peerCredentials);
+                     // TODO (chriswailes): Should this only be run for debug builds?
+                     validateUsapCommand(args);
+                     break;
+-                } else {
+-                    Log.e("USAP", "Truncated command received.");
+-                    IoUtils.closeQuietly(sessionSocket);
+-
+-                    // Re-enable SIGTERM so the USAP can be flushed from the pool if necessary.
+-                    unblockSigTerm();
++                } catch (Exception ex) {
++                    Log.e("USAP", ex.getMessage());
+                 }
+-            } catch (Exception ex) {
+-                Log.e("USAP", ex.getMessage());
+-                IoUtils.closeQuietly(sessionSocket);
+-
+                 // Re-enable SIGTERM so the USAP can be flushed from the pool if necessary.
+                 unblockSigTerm();
++                IoUtils.closeQuietly(sessionSocket);
++                IoUtils.closeQuietly(tmpArgBuffer);
++                blockSigTerm();
+             }
++        } else {
++            try {
++                args = ZygoteArguments.getInstance(argBuffer);
++            } catch (Exception ex) {
++                Log.e("AppStartup", ex.getMessage());
++                throw new AssertionError("Failed to parse application start command", ex);
++            }
++            // peerCredentials were checked in parent.
++        }
++        if (args == null) {
++            throw new AssertionError("Empty command line");
+         }
+-
+         try {
+-            // SIGTERM is blocked on loop exit.  This prevents a USAP that is specializing from
+-            // being killed during a pool flush.
+-
+-            setAppProcessName(args, "USAP");
++            // SIGTERM is blocked here.  This prevents a USAP that is specializing from being
++            // killed during a pool flush.
+ 
+-            applyUidSecurityPolicy(args, peerCredentials);
+             applyDebuggerSystemProperty(args);
+ 
+             int[][] rlimits = null;
+@@ -700,53 +754,57 @@ public final class Zygote {
+                 rlimits = args.mRLimits.toArray(INT_ARRAY_2D);
+             }
+ 
+-            // This must happen before the SELinux policy for this process is
+-            // changed when specializing.
+-            try {
+-                // Used by ZygoteProcess.zygoteSendArgsAndGetResult to fill in a
+-                // Process.ProcessStartResult object.
+-                usapOutputStream.writeInt(pid);
+-            } catch (IOException ioEx) {
+-                Log.e("USAP", "Failed to write response to session socket: "
+-                        + ioEx.getMessage());
+-                throw new RuntimeException(ioEx);
+-            } finally {
+-                IoUtils.closeQuietly(sessionSocket);
+-
++            if (argBuffer == null) {
++                // This must happen before the SELinux policy for this process is
++                // changed when specializing.
+                 try {
+-                    // This socket is closed using Os.close due to an issue with the implementation
+-                    // of LocalSocketImp.close().  Because the raw FD is created by init and then
+-                    // loaded from an environment variable (as opposed to being created by the
+-                    // LocalSocketImpl itself) the current implementation will not actually close
+-                    // the underlying FD.
+-                    //
+-                    // See b/130309968 for discussion of this issue.
+-                    Os.close(usapPoolSocket.getFileDescriptor());
+-                } catch (ErrnoException ex) {
+-                    Log.e("USAP", "Failed to close USAP pool socket");
+-                    throw new RuntimeException(ex);
++                    // Used by ZygoteProcess.zygoteSendArgsAndGetResult to fill in a
++                    // Process.ProcessStartResult object.
++                    usapOutputStream.writeInt(pid);
++                } catch (IOException ioEx) {
++                    Log.e("USAP", "Failed to write response to session socket: "
++                            + ioEx.getMessage());
++                    throw new RuntimeException(ioEx);
++                } finally {
++                    try {
++                        // Since the raw FD is created by init and then loaded from an environment
++                        // variable (as opposed to being created by the LocalSocketImpl itself),
++                        // the LocalSocket/LocalSocketImpl does not own the Os-level socket. See
++                        // the spec for LocalSocket.createConnectedLocalSocket(FileDescriptor fd).
++                        // Thus closing the LocalSocket does not suffice. See b/130309968 for more
++                        // discussion.
++                        FileDescriptor fd = usapPoolSocket.getFileDescriptor();
++                        usapPoolSocket.close();
++                        Os.close(fd);
++                    } catch (ErrnoException | IOException ex) {
++                        Log.e("USAP", "Failed to close USAP pool socket");
++                        throw new RuntimeException(ex);
++                    }
+                 }
+             }
+ 
+-            try {
+-                ByteArrayOutputStream buffer =
+-                        new ByteArrayOutputStream(Zygote.USAP_MANAGEMENT_MESSAGE_BYTES);
+-                DataOutputStream outputStream = new DataOutputStream(buffer);
+-
+-                // This is written as a long so that the USAP reporting pipe and USAP pool event FD
+-                // handlers in ZygoteServer.runSelectLoop can be unified.  These two cases should
+-                // both send/receive 8 bytes.
+-                outputStream.writeLong(pid);
+-                outputStream.flush();
+-
+-                Os.write(writePipe, buffer.toByteArray(), 0, buffer.size());
+-            } catch (Exception ex) {
+-                Log.e("USAP",
+-                        String.format("Failed to write PID (%d) to pipe (%d): %s",
+-                                pid, writePipe.getInt$(), ex.getMessage()));
+-                throw new RuntimeException(ex);
+-            } finally {
+-                IoUtils.closeQuietly(writePipe);
++            if (writePipe != null) {
++                try {
++                    ByteArrayOutputStream buffer =
++                            new ByteArrayOutputStream(Zygote.USAP_MANAGEMENT_MESSAGE_BYTES);
++                    DataOutputStream outputStream = new DataOutputStream(buffer);
++
++                    // This is written as a long so that the USAP reporting pipe and USAP pool
++                    // event FD handlers in ZygoteServer.runSelectLoop can be unified.  These two
++                    // cases should both send/receive 8 bytes.
++                    // TODO: Needs tweaking to handle the non-Usap invoke-with case, which expects
++                    // a different format.
++                    outputStream.writeLong(pid);
++                    outputStream.flush();
++                    Os.write(writePipe, buffer.toByteArray(), 0, buffer.size());
++                } catch (Exception ex) {
++                    Log.e("USAP",
++                            String.format("Failed to write PID (%d) to pipe (%d): %s",
++                                    pid, writePipe.getInt$(), ex.getMessage()));
++                    throw new RuntimeException(ex);
++                } finally {
++                    IoUtils.closeQuietly(writePipe);
++                }
+             }
+ 
+             specializeAppProcess(args.mUid, args.mGid, args.mGids,
+@@ -853,13 +911,29 @@ public final class Zygote {
+         return nativeRemoveUsapTableEntry(usapPID);
+     }
+ 
++    @CriticalNative
+     private static native boolean nativeRemoveUsapTableEntry(int usapPID);
+ 
+     /**
+-     * uid 1000 (Process.SYSTEM_UID) may specify any uid &gt; 1000 in normal
++     * Return the minimum child uid that the given peer is allowed to create.
++     * uid 1000 (Process.SYSTEM_UID) may specify any uid &ge; 1000 in normal
+      * operation. It may also specify any gid and setgroups() list it chooses.
+      * In factory test mode, it may specify any UID.
+-     *
++     */
++    static int minChildUid(Credentials peer) {
++        if (peer.getUid() == Process.SYSTEM_UID
++                && FactoryTest.getMode() == FactoryTest.FACTORY_TEST_OFF) {
++            /* In normal operation, SYSTEM_UID can only specify a restricted
++             * set of UIDs. In factory test mode, SYSTEM_UID may specify any uid.
++             */
++            return Process.SYSTEM_UID;
++        } else {
++            return 0;
++        }
++    }
++
++    /*
++     * Adjust uid and gid arguments, ensuring that the security policy is satisfied.
+      * @param args non-null; zygote spawner arguments
+      * @param peer non-null; peer credentials
+      * @throws ZygoteSecurityException Indicates a security issue when applying the UID based
+@@ -868,17 +942,10 @@ public final class Zygote {
+     static void applyUidSecurityPolicy(ZygoteArguments args, Credentials peer)
+             throws ZygoteSecurityException {
+ 
+-        if (peer.getUid() == Process.SYSTEM_UID) {
+-            /* In normal operation, SYSTEM_UID can only specify a restricted
+-             * set of UIDs. In factory test mode, SYSTEM_UID may specify any uid.
+-             */
+-            boolean uidRestricted = FactoryTest.getMode() == FactoryTest.FACTORY_TEST_OFF;
+-
+-            if (uidRestricted && args.mUidSpecified && (args.mUid < Process.SYSTEM_UID)) {
+-                throw new ZygoteSecurityException(
+-                        "System UID may not launch process with UID < "
+-                        + Process.SYSTEM_UID);
+-            }
++        if (args.mUidSpecified && (args.mUid < minChildUid(peer))) {
++            throw new ZygoteSecurityException(
++                    "System UID may not launch process with UID < "
++                    + Process.SYSTEM_UID);
+         }
+ 
+         // If not otherwise specified, uid and gid are inherited from peer
+@@ -963,45 +1030,6 @@ public final class Zygote {
+         }
+     }
+ 
+-    /**
+-     * Reads an argument list from the provided socket
+-     * @return Argument list or null if EOF is reached
+-     * @throws IOException passed straight through
+-     */
+-    static String[] readArgumentList(BufferedReader socketReader) throws IOException {
+-        int argc;
+-
+-        try {
+-            String argc_string = socketReader.readLine();
+-
+-            if (argc_string == null) {
+-                // EOF reached.
+-                return null;
+-            }
+-            argc = Integer.parseInt(argc_string);
+-
+-        } catch (NumberFormatException ex) {
+-            Log.e("Zygote", "Invalid Zygote wire format: non-int at argc");
+-            throw new IOException("Invalid wire format");
+-        }
+-
+-        // See bug 1092107: large argc can be used for a DOS attack
+-        if (argc > MAX_ZYGOTE_ARGC) {
+-            throw new IOException("Max arg count exceeded");
+-        }
+-
+-        String[] args = new String[argc];
+-        for (int arg_index = 0; arg_index < argc; arg_index++) {
+-            args[arg_index] = socketReader.readLine();
+-            if (args[arg_index] == null) {
+-                // We got an unexpected EOF.
+-                throw new IOException("Truncated request");
+-            }
+-        }
+-
+-        return args;
+-    }
+-
+     /**
+      * Creates a managed LocalServerSocket object using a file descriptor
+      * created by an init.rc script.  The init scripts that specify the
+diff --git a/core/java/com/android/internal/os/ZygoteArguments.java b/core/java/com/android/internal/os/ZygoteArguments.java
+index 94c1f71a..62b4149b 100644
+--- a/core/java/com/android/internal/os/ZygoteArguments.java
++++ b/core/java/com/android/internal/os/ZygoteArguments.java
+@@ -16,8 +16,8 @@
+ 
+ package com.android.internal.os;
+ 
++import java.io.EOFException;
+ import java.util.ArrayList;
+-import java.util.Arrays;
+ 
+ /**
+  * Handles argument parsing for args related to the zygote spawner.
+@@ -245,20 +245,34 @@ class ZygoteArguments {
+     /**
+      * Constructs instance and parses args
+      *
+-     * @param args zygote command-line args
++     * @param args zygote command-line args as ZygoteCommandBuffer, positioned after argument count.
+      */
+-    ZygoteArguments(String[] args) throws IllegalArgumentException {
+-        parseArgs(args);
++    private ZygoteArguments(ZygoteCommandBuffer args, int argCount)
++            throws IllegalArgumentException, EOFException {
++        parseArgs(args, argCount);
++    }
++
++    /**
++     * Return a new ZygoteArguments reflecting the contents of the given ZygoteCommandBuffer. Return
++     * null if the ZygoteCommandBuffer was positioned at EOF. Assumes the buffer is initially
++     * positioned at the beginning of the command.
++     */
++    public static ZygoteArguments getInstance(ZygoteCommandBuffer args)
++            throws IllegalArgumentException, EOFException {
++        int argCount = args.getCount();
++        return argCount == 0 ? null : new ZygoteArguments(args, argCount);
+     }
+ 
+     /**
+      * Parses the commandline arguments intended for the Zygote spawner (such as "--setuid=" and
+-     * "--setgid=") and creates an array containing the remaining args.
++     * "--setgid=") and creates an array containing the remaining args. Return false if we were
++     * at EOF.
+      *
+      * Per security review bug #1112214, duplicate args are disallowed in critical cases to make
+      * injection harder.
+      */
+-    private void parseArgs(String[] args) throws IllegalArgumentException {
++    private void parseArgs(ZygoteCommandBuffer args, int argCount)
++            throws IllegalArgumentException, EOFException {
+         /*
+          * See android.os.ZygoteProcess.zygoteSendArgsAndGetResult()
+          * Presently the wire format to the zygote process is:
+@@ -269,13 +283,13 @@ class ZygoteArguments {
+          * the child or -1 on failure.
+          */
+ 
+-        int curArg = 0;
+-
++        String unprocessedArg = null;
++        int curArg = 0;  // Index of arg
+         boolean seenRuntimeArgs = false;
+-
+         boolean expectRuntimeArgs = true;
+-        for ( /* curArg */ ; curArg < args.length; curArg++) {
+-            String arg = args[curArg];
++
++        for ( /* curArg */ ; curArg < argCount; ++curArg) {
++            String arg = args.nextArg();
+ 
+             if (arg.equals("--")) {
+                 curArg++;
+@@ -367,7 +381,8 @@ class ZygoteArguments {
+                         "Duplicate arg specified");
+                 }
+                 try {
+-                    mInvokeWith = args[++curArg];
++                    ++curArg;
++                    mInvokeWith = args.nextArg();
+                 } catch (IndexOutOfBoundsException ex) {
+                     throw new IllegalArgumentException(
+                         "--invoke-with requires argument");
+@@ -405,12 +420,14 @@ class ZygoteArguments {
+             } else if (arg.startsWith("--app-data-dir=")) {
+                 mAppDataDir = getAssignmentValue(arg);
+             } else if (arg.equals("--preload-app")) {
+-                mPreloadApp = args[++curArg];
++                ++curArg;
++                mPreloadApp = args.nextArg();
+             } else if (arg.equals("--preload-package")) {
+-                mPreloadPackage = args[++curArg];
+-                mPreloadPackageLibs = args[++curArg];
+-                mPreloadPackageLibFileName = args[++curArg];
+-                mPreloadPackageCacheKey = args[++curArg];
++                curArg += 4;
++                mPreloadPackage = args.nextArg();
++                mPreloadPackageLibs = args.nextArg();
++                mPreloadPackageLibFileName = args.nextArg();
++                mPreloadPackageCacheKey = args.nextArg();
+             } else if (arg.equals("--preload-default")) {
+                 mPreloadDefault = true;
+                 expectRuntimeArgs = false;
+@@ -419,8 +436,11 @@ class ZygoteArguments {
+             } else if (arg.equals("--set-api-blacklist-exemptions")) {
+                 // consume all remaining args; this is a stand-alone command, never included
+                 // with the regular fork command.
+-                mApiBlacklistExemptions = Arrays.copyOfRange(args, curArg + 1, args.length);
+-                curArg = args.length;
++                mApiBlacklistExemptions = new String[argCount - curArg - 1];
++                ++curArg;
++                for (int i = 0; curArg < argCount; ++curArg, ++i) {
++                    mApiBlacklistExemptions[i] = args.nextArg();
++                }
+                 expectRuntimeArgs = false;
+             } else if (arg.startsWith("--hidden-api-log-sampling-rate=")) {
+                 String rateStr = getAssignmentValue(arg);
+@@ -470,35 +490,46 @@ class ZygoteArguments {
+             } else if (arg.equals(Zygote.BIND_MOUNT_APP_DATA_DIRS)) {
+                 mBindMountAppDataDirs = true;
+             } else {
++                unprocessedArg = arg;
+                 break;
+             }
+         }
++        // curArg is the index of the first unprocessed argument. That argument is either referenced
++        // by unprocessedArg or not read yet.
+ 
+         if (mBootCompleted) {
+-            if (args.length - curArg > 0) {
++            if (argCount > curArg) {
+                 throw new IllegalArgumentException("Unexpected arguments after --boot-completed");
+             }
+         } else if (mAbiListQuery || mPidQuery) {
+-            if (args.length - curArg > 0) {
++            if (argCount > curArg) {
+                 throw new IllegalArgumentException("Unexpected arguments after --query-abi-list.");
+             }
+         } else if (mPreloadPackage != null) {
+-            if (args.length - curArg > 0) {
++            if (argCount > curArg) {
+                 throw new IllegalArgumentException(
+                     "Unexpected arguments after --preload-package.");
+             }
+         } else if (mPreloadApp != null) {
+-            if (args.length - curArg > 0) {
++            if (argCount > curArg) {
+                 throw new IllegalArgumentException(
+                     "Unexpected arguments after --preload-app.");
+             }
+         } else if (expectRuntimeArgs) {
+             if (!seenRuntimeArgs) {
+-                throw new IllegalArgumentException("Unexpected argument : " + args[curArg]);
++                throw new IllegalArgumentException("Unexpected argument : "
++                    + (unprocessedArg == null ? args.nextArg() : unprocessedArg));
+             }
+ 
+-            mRemainingArgs = new String[args.length - curArg];
+-            System.arraycopy(args, curArg, mRemainingArgs, 0, mRemainingArgs.length);
++            mRemainingArgs = new String[argCount - curArg];
++            int i = 0;
++            if (unprocessedArg != null) {
++                mRemainingArgs[0] = unprocessedArg;
++                ++i;
++            }
++            for (; i < argCount - curArg; ++i) {
++                mRemainingArgs[i] = args.nextArg();
++            }
+         }
+ 
+         if (mStartChildZygote) {
+diff --git a/core/java/com/android/internal/os/ZygoteCommandBuffer.java b/core/java/com/android/internal/os/ZygoteCommandBuffer.java
+new file mode 100644
+index 00000000..b61ae7ac
+--- /dev/null
++++ b/core/java/com/android/internal/os/ZygoteCommandBuffer.java
+@@ -0,0 +1,187 @@
++/*
++ * Copyright (C) 2020 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.internal.os;
++
++import android.annotation.NonNull;
++import android.annotation.Nullable;
++import android.net.LocalSocket;
++
++import java.io.FileDescriptor;
++import java.lang.ref.Reference;  // For reachabilityFence.
++
++/**
++ * A native-accessible buffer for Zygote commands. Designed to support repeated forking
++ * of applications without intervening memory allocation, thus keeping zygote memory
++ * as stable as possible.
++ * A ZygoteCommandBuffer may have an associated socket from which it can be refilled.
++ * Otherwise the contents are explicitly set by getInstance().
++ *
++ * NOT THREAD-SAFE. No methods may be called concurrently from multiple threads.
++ *
++ * Only one ZygoteCommandBuffer can exist at a time.
++ * Must be explicitly closed before being dropped.
++ * @hide
++ */
++class ZygoteCommandBuffer implements AutoCloseable {
++    private long mNativeBuffer;  // Not final so that we can clear it in close().
++
++    /**
++     * The command socket.
++     *
++     * mSocket is retained in the child process in "peer wait" mode, so
++     * that it closes when the child process terminates. In other cases,
++     * it is closed in the peer.
++     */
++    private final LocalSocket mSocket;
++    private final int mNativeSocket;
++
++    /**
++     * Constructs instance from file descriptor from which the command will be read.
++     * Only a single instance may be live in a given process. The native code checks.
++     *
++     * @param fd file descriptor to read from. The setCommand() method may be used if and only if
++     * fd is null.
++     */
++    ZygoteCommandBuffer(@Nullable LocalSocket socket) {
++        mSocket = socket;
++        if (socket == null) {
++            mNativeSocket = -1;
++        } else {
++            mNativeSocket = mSocket.getFileDescriptor().getInt$();
++        }
++        mNativeBuffer = getNativeBuffer(mNativeSocket);
++    }
++
++    /**
++     * Constructs an instance with explicitly supplied arguments and an invalid
++     * file descriptor. Can only be used for a single command.
++     */
++    ZygoteCommandBuffer(@NonNull String[] args) {
++        this((LocalSocket) null);
++        setCommand(args);
++    }
++
++
++    private static native long getNativeBuffer(int fd);
++
++    /**
++     * Deallocate native resources associated with the one and only command buffer, and prevent
++     * reuse. Subsequent calls to getInstance() will yield a new buffer.
++     * We do not close the associated socket, if any.
++     */
++    @Override
++    public void close() {
++        freeNativeBuffer(mNativeBuffer);
++        mNativeBuffer = 0;
++    }
++
++    private static native void freeNativeBuffer(long /* NativeCommandBuffer* */ nbuffer);
++
++    /**
++     * Read at least the first line of the next command into the buffer, return the argument count
++     * from that line. Assumes we are initially positioned at the beginning of the first line of
++     * the command. Leave the buffer positioned at the beginning of the second command line, i.e.
++     * the first argument. If the buffer has no associated file descriptor, we just reposition to
++     * the beginning of the buffer, and reread existing contents.  Returns zero if we started out
++     * at EOF.
++     */
++    int getCount() {
++        try {
++            return nativeGetCount(mNativeBuffer);
++        } finally {
++            // Make sure the mNativeSocket doesn't get closed due to early finalization.
++            Reference.reachabilityFence(mSocket);
++        }
++    }
++
++    private static native int nativeGetCount(long /* NativeCommandBuffer* */ nbuffer);
++
++
++    /*
++     * Set the buffer to contain the supplied sequence of arguments.
++     */
++    private void setCommand(String[] command) {
++        int nArgs = command.length;
++        insert(mNativeBuffer, Integer.toString(nArgs));
++        for (String s: command) {
++            insert(mNativeBuffer, s);
++        }
++        // Native code checks there is no socket; hence no reachabilityFence.
++    }
++
++    private static native void insert(long /* NativeCommandBuffer* */ nbuffer, String s);
++
++    /**
++     * Retrieve the next argument/line from the buffer, filling the buffer as necessary.
++     */
++    String nextArg() {
++        try {
++            return nativeNextArg(mNativeBuffer);
++        } finally {
++            Reference.reachabilityFence(mSocket);
++        }
++    }
++
++    private static native String nativeNextArg(long /* NativeCommandBuffer* */ nbuffer);
++
++    void readFullyAndReset() {
++        try {
++            nativeReadFullyAndReset(mNativeBuffer);
++        } finally {
++            Reference.reachabilityFence(mSocket);
++        }
++    }
++
++    private static native void nativeReadFullyAndReset(long /* NativeCommandBuffer* */ nbuffer);
++
++    /**
++     * Fork a child as specified by the current command in the buffer, and repeat this process
++     * after refilling the buffer, so long as the buffer clearly contains another fork command.
++     *
++     * @param zygoteSocket socket from which to obtain new connections when current one is
++     *         disconnected
++     * @param expectedUid Peer UID for current connection. We refuse to deal with requests from
++     *         a different UID.
++     * @param minUid the smallest uid that may be request for the child process.
++     * @param firstNiceName The name for the initial process to be forked. Used only for error
++     *         reporting.
++     *
++     * @return true in the child, false in the parent. In the parent case, the buffer is positioned
++     * at the beginning of a command that still needs to be processed.
++     */
++    boolean forkRepeatedly(FileDescriptor zygoteSocket, int expectedUid, int minUid,
++                       String firstNiceName) {
++        try {
++            return nativeForkRepeatedly(mNativeBuffer, zygoteSocket.getInt$(),
++                    expectedUid, minUid, firstNiceName);
++        } finally {
++            Reference.reachabilityFence(mSocket);
++            Reference.reachabilityFence(zygoteSocket);
++        }
++    }
++
++    /*
++     * Repeatedly fork children as above. It commonly does not return in the parent, but it may.
++     * @return true in the chaild, false in the parent if we encounter a command we couldn't handle.
++     */
++    private static native boolean nativeForkRepeatedly(long /* NativeCommandBuffer* */ nbuffer,
++                                                   int zygoteSocketRawFd,
++                                                   int expectedUid,
++                                                   int minUid,
++                                                   String firstNiceName);
++
++}
+diff --git a/core/java/com/android/internal/os/ZygoteConnection.java b/core/java/com/android/internal/os/ZygoteConnection.java
+index e6a3029c..060689a3 100644
+--- a/core/java/com/android/internal/os/ZygoteConnection.java
++++ b/core/java/com/android/internal/os/ZygoteConnection.java
+@@ -36,16 +36,15 @@ import android.system.StructPollfd;
+ import android.util.Log;
+ 
+ import dalvik.system.VMRuntime;
++import dalvik.system.ZygoteHooks;
+ 
+ import libcore.io.IoUtils;
+ 
+-import java.io.BufferedReader;
+ import java.io.ByteArrayInputStream;
+ import java.io.DataInputStream;
+ import java.io.DataOutputStream;
+ import java.io.FileDescriptor;
+ import java.io.IOException;
+-import java.io.InputStreamReader;
+ import java.nio.charset.StandardCharsets;
+ import java.util.Base64;
+ import java.util.concurrent.TimeUnit;
+@@ -67,7 +66,6 @@ class ZygoteConnection {
+     private final LocalSocket mSocket;
+     @UnsupportedAppUsage
+     private final DataOutputStream mSocketOutStream;
+-    private final BufferedReader mSocketReader;
+     @UnsupportedAppUsage
+     private final Credentials peer;
+     private final String abiList;
+@@ -85,9 +83,6 @@ class ZygoteConnection {
+         this.abiList = abiList;
+ 
+         mSocketOutStream = new DataOutputStream(socket.getOutputStream());
+-        mSocketReader =
+-                new BufferedReader(
+-                        new InputStreamReader(socket.getInputStream()), Zygote.SOCKET_BUFFER_SIZE);
+ 
+         mSocket.setSoTimeout(CONNECTION_TIMEOUT_MILLIS);
+ 
+@@ -111,178 +106,216 @@ class ZygoteConnection {
+     }
+ 
+     /**
+-     * Reads one start command from the command socket. If successful, a child is forked and a
++     * Reads a command from the command socket. If a child is successfully forked, a
+      * {@code Runnable} that calls the childs main method (or equivalent) is returned in the child
+      * process. {@code null} is always returned in the parent process (the zygote).
++     * If multipleOK is set, we may keep processing additional fork commands before returning.
+      *
+      * If the client closes the socket, an {@code EOF} condition is set, which callers can test
+      * for by calling {@code ZygoteConnection.isClosedByPeer}.
+      */
+-    Runnable processOneCommand(ZygoteServer zygoteServer) {
+-        String[] args;
+-
+-        try {
+-            args = Zygote.readArgumentList(mSocketReader);
+-        } catch (IOException ex) {
+-            throw new IllegalStateException("IOException on command socket", ex);
+-        }
+-
+-        // readArgumentList returns null only when it has reached EOF with no available
+-        // data to read. This will only happen when the remote socket has disconnected.
+-        if (args == null) {
+-            isEof = true;
+-            return null;
+-        }
+-
+-        int pid;
+-        FileDescriptor childPipeFd = null;
+-        FileDescriptor serverPipeFd = null;
+-
+-        ZygoteArguments parsedArgs = new ZygoteArguments(args);
+-
+-        if (parsedArgs.mBootCompleted) {
+-            handleBootCompleted();
+-            return null;
+-        }
+-
+-        if (parsedArgs.mAbiListQuery) {
+-            handleAbiListQuery();
+-            return null;
+-        }
+-
+-        if (parsedArgs.mPidQuery) {
+-            handlePidQuery();
+-            return null;
+-        }
++    Runnable processCommand(ZygoteServer zygoteServer, boolean multipleOK) {
++        ZygoteArguments parsedArgs;
++
++        try (ZygoteCommandBuffer argBuffer = new ZygoteCommandBuffer(mSocket)) {
++            while (true) {
++                try {
++                    parsedArgs = ZygoteArguments.getInstance(argBuffer);
++                    // Keep argBuffer around, since we need it to fork.
++                } catch (IOException ex) {
++                    throw new IllegalStateException("IOException on command socket", ex);
++                }
++                if (parsedArgs == null) {
++                    isEof = true;
++                    return null;
++                }
+ 
+-        if (parsedArgs.mUsapPoolStatusSpecified) {
+-            return handleUsapPoolStatusChange(zygoteServer, parsedArgs.mUsapPoolEnabled);
+-        }
++                int pid;
++                FileDescriptor childPipeFd = null;
++                FileDescriptor serverPipeFd = null;
+ 
+-        if (parsedArgs.mPreloadDefault) {
+-            handlePreload();
+-            return null;
+-        }
++                if (parsedArgs.mBootCompleted) {
++                    handleBootCompleted();
++                    return null;
++                }
+ 
+-        if (parsedArgs.mPreloadPackage != null) {
+-            handlePreloadPackage(parsedArgs.mPreloadPackage, parsedArgs.mPreloadPackageLibs,
+-                    parsedArgs.mPreloadPackageLibFileName, parsedArgs.mPreloadPackageCacheKey);
+-            return null;
+-        }
++                if (parsedArgs.mAbiListQuery) {
++                    handleAbiListQuery();
++                    return null;
++                }
+ 
+-        if (canPreloadApp() && parsedArgs.mPreloadApp != null) {
+-            byte[] rawParcelData = Base64.getDecoder().decode(parsedArgs.mPreloadApp);
+-            Parcel appInfoParcel = Parcel.obtain();
+-            appInfoParcel.unmarshall(rawParcelData, 0, rawParcelData.length);
+-            appInfoParcel.setDataPosition(0);
+-            ApplicationInfo appInfo = ApplicationInfo.CREATOR.createFromParcel(appInfoParcel);
+-            appInfoParcel.recycle();
+-            if (appInfo != null) {
+-                handlePreloadApp(appInfo);
+-            } else {
+-                throw new IllegalArgumentException("Failed to deserialize --preload-app");
+-            }
+-            return null;
+-        }
++                if (parsedArgs.mPidQuery) {
++                    handlePidQuery();
++                    return null;
++                }
+ 
+-        if (parsedArgs.mApiBlacklistExemptions != null) {
+-            return handleApiBlacklistExemptions(zygoteServer, parsedArgs.mApiBlacklistExemptions);
+-        }
++                if (parsedArgs.mUsapPoolStatusSpecified) {
++                    // Handle this once we've released the argBuffer, to avoid opening a second one.
++                    break;
++                }
+ 
+-        if (parsedArgs.mHiddenApiAccessLogSampleRate != -1
+-                || parsedArgs.mHiddenApiAccessStatslogSampleRate != -1) {
+-            return handleHiddenApiAccessLogSampleRate(zygoteServer,
+-                    parsedArgs.mHiddenApiAccessLogSampleRate,
+-                    parsedArgs.mHiddenApiAccessStatslogSampleRate);
+-        }
++                if (parsedArgs.mPreloadDefault) {
++                    handlePreload();
++                    return null;
++                }
+ 
+-        if (parsedArgs.mPermittedCapabilities != 0 || parsedArgs.mEffectiveCapabilities != 0) {
+-            throw new ZygoteSecurityException("Client may not specify capabilities: "
+-                    + "permitted=0x" + Long.toHexString(parsedArgs.mPermittedCapabilities)
+-                    + ", effective=0x" + Long.toHexString(parsedArgs.mEffectiveCapabilities));
+-        }
++                if (parsedArgs.mPreloadPackage != null) {
++                    handlePreloadPackage(parsedArgs.mPreloadPackage,
++                            parsedArgs.mPreloadPackageLibs,
++                            parsedArgs.mPreloadPackageLibFileName,
++                            parsedArgs.mPreloadPackageCacheKey);
++                    return null;
++                }
+ 
+-        Zygote.applyUidSecurityPolicy(parsedArgs, peer);
+-        Zygote.applyInvokeWithSecurityPolicy(parsedArgs, peer);
++                if (canPreloadApp() && parsedArgs.mPreloadApp != null) {
++                    byte[] rawParcelData = Base64.getDecoder().decode(parsedArgs.mPreloadApp);
++                    Parcel appInfoParcel = Parcel.obtain();
++                    appInfoParcel.unmarshall(rawParcelData, 0, rawParcelData.length);
++                    appInfoParcel.setDataPosition(0);
++                    ApplicationInfo appInfo =
++                            ApplicationInfo.CREATOR.createFromParcel(appInfoParcel);
++                    appInfoParcel.recycle();
++                    if (appInfo != null) {
++                        handlePreloadApp(appInfo);
++                    } else {
++                        throw new IllegalArgumentException("Failed to deserialize --preload-app");
++                    }
++                    return null;
++                }
+ 
+-        Zygote.applyDebuggerSystemProperty(parsedArgs);
+-        Zygote.applyInvokeWithSystemProperty(parsedArgs);
++                if (parsedArgs.mApiBlacklistExemptions != null) {
++                    return handleApiBlacklistExemptions(zygoteServer,
++                            parsedArgs.mApiBlacklistExemptions);
++                }
+ 
+-        int[][] rlimits = null;
++                if (parsedArgs.mHiddenApiAccessLogSampleRate != -1
++                        || parsedArgs.mHiddenApiAccessStatslogSampleRate != -1) {
++                    return handleHiddenApiAccessLogSampleRate(zygoteServer,
++                            parsedArgs.mHiddenApiAccessLogSampleRate,
++                            parsedArgs.mHiddenApiAccessStatslogSampleRate);
++                }
+ 
+-        if (parsedArgs.mRLimits != null) {
+-            rlimits = parsedArgs.mRLimits.toArray(Zygote.INT_ARRAY_2D);
+-        }
++                if (parsedArgs.mPermittedCapabilities != 0
++                        || parsedArgs.mEffectiveCapabilities != 0) {
++                    throw new ZygoteSecurityException("Client may not specify capabilities: "
++                            + "permitted=0x" + Long.toHexString(parsedArgs.mPermittedCapabilities)
++                            + ", effective=0x"
++                            + Long.toHexString(parsedArgs.mEffectiveCapabilities));
++                }
+ 
+-        int[] fdsToIgnore = null;
++                Zygote.applyUidSecurityPolicy(parsedArgs, peer);
++                Zygote.applyInvokeWithSecurityPolicy(parsedArgs, peer);
+ 
+-        if (parsedArgs.mInvokeWith != null) {
+-            try {
+-                FileDescriptor[] pipeFds = Os.pipe2(O_CLOEXEC);
+-                childPipeFd = pipeFds[1];
+-                serverPipeFd = pipeFds[0];
+-                Os.fcntlInt(childPipeFd, F_SETFD, 0);
+-                fdsToIgnore = new int[]{childPipeFd.getInt$(), serverPipeFd.getInt$()};
+-            } catch (ErrnoException errnoEx) {
+-                throw new IllegalStateException("Unable to set up pipe for invoke-with", errnoEx);
+-            }
+-        }
++                Zygote.applyDebuggerSystemProperty(parsedArgs);
++                Zygote.applyInvokeWithSystemProperty(parsedArgs);
+ 
+-        /*
+-         * In order to avoid leaking descriptors to the Zygote child,
+-         * the native code must close the two Zygote socket descriptors
+-         * in the child process before it switches from Zygote-root to
+-         * the UID and privileges of the application being launched.
+-         *
+-         * In order to avoid "bad file descriptor" errors when the
+-         * two LocalSocket objects are closed, the Posix file
+-         * descriptors are released via a dup2() call which closes
+-         * the socket and substitutes an open descriptor to /dev/null.
+-         */
++                int[][] rlimits = null;
+ 
+-        int [] fdsToClose = { -1, -1 };
++                if (parsedArgs.mRLimits != null) {
++                    rlimits = parsedArgs.mRLimits.toArray(Zygote.INT_ARRAY_2D);
++                }
+ 
+-        FileDescriptor fd = mSocket.getFileDescriptor();
++                int[] fdsToIgnore = null;
++
++                if (parsedArgs.mInvokeWith != null) {
++                    try {
++                        FileDescriptor[] pipeFds = Os.pipe2(O_CLOEXEC);
++                        childPipeFd = pipeFds[1];
++                        serverPipeFd = pipeFds[0];
++                        Os.fcntlInt(childPipeFd, F_SETFD, 0);
++                        fdsToIgnore = new int[]{childPipeFd.getInt$(), serverPipeFd.getInt$()};
++                    } catch (ErrnoException errnoEx) {
++                        throw new IllegalStateException("Unable to set up pipe for invoke-with",
++                                errnoEx);
++                    }
++                }
+ 
+-        if (fd != null) {
+-            fdsToClose[0] = fd.getInt$();
+-        }
++                /*
++                 * In order to avoid leaking descriptors to the Zygote child,
++                 * the native code must close the two Zygote socket descriptors
++                 * in the child process before it switches from Zygote-root to
++                 * the UID and privileges of the application being launched.
++                 *
++                 * In order to avoid "bad file descriptor" errors when the
++                 * two LocalSocket objects are closed, the Posix file
++                 * descriptors are released via a dup2() call which closes
++                 * the socket and substitutes an open descriptor to /dev/null.
++                 */
+ 
+-        fd = zygoteServer.getZygoteSocketFileDescriptor();
++                int [] fdsToClose = { -1, -1 };
+ 
+-        if (fd != null) {
+-            fdsToClose[1] = fd.getInt$();
+-        }
++                FileDescriptor fd = mSocket.getFileDescriptor();
+ 
+-        pid = Zygote.forkAndSpecialize(parsedArgs.mUid, parsedArgs.mGid, parsedArgs.mGids,
+-                parsedArgs.mRuntimeFlags, rlimits, parsedArgs.mMountExternal, parsedArgs.mSeInfo,
+-                parsedArgs.mNiceName, fdsToClose, fdsToIgnore, parsedArgs.mStartChildZygote,
+-                parsedArgs.mInstructionSet, parsedArgs.mAppDataDir, parsedArgs.mIsTopApp,
+-                parsedArgs.mPkgDataInfoList, parsedArgs.mWhitelistedDataInfoList,
+-                parsedArgs.mBindMountAppDataDirs, parsedArgs.mBindMountAppStorageDirs);
++                if (fd != null) {
++                    fdsToClose[0] = fd.getInt$();
++                }
+ 
+-        try {
+-            if (pid == 0) {
+-                // in child
+-                zygoteServer.setForkChild();
++                FileDescriptor zygoteFd = zygoteServer.getZygoteSocketFileDescriptor();
+ 
+-                zygoteServer.closeServerSocket();
+-                IoUtils.closeQuietly(serverPipeFd);
+-                serverPipeFd = null;
++                if (zygoteFd != null) {
++                    fdsToClose[1] = zygoteFd.getInt$();
++                }
+ 
+-                return handleChildProc(parsedArgs, childPipeFd, parsedArgs.mStartChildZygote);
+-            } else {
+-                // In the parent. A pid < 0 indicates a failure and will be handled in
+-                // handleParentProc.
+-                IoUtils.closeQuietly(childPipeFd);
+-                childPipeFd = null;
+-                handleParentProc(pid, serverPipeFd);
+-                return null;
++                if (parsedArgs.mInvokeWith != null || parsedArgs.mStartChildZygote
++                        || !multipleOK || peer.getUid() != Process.SYSTEM_UID) {
++                    // Continue using old code for now. TODO: Handle these cases in the other path.
++                    pid = Zygote.forkAndSpecialize(parsedArgs.mUid, parsedArgs.mGid,
++                            parsedArgs.mGids, parsedArgs.mRuntimeFlags, rlimits,
++                            parsedArgs.mMountExternal, parsedArgs.mSeInfo, parsedArgs.mNiceName,
++                            fdsToClose, fdsToIgnore, parsedArgs.mStartChildZygote,
++                            parsedArgs.mInstructionSet, parsedArgs.mAppDataDir,
++                            parsedArgs.mIsTopApp, parsedArgs.mPkgDataInfoList,
++                            parsedArgs.mWhitelistedDataInfoList, parsedArgs.mBindMountAppDataDirs,
++                            parsedArgs.mBindMountAppStorageDirs);
++
++                    try {
++                        if (pid == 0) {
++                            // in child
++                            zygoteServer.setForkChild();
++
++                            zygoteServer.closeServerSocket();
++                            IoUtils.closeQuietly(serverPipeFd);
++                            serverPipeFd = null;
++
++                            return handleChildProc(parsedArgs, childPipeFd,
++                                    parsedArgs.mStartChildZygote);
++                        } else {
++                            // In the parent. A pid < 0 indicates a failure and will be handled in
++                            // handleParentProc.
++                            IoUtils.closeQuietly(childPipeFd);
++                            childPipeFd = null;
++                            handleParentProc(pid, serverPipeFd);
++                            return null;
++                        }
++                    } finally {
++                        IoUtils.closeQuietly(childPipeFd);
++                        IoUtils.closeQuietly(serverPipeFd);
++                    }
++                } else {
++                    ZygoteHooks.preFork();
++                    Runnable result = Zygote.forkSimpleApps(argBuffer,
++                            zygoteServer.getZygoteSocketFileDescriptor(),
++                            peer.getUid(), Zygote.minChildUid(peer), parsedArgs.mNiceName);
++                    if (result == null) {
++                        // parent; we finished some number of forks. Result is Boolean.
++                        // We already did the equivalent of handleParentProc().
++                        ZygoteHooks.postForkCommon();
++                        // argBuffer contains a command not understood by forksimpleApps.
++                        continue;
++                    } else {
++                        // child; result is a Runnable.
++                        zygoteServer.setForkChild();
++                        Zygote.setAppProcessName(parsedArgs, TAG);  // ??? Necessary?
++                        return result;
++                    }
++                }
+             }
+-        } finally {
+-            IoUtils.closeQuietly(childPipeFd);
+-            IoUtils.closeQuietly(serverPipeFd);
+         }
++        if (parsedArgs.mUsapPoolStatusSpecified) {
++            // Now that we've released argBuffer:
++            return handleUsapPoolStatusChange(zygoteServer, parsedArgs.mUsapPoolEnabled);
++        }
++        throw new AssertionError("Shouldn't get here");
+     }
+ 
+     private void handleAbiListQuery() {
+@@ -557,7 +590,7 @@ class ZygoteConnection {
+ 
+                     if (res > 0) {
+                         if ((fds[0].revents & POLLIN) != 0) {
+-                            // Only read one byte, so as not to block.
++                            // Only read one byte, so as not to block. Really needed?
+                             int readBytes = android.system.Os.read(pipeFd, data, dataIndex, 1);
+                             if (readBytes < 0) {
+                                 throw new RuntimeException("Some error");
+diff --git a/core/java/com/android/internal/os/ZygoteConnectionConstants.java b/core/java/com/android/internal/os/ZygoteConnectionConstants.java
+index 506e39f3..0c1cd6de 100644
+--- a/core/java/com/android/internal/os/ZygoteConnectionConstants.java
++++ b/core/java/com/android/internal/os/ZygoteConnectionConstants.java
+@@ -31,9 +31,6 @@ public class ZygoteConnectionConstants {
+      */
+     public static final int CONNECTION_TIMEOUT_MILLIS = 1000;
+ 
+-    /** max number of arguments that a connection can specify */
+-    public static final int MAX_ZYGOTE_ARGC = 1024;
+-
+     /**
+      * Wait time for a wrapped app to report back its pid.
+      *
+diff --git a/core/java/com/android/internal/os/ZygoteInit.java b/core/java/com/android/internal/os/ZygoteInit.java
+index 2e32730a..8e3076df 100644
+--- a/core/java/com/android/internal/os/ZygoteInit.java
++++ b/core/java/com/android/internal/os/ZygoteInit.java
+@@ -65,6 +65,7 @@ import dalvik.system.ZygoteHooks;
+ import libcore.io.IoUtils;
+ 
+ import java.io.BufferedReader;
++import java.io.EOFException;
+ import java.io.File;
+ import java.io.FileInputStream;
+ import java.io.FileNotFoundException;
+@@ -759,7 +760,13 @@ public class ZygoteInit {
+         int pid;
+ 
+         try {
+-            parsedArgs = new ZygoteArguments(args);
++            ZygoteCommandBuffer commandBuffer = new ZygoteCommandBuffer(args);
++            try {
++                parsedArgs = ZygoteArguments.getInstance(commandBuffer);
++            } catch (EOFException e) {
++                throw new AssertionError("Unexpected argument error for forking system server", e);
++            }
++            commandBuffer.close();
+             Zygote.applyDebuggerSystemProperty(parsedArgs);
+             Zygote.applyInvokeWithSystemProperty(parsedArgs);
+ 
+@@ -824,7 +831,7 @@ public class ZygoteInit {
+      * into new processes are required to either set the priority to the default value or terminate
+      * before executing any non-system code.  The native side of this occurs in SpecializeCommon,
+      * while the Java Language priority is changed in ZygoteInit.handleSystemServerProcess,
+-     * ZygoteConnection.handleChildProc, and Zygote.usapMain.
++     * ZygoteConnection.handleChildProc, and Zygote.childMain.
+      *
+      * @param argv  Command line arguments used to specify the Zygote's configuration.
+      */
+diff --git a/core/java/com/android/internal/os/ZygoteServer.java b/core/java/com/android/internal/os/ZygoteServer.java
+index 567747cd..1308101f 100644
+--- a/core/java/com/android/internal/os/ZygoteServer.java
++++ b/core/java/com/android/internal/os/ZygoteServer.java
+@@ -337,7 +337,7 @@ class ZygoteServer {
+      * @param sessionSocketRawFDs  Anonymous session sockets that are currently open
+      * @return In the Zygote process this function will always return null; in unspecialized app
+      *         processes this function will return a Runnable object representing the new
+-     *         application that is passed up from usapMain.
++     *         application that is passed up from childMain (the usap's main wait loop).
+      */
+ 
+     Runnable fillUsapPool(int[] sessionSocketRawFDs, boolean isPriorityRefill) {
+@@ -420,6 +420,7 @@ class ZygoteServer {
+      * Runs the zygote process's select loop. Accepts new connections as
+      * they happen, and reads commands from connections one spawn-request's
+      * worth at a time.
++     * @param abiList list of ABIs supported by this zygote.
+      */
+     Runnable runSelectLoop(String abiList) {
+         ArrayList<FileDescriptor> socketFDs = new ArrayList<>();
+@@ -537,22 +538,23 @@ class ZygoteServer {
+ 
+                     if (pollIndex == 0) {
+                         // Zygote server socket
+-
+                         ZygoteConnection newPeer = acceptCommandPeer(abiList);
+                         peers.add(newPeer);
+                         socketFDs.add(newPeer.getFileDescriptor());
+-
+                     } else if (pollIndex < usapPoolEventFDIndex) {
+                         // Session socket accepted from the Zygote server socket
+ 
+                         try {
+                             ZygoteConnection connection = peers.get(pollIndex);
+-                            final Runnable command = connection.processOneCommand(this);
++                            boolean multipleForksOK = !isUsapPoolEnabled()
++                                    && ZygoteHooks.indefiniteThreadSuspensionOK();
++                            final Runnable command =
++                                    connection.processCommand(this, multipleForksOK);
+ 
+                             // TODO (chriswailes): Is this extra check necessary?
+                             if (mIsForkChild) {
+                                 // We're in the child. We should always have a command to run at
+-                                // this stage if processOneCommand hasn't called "exec".
++                                // this stage if processCommand hasn't called "exec".
+                                 if (command == null) {
+                                     throw new IllegalStateException("command == null");
+                                 }
+@@ -565,7 +567,7 @@ class ZygoteServer {
+                                 }
+ 
+                                 // We don't know whether the remote side of the socket was closed or
+-                                // not until we attempt to read from it from processOneCommand. This
++                                // not until we attempt to read from it from processCommand. This
+                                 // shows up as a regular POLLIN event in our regular processing
+                                 // loop.
+                                 if (connection.isClosedByPeer()) {
+diff --git a/core/jni/Android.bp b/core/jni/Android.bp
+index 0797b18f..93c8bb35 100644
+--- a/core/jni/Android.bp
++++ b/core/jni/Android.bp
+@@ -187,6 +187,7 @@ cc_library_shared {
+                 "com_android_internal_os_KernelCpuUidBpfMapReader.cpp",
+                 "com_android_internal_os_KernelSingleUidTimeReader.cpp",
+                 "com_android_internal_os_Zygote.cpp",
++                "com_android_internal_os_ZygoteCommandBuffer.cpp",
+                 "com_android_internal_os_ZygoteInit.cpp",
+                 "hwbinder/EphemeralStorage.cpp",
+                 "fd_utils.cpp",
+diff --git a/core/jni/AndroidRuntime.cpp b/core/jni/AndroidRuntime.cpp
+index 7b708efd..3f66b797 100644
+--- a/core/jni/AndroidRuntime.cpp
++++ b/core/jni/AndroidRuntime.cpp
+@@ -192,6 +192,7 @@ extern int register_com_android_internal_os_FuseAppLoop(JNIEnv* env);
+ extern int register_com_android_internal_os_KernelCpuUidBpfMapReader(JNIEnv *env);
+ extern int register_com_android_internal_os_KernelSingleUidTimeReader(JNIEnv *env);
+ extern int register_com_android_internal_os_Zygote(JNIEnv *env);
++extern int register_com_android_internal_os_ZygoteCommandBuffer(JNIEnv *env);
+ extern int register_com_android_internal_os_ZygoteInit(JNIEnv *env);
+ extern int register_com_android_internal_util_VirtualRefBasePtr(JNIEnv *env);
+ 
+@@ -1522,6 +1523,7 @@ static const RegJNIRec gRegJNI[] = {
+         REG_JNI(register_com_android_internal_content_om_OverlayConfig),
+         REG_JNI(register_com_android_internal_os_ClassLoaderFactory),
+         REG_JNI(register_com_android_internal_os_Zygote),
++        REG_JNI(register_com_android_internal_os_ZygoteCommandBuffer),
+         REG_JNI(register_com_android_internal_os_ZygoteInit),
+         REG_JNI(register_com_android_internal_util_VirtualRefBasePtr),
+         REG_JNI(register_android_hardware_Camera),
+diff --git a/core/jni/com_android_internal_os_Zygote.cpp b/core/jni/com_android_internal_os_Zygote.cpp
+index 9eede83e..c57e5001 100644
+--- a/core/jni/com_android_internal_os_Zygote.cpp
++++ b/core/jni/com_android_internal_os_Zygote.cpp
+@@ -26,6 +26,8 @@
+ #define LOG_TAG "Zygote"
+ #define ATRACE_TAG ATRACE_TAG_DALVIK
+ 
++#include "com_android_internal_os_Zygote.h"
++
+ #include <async_safe/log.h>
+ 
+ // sys/mount.h has to come before linux/fs.h due to redefinition of MS_RDONLY, MS_BIND, etc
+@@ -112,8 +114,7 @@ using android::base::StringPrintf;
+ using android::base::WriteStringToFile;
+ using android::base::GetBoolProperty;
+ 
+-#define CREATE_ERROR(...) StringPrintf("%s:%d: ", __FILE__, __LINE__). \
+-                              append(StringPrintf(__VA_ARGS__))
++using android::zygote::ZygoteFailure;
+ 
+ // This type is duplicated in fd_utils.h
+ typedef const std::function<void(std::string)>& fail_fn_t;
+@@ -209,7 +210,7 @@ class UsapTableEntry {
+   static constexpr EntryStorage INVALID_ENTRY_VALUE = {-1, -1};
+ 
+   std::atomic<EntryStorage> mStorage;
+-  static_assert(decltype(mStorage)::is_always_lock_free);
++  static_assert(decltype(mStorage)::is_always_lock_free);  // Accessed from signal handler.
+ 
+  public:
+   constexpr UsapTableEntry() : mStorage(INVALID_ENTRY_VALUE) {}
+@@ -929,36 +930,6 @@ void SetThreadName(const std::string& thread_name) {
+   android::base::SetDefaultTag(buf);
+ }
+ 
+-/**
+- * A failure function used to report fatal errors to the managed runtime.  This
+- * function is often curried with the process name information and then passed
+- * to called functions.
+- *
+- * @param env  Managed runtime environment
+- * @param process_name  A native representation of the process name
+- * @param managed_process_name  A managed representation of the process name
+- * @param msg  The error message to be reported
+- */
+-[[noreturn]]
+-static void ZygoteFailure(JNIEnv* env,
+-                          const char* process_name,
+-                          jstring managed_process_name,
+-                          const std::string& msg) {
+-  std::unique_ptr<ScopedUtfChars> scoped_managed_process_name_ptr = nullptr;
+-  if (managed_process_name != nullptr) {
+-    scoped_managed_process_name_ptr.reset(new ScopedUtfChars(env, managed_process_name));
+-    if (scoped_managed_process_name_ptr->c_str() != nullptr) {
+-      process_name = scoped_managed_process_name_ptr->c_str();
+-    }
+-  }
+-
+-  const std::string& error_msg =
+-      (process_name == nullptr) ? msg : StringPrintf("(%s) %s", process_name, msg.c_str());
+-
+-  env->FatalError(error_msg.c_str());
+-  __builtin_unreachable();
+-}
+-
+ /**
+  * A helper method for converting managed strings to native strings.  A fatal
+  * error is generated if a problem is encountered in extracting a non-null
+@@ -1071,84 +1042,6 @@ static void ClearUsapTable() {
+   gUsapPoolCount = 0;
+ }
+ 
+-// Utility routine to fork a process from the zygote.
+-static pid_t ForkCommon(JNIEnv* env, bool is_system_server,
+-                        const std::vector<int>& fds_to_close,
+-                        const std::vector<int>& fds_to_ignore,
+-                        bool is_priority_fork) {
+-  SetSignalHandlers();
+-
+-  // Curry a failure function.
+-  auto fail_fn = std::bind(ZygoteFailure, env, is_system_server ? "system_server" : "zygote",
+-                           nullptr, _1);
+-
+-  // Temporarily block SIGCHLD during forks. The SIGCHLD handler might
+-  // log, which would result in the logging FDs we close being reopened.
+-  // This would cause failures because the FDs are not whitelisted.
+-  //
+-  // Note that the zygote process is single threaded at this point.
+-  BlockSignal(SIGCHLD, fail_fn);
+-
+-  // Close any logging related FDs before we start evaluating the list of
+-  // file descriptors.
+-  __android_log_close();
+-  AStatsSocket_close();
+-
+-  // If this is the first fork for this zygote, create the open FD table.  If
+-  // it isn't, we just need to check whether the list of open files has changed
+-  // (and it shouldn't in the normal case).
+-  if (gOpenFdTable == nullptr) {
+-    gOpenFdTable = FileDescriptorTable::Create(fds_to_ignore, fail_fn);
+-  } else {
+-    gOpenFdTable->Restat(fds_to_ignore, fail_fn);
+-  }
+-
+-  android_fdsan_error_level fdsan_error_level = android_fdsan_get_error_level();
+-
+-  // Purge unused native memory in an attempt to reduce the amount of false
+-  // sharing with the child process.  By reducing the size of the libc_malloc
+-  // region shared with the child process we reduce the number of pages that
+-  // transition to the private-dirty state when malloc adjusts the meta-data
+-  // on each of the pages it is managing after the fork.
+-  mallopt(M_PURGE, 0);
+-
+-  pid_t pid = fork();
+-
+-  if (pid == 0) {
+-    if (is_priority_fork) {
+-      setpriority(PRIO_PROCESS, 0, PROCESS_PRIORITY_MAX);
+-    } else {
+-      setpriority(PRIO_PROCESS, 0, PROCESS_PRIORITY_MIN);
+-    }
+-
+-    // The child process.
+-    PreApplicationInit();
+-
+-    // Clean up any descriptors which must be closed immediately
+-    DetachDescriptors(env, fds_to_close, fail_fn);
+-
+-    // Invalidate the entries in the USAP table.
+-    ClearUsapTable();
+-
+-    // Re-open all remaining open file descriptors so that they aren't shared
+-    // with the zygote across a fork.
+-    gOpenFdTable->ReopenOrDetach(fail_fn);
+-
+-    // Turn fdsan back on.
+-    android_fdsan_set_error_level(fdsan_error_level);
+-
+-    // Reset the fd to the unsolicited zygote socket
+-    gSystemServerSocketFd = -1;
+-  } else {
+-    ALOGD("Forked child process %d", pid);
+-  }
+-
+-  // We blocked SIGCHLD prior to a fork, we unblock it here.
+-  UnblockSignal(SIGCHLD, fail_fn);
+-
+-  return pid;
+-}
+-
+ // Create an app data directory over tmpfs overlayed CE / DE storage, and bind mount it
+ // from the actual app data directory in data mirror.
+ static void createAndMountAppData(std::string_view package_name,
+@@ -1919,9 +1812,10 @@ static void AddUsapTableEntry(pid_t usap_pid, int read_pipe_fd) {
+   static int sUsapTableInsertIndex = 0;
+ 
+   int search_index = sUsapTableInsertIndex;
+-
+   do {
+     if (gUsapTable[search_index].SetIfInvalid(usap_pid, read_pipe_fd)) {
++      ++gUsapPoolCount;
++
+       // Start our next search right after where we finished this one.
+       sUsapTableInsertIndex = (search_index + 1) % gUsapTable.size();
+ 
+@@ -1939,7 +1833,7 @@ static void AddUsapTableEntry(pid_t usap_pid, int read_pipe_fd) {
+ /**
+  * Invalidates the entry in the USAPTable corresponding to the provided
+  * process ID if it is present.  If an entry was removed the USAP pool
+- * count is decremented.
++ * count is decremented. May be called from signal handler.
+  *
+  * @param usap_pid  Process ID of the USAP entry to invalidate
+  * @return True if an entry was invalidated; false otherwise
+@@ -2015,6 +1909,120 @@ static void UnmountStorageOnInit(JNIEnv* env) {
+ 
+ namespace android {
+ 
++/**
++ * A failure function used to report fatal errors to the managed runtime.  This
++ * function is often curried with the process name information and then passed
++ * to called functions.
++ *
++ * @param env  Managed runtime environment
++ * @param process_name  A native representation of the process name
++ * @param managed_process_name  A managed representation of the process name
++ * @param msg  The error message to be reported
++ */
++[[noreturn]]
++void zygote::ZygoteFailure(JNIEnv* env,
++                           const char* process_name,
++                           jstring managed_process_name,
++                           const std::string& msg) {
++  std::unique_ptr<ScopedUtfChars> scoped_managed_process_name_ptr = nullptr;
++  if (managed_process_name != nullptr) {
++    scoped_managed_process_name_ptr.reset(new ScopedUtfChars(env, managed_process_name));
++    if (scoped_managed_process_name_ptr->c_str() != nullptr) {
++      process_name = scoped_managed_process_name_ptr->c_str();
++    }
++  }
++
++  const std::string& error_msg =
++      (process_name == nullptr || process_name[0] == '\0') ?
++      msg : StringPrintf("(%s) %s", process_name, msg.c_str());
++
++  env->FatalError(error_msg.c_str());
++  __builtin_unreachable();
++}
++
++// Utility routine to fork a process from the zygote.
++NO_PAC_FUNC
++pid_t zygote::ForkCommon(JNIEnv* env, bool is_system_server,
++                         const std::vector<int>& fds_to_close,
++                         const std::vector<int>& fds_to_ignore,
++                         bool is_priority_fork,
++                         bool purge) {
++  SetSignalHandlers();
++
++  // Curry a failure function.
++  auto fail_fn = std::bind(zygote::ZygoteFailure, env,
++                           is_system_server ? "system_server" : "zygote",
++                           nullptr, _1);
++
++  // Temporarily block SIGCHLD during forks. The SIGCHLD handler might
++  // log, which would result in the logging FDs we close being reopened.
++  // This would cause failures because the FDs are not allowlisted.
++  //
++  // Note that the zygote process is single threaded at this point.
++  BlockSignal(SIGCHLD, fail_fn);
++
++  // Close any logging related FDs before we start evaluating the list of
++  // file descriptors.
++  __android_log_close();
++  AStatsSocket_close();
++
++  // If this is the first fork for this zygote, create the open FD table.  If
++  // it isn't, we just need to check whether the list of open files has changed
++  // (and it shouldn't in the normal case).
++  if (gOpenFdTable == nullptr) {
++    gOpenFdTable = FileDescriptorTable::Create(fds_to_ignore, fail_fn);
++  } else {
++    gOpenFdTable->Restat(fds_to_ignore, fail_fn);
++  }
++
++  android_fdsan_error_level fdsan_error_level = android_fdsan_get_error_level();
++
++  if (purge) {
++    // Purge unused native memory in an attempt to reduce the amount of false
++    // sharing with the child process.  By reducing the size of the libc_malloc
++    // region shared with the child process we reduce the number of pages that
++    // transition to the private-dirty state when malloc adjusts the meta-data
++    // on each of the pages it is managing after the fork.
++    mallopt(M_PURGE, 0);
++  }
++
++  pid_t pid = fork();
++
++  if (pid == 0) {
++    if (is_priority_fork) {
++      setpriority(PRIO_PROCESS, 0, PROCESS_PRIORITY_MAX);
++    } else {
++      setpriority(PRIO_PROCESS, 0, PROCESS_PRIORITY_MIN);
++    }
++
++    // The child process.
++    PreApplicationInit();
++
++    // Clean up any descriptors which must be closed immediately
++    DetachDescriptors(env, fds_to_close, fail_fn);
++
++    // Invalidate the entries in the USAP table.
++    ClearUsapTable();
++
++    // Re-open all remaining open file descriptors so that they aren't shared
++    // with the zygote across a fork.
++    gOpenFdTable->ReopenOrDetach(fail_fn);
++
++    // Turn fdsan back on.
++    android_fdsan_set_error_level(fdsan_error_level);
++
++    // Reset the fd to the unsolicited zygote socket
++    gSystemServerSocketFd = -1;
++  } else {
++    ALOGD("Forked child process %d", pid);
++  }
++
++  // We blocked SIGCHLD prior to a fork, we unblock it here.
++  UnblockSignal(SIGCHLD, fail_fn);
++
++  return pid;
++}
++
+ static void com_android_internal_os_Zygote_nativePreApplicationInit(JNIEnv*, jclass) {
+   PreApplicationInit();
+ }
+@@ -2030,7 +2038,8 @@ static jint com_android_internal_os_Zygote_nativeForkAndSpecialize(
+     jlong capabilities = CalculateCapabilities(env, uid, gid, gids, is_child_zygote);
+ 
+     if (UNLIKELY(managed_fds_to_close == nullptr)) {
+-      ZygoteFailure(env, "zygote", nice_name, "Zygote received a null fds_to_close vector.");
++      zygote::ZygoteFailure(env, "zygote", nice_name,
++                            "Zygote received a null fds_to_close vector.");
+     }
+ 
+     std::vector<int> fds_to_close =
+@@ -2056,7 +2065,7 @@ static jint com_android_internal_os_Zygote_nativeForkAndSpecialize(
+         fds_to_ignore.push_back(gSystemServerSocketFd);
+     }
+ 
+-    pid_t pid = ForkCommon(env, false, fds_to_close, fds_to_ignore, true);
++    pid_t pid = zygote::ForkCommon(env, false, fds_to_close, fds_to_ignore, true);
+ 
+     if (pid == 0) {
+       SpecializeCommon(env, uid, gid, gids, runtime_flags, rlimits,
+@@ -2090,10 +2099,10 @@ static jint com_android_internal_os_Zygote_nativeForkSystemServer(
+       fds_to_ignore.push_back(gSystemServerSocketFd);
+   }
+ 
+-  pid_t pid = ForkCommon(env, true,
+-                         fds_to_close,
+-                         fds_to_ignore,
+-                         true);
++  pid_t pid = zygote::ForkCommon(env, true,
++                                 fds_to_close,
++                                 fds_to_ignore,
++                                 true);
+   if (pid == 0) {
+       // System server prcoess does not need data isolation so no need to
+       // know pkg_data_info_list.
+@@ -2133,57 +2142,73 @@ static jint com_android_internal_os_Zygote_nativeForkSystemServer(
+  * ensuring proper file descriptor hygiene.
+  *
+  * @param env  Managed runtime environment
+- * @param read_pipe_fd  The read FD for the USAP reporting pipe.  Manually closed by blastlas
+- * in managed code.
++ * @param read_pipe_fd  The read FD for the USAP reporting pipe.  Manually closed by the child
++ * in managed code. -1 indicates none.
+  * @param write_pipe_fd  The write FD for the USAP reporting pipe.  Manually closed by the
+- * zygote in managed code.
++ * zygote in managed code. -1 indicates none.
+  * @param managed_session_socket_fds  A list of anonymous session sockets that must be ignored by
+  * the FD hygiene code and automatically "closed" in the new USAP.
++ * @param args_known Arguments for specialization are available; no need to read from a socket
+  * @param is_priority_fork  Controls the nice level assigned to the newly created process
+- * @return
++ * @return child pid in the parent, 0 in the child
+  */
+-static jint com_android_internal_os_Zygote_nativeForkUsap(JNIEnv* env,
+-                                                          jclass,
+-                                                          jint read_pipe_fd,
+-                                                          jint write_pipe_fd,
+-                                                          jintArray managed_session_socket_fds,
+-                                                          jboolean is_priority_fork) {
+-  std::vector<int> fds_to_close(MakeUsapPipeReadFDVector()),
+-                   fds_to_ignore(fds_to_close);
+-
++static jint com_android_internal_os_Zygote_nativeForkApp(JNIEnv* env,
++                                                         jclass,
++                                                         jint read_pipe_fd,
++                                                         jint write_pipe_fd,
++                                                         jintArray managed_session_socket_fds,
++                                                         jboolean args_known,
++                                                         jboolean is_priority_fork) {
+   std::vector<int> session_socket_fds =
+       ExtractJIntArray(env, "USAP", nullptr, managed_session_socket_fds)
+           .value_or(std::vector<int>());
++  return zygote::forkApp(env, read_pipe_fd, write_pipe_fd, session_socket_fds,
++                            args_known == JNI_TRUE, is_priority_fork == JNI_TRUE, true);
++}
+ 
+-  // The USAP Pool Event FD is created during the initialization of the
+-  // USAP pool and should always be valid here.
++NO_PAC_FUNC
++int zygote::forkApp(JNIEnv* env,
++                    int read_pipe_fd,
++                    int write_pipe_fd,
++                    const std::vector<int>& session_socket_fds,
++                    bool args_known,
++                    bool is_priority_fork,
++                    bool purge) {
++
++  std::vector<int> fds_to_close(MakeUsapPipeReadFDVector()),
++                   fds_to_ignore(fds_to_close);
+ 
+   fds_to_close.push_back(gZygoteSocketFD);
+-  fds_to_close.push_back(gUsapPoolEventFD);
+-  fds_to_close.insert(fds_to_close.end(), session_socket_fds.begin(), session_socket_fds.end());
+   if (gSystemServerSocketFd != -1) {
+       fds_to_close.push_back(gSystemServerSocketFd);
+   }
++  if (args_known) {
++      fds_to_close.push_back(gUsapPoolSocketFD);
++  }
++  fds_to_close.insert(fds_to_close.end(), session_socket_fds.begin(), session_socket_fds.end());
+ 
+-  fds_to_ignore.push_back(gZygoteSocketFD);
+   fds_to_ignore.push_back(gUsapPoolSocketFD);
+-  fds_to_ignore.push_back(gUsapPoolEventFD);
+-  fds_to_ignore.push_back(read_pipe_fd);
+-  fds_to_ignore.push_back(write_pipe_fd);
++  fds_to_ignore.push_back(gZygoteSocketFD);
++  if (read_pipe_fd != -1) {
++      fds_to_ignore.push_back(read_pipe_fd);
++  }
++  if (write_pipe_fd != -1) {
++      fds_to_ignore.push_back(write_pipe_fd);
++  }
+   fds_to_ignore.insert(fds_to_ignore.end(), session_socket_fds.begin(), session_socket_fds.end());
++
++  if (gUsapPoolEventFD != -1) {
++      fds_to_close.push_back(gUsapPoolEventFD);
++      fds_to_ignore.push_back(gUsapPoolEventFD);
++  }
+   if (gSystemServerSocketFd != -1) {
++      if (args_known) {
++          fds_to_close.push_back(gSystemServerSocketFd);
++      }
+       fds_to_ignore.push_back(gSystemServerSocketFd);
+   }
+-
+-  pid_t usap_pid = ForkCommon(env, /* is_system_server= */ false, fds_to_close, fds_to_ignore,
+-                              is_priority_fork == JNI_TRUE);
+-
+-  if (usap_pid != 0) {
+-    ++gUsapPoolCount;
+-    AddUsapTableEntry(usap_pid, read_pipe_fd);
+-  }
+-
+-  return usap_pid;
++  return zygote::ForkCommon(env, /* is_system_server= */ false, fds_to_close,
++                            fds_to_ignore, is_priority_fork == JNI_TRUE, purge);
+ }
+ 
+ static void com_android_internal_os_Zygote_nativeAllowFileAcrossFork(
+@@ -2297,7 +2322,7 @@ static void com_android_internal_os_Zygote_nativeInitNativeState(JNIEnv* env, jc
+    */
+ 
+   if (!SetTaskProfiles(0, {})) {
+-    ZygoteFailure(env, "zygote", nullptr, "Zygote SetTaskProfiles failed");
++    zygote::ZygoteFailure(env, "zygote", nullptr, "Zygote SetTaskProfiles failed");
+   }
+ }
+ 
+@@ -2315,15 +2340,21 @@ static jintArray com_android_internal_os_Zygote_nativeGetUsapPipeFDs(JNIEnv* env
+   return managed_usap_fds;
+ }
+ 
++/*
++ * Add the given pid and file descriptor to the Usap table. CriticalNative method.
++ */
++static void com_android_internal_os_Zygote_nativeAddUsapTableEntry(jint pid, jint read_pipe_fd) {
++  AddUsapTableEntry(pid, read_pipe_fd);
++}
++
+ /**
+- * A JNI wrapper around RemoveUsapTableEntry.
++ * A JNI wrapper around RemoveUsapTableEntry. CriticalNative method.
+  *
+  * @param env  Managed runtime environment
+  * @param usap_pid  Process ID of the USAP entry to invalidate
+  * @return  True if an entry was invalidated; false otherwise.
+  */
+-static jboolean com_android_internal_os_Zygote_nativeRemoveUsapTableEntry(JNIEnv* env, jclass,
+-                                                                          jint usap_pid) {
++static jboolean com_android_internal_os_Zygote_nativeRemoveUsapTableEntry(jint usap_pid) {
+   return RemoveUsapTableEntry(usap_pid);
+ }
+ 
+@@ -2338,7 +2369,8 @@ static jboolean com_android_internal_os_Zygote_nativeRemoveUsapTableEntry(JNIEnv
+ static jint com_android_internal_os_Zygote_nativeGetUsapPoolEventFD(JNIEnv* env, jclass) {
+   if (gUsapPoolEventFD == -1) {
+     if ((gUsapPoolEventFD = eventfd(0, 0)) == -1) {
+-      ZygoteFailure(env, "zygote", nullptr, StringPrintf("Unable to create eventfd: %s", strerror(errno)));
++      zygote::ZygoteFailure(env, "zygote", nullptr,
++                            StringPrintf("Unable to create eventfd: %s", strerror(errno)));
+     }
+   }
+ 
+@@ -2381,12 +2413,12 @@ static void com_android_internal_os_Zygote_nativeEmptyUsapPool(JNIEnv* env, jcla
+ }
+ 
+ static void com_android_internal_os_Zygote_nativeBlockSigTerm(JNIEnv* env, jclass) {
+-  auto fail_fn = std::bind(ZygoteFailure, env, "usap", nullptr, _1);
++  auto fail_fn = std::bind(zygote::ZygoteFailure, env, "usap", nullptr, _1);
+   BlockSignal(SIGTERM, fail_fn);
+ }
+ 
+ static void com_android_internal_os_Zygote_nativeUnblockSigTerm(JNIEnv* env, jclass) {
+-  auto fail_fn = std::bind(ZygoteFailure, env, "usap", nullptr, _1);
++  auto fail_fn = std::bind(zygote::ZygoteFailure, env, "usap", nullptr, _1);
+   UnblockSignal(SIGTERM, fail_fn);
+ }
+ 
+@@ -2454,7 +2486,10 @@ static const JNINativeMethod gMethods[] = {
+          (void*)com_android_internal_os_Zygote_nativePreApplicationInit},
+         {"nativeInstallSeccompUidGidFilter", "(II)V",
+          (void*)com_android_internal_os_Zygote_nativeInstallSeccompUidGidFilter},
+-        {"nativeForkUsap", "(II[IZ)I", (void*)com_android_internal_os_Zygote_nativeForkUsap},
++        {"nativeForkApp", "(II[IZZ)I", (void*)com_android_internal_os_Zygote_nativeForkApp},
++        // @CriticalNative
++        {"nativeAddUsapTableEntry", "(II)V",
++         (void*)com_android_internal_os_Zygote_nativeAddUsapTableEntry},
+         {"nativeSpecializeAppProcess",
+          "(II[II[[IILjava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/"
+          "String;Z[Ljava/lang/String;[Ljava/lang/String;ZZ)V",
+@@ -2463,6 +2498,10 @@ static const JNINativeMethod gMethods[] = {
+          (void*)com_android_internal_os_Zygote_nativeInitNativeState},
+         {"nativeGetUsapPipeFDs", "()[I",
+          (void*)com_android_internal_os_Zygote_nativeGetUsapPipeFDs},
++        // @CriticalNative
++        {"nativeAddUsapTableEntry", "(II)V",
++         (void*)com_android_internal_os_Zygote_nativeAddUsapTableEntry},
++        // @CriticalNative
+         {"nativeRemoveUsapTableEntry", "(I)Z",
+          (void*)com_android_internal_os_Zygote_nativeRemoveUsapTableEntry},
+         {"nativeGetUsapPoolEventFD", "()I",
+diff --git a/core/jni/com_android_internal_os_Zygote.h b/core/jni/com_android_internal_os_Zygote.h
+new file mode 100644
+index 00000000..d2da9147
+--- /dev/null
++++ b/core/jni/com_android_internal_os_Zygote.h
+@@ -0,0 +1,78 @@
++/*
++ * Copyright (C) 2008 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#ifndef _COM_ANDROID_INTERNAL_OS_ZYGOTE_H
++#define _COM_ANDROID_INTERNAL_OS_ZYGOTE_H
++
++#define LOG_TAG "Zygote"
++#define ATRACE_TAG ATRACE_TAG_DALVIK
++
++/* Functions in the callchain during the fork shall not be protected with
++   Armv8.3-A Pointer Authentication, otherwise child will not be able to return. */
++#ifdef __ARM_FEATURE_PAC_DEFAULT
++#ifdef __ARM_FEATURE_BTI_DEFAULT
++#define NO_PAC_FUNC __attribute__((target("branch-protection=bti")))
++#else
++#define NO_PAC_FUNC __attribute__((target("branch-protection=none")))
++#endif /* __ARM_FEATURE_BTI_DEFAULT */
++#else /* !__ARM_FEATURE_PAC_DEFAULT */
++#define NO_PAC_FUNC
++#endif /* __ARM_FEATURE_PAC_DEFAULT */
++
++#include <jni.h>
++#include <vector>
++#include <android-base/stringprintf.h>
++
++#define CREATE_ERROR(...) StringPrintf("%s:%d: ", __FILE__, __LINE__). \
++                              append(StringPrintf(__VA_ARGS__))
++
++namespace android {
++namespace zygote {
++
++NO_PAC_FUNC
++pid_t ForkCommon(JNIEnv* env,bool is_system_server,
++                 const std::vector<int>& fds_to_close,
++                 const std::vector<int>& fds_to_ignore,
++                 bool is_priority_fork,
++                 bool purge = true);
++
++/**
++ * Fork a process. The pipe fds are used for usap communication, or -1 in
++ * other cases. Session_socket_fds are FDs used for zygote communication that must be dealt
++ * with hygienically, but are not otherwise used here. Args_known indicates that the process
++ * will be immediately specialized with arguments that are already known, so no usap
++ * communication is required. Is_priority_fork should be true if this is on the app startup
++ * critical path. Purge specifies that unused pages should be purged before the fork.
++ */
++NO_PAC_FUNC
++int forkApp(JNIEnv* env,
++            int read_pipe_fd,
++            int write_pipe_fd,
++            const std::vector<int>& session_socket_fds,
++            bool args_known,
++            bool is_priority_fork,
++            bool purge);
++
++[[noreturn]]
++void ZygoteFailure(JNIEnv* env,
++                   const char* process_name,
++                   jstring managed_process_name,
++                   const std::string& msg);
++
++}  // namespace zygote
++}  // namespace android
++
++#endif // _COM_ANDROID_INTERNAL_OS_ZYGOTE_
+diff --git a/core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp b/core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp
+new file mode 100644
+index 00000000..011e8f8f
+--- /dev/null
++++ b/core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp
+@@ -0,0 +1,512 @@
++/*
++ * Copyright (C) 2020 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "com_android_internal_os_Zygote.h"
++
++#include <algorithm>
++#include <android-base/logging.h>
++#include <async_safe/log.h>
++#include <cctype>
++#include <chrono>
++#include <core_jni_helpers.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <jni.h>
++#include <nativehelper/JNIHelp.h>
++#include <optional>
++#include <poll.h>
++#include <unistd.h>
++#include <utility>
++#include <utils/misc.h>
++#include <sys/mman.h>
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <vector>
++
++namespace android {
++
++using namespace std::placeholders;
++using android::base::StringPrintf;
++using android::zygote::ZygoteFailure;
++
++// WARNING: Knows a little about the wire protocol used to communicate with Zygote.
++// TODO: Fix error handling.
++
++constexpr size_t MAX_COMMAND_BYTES = 12200;
++constexpr size_t NICE_NAME_BYTES = 50;
++
++// A buffer optionally bundled with a file descriptor from which we can fill it.
++// Does not own the file descriptor; destroying a NativeCommandBuffer does not
++// close the descriptor.
++class NativeCommandBuffer {
++ public:
++  NativeCommandBuffer(int sourceFd): mEnd(0), mNext(0), mLinesLeft(0), mFd(sourceFd) {}
++
++  // Read mNext line from mFd, filling mBuffer from file descriptor, as needed.
++  // Return a pair of pointers pointing to the first character, and one past the
++  // mEnd of the line, i.e. at the newline. Returns nothing on failure.
++  template<class FailFn>
++  std::optional<std::pair<char*, char*>> readLine(FailFn fail_fn) {
++    char* result = mBuffer + mNext;
++    while (true) {
++      if (mNext == mEnd) {
++        if (mEnd == MAX_COMMAND_BYTES) {
++          return {};
++        }
++        if (mFd == -1) {
++          fail_fn("ZygoteCommandBuffer.readLine attempted to read from mFd -1");
++        }
++        ssize_t nread = TEMP_FAILURE_RETRY(read(mFd, mBuffer + mEnd, MAX_COMMAND_BYTES - mEnd));
++        if (nread <= 0) {
++          if (nread == 0) {
++            return {};
++          }
++          fail_fn(CREATE_ERROR("session socket read failed: %s", strerror(errno)));
++        } else if (nread == MAX_COMMAND_BYTES - mEnd) {
++          // This is pessimistic by one character, but close enough.
++          fail_fn("ZygoteCommandBuffer overflowed: command too long");
++        }
++        mEnd += nread;
++      }
++      // UTF-8 does not allow newline to occur as part of a multibyte character.
++      char* nl = static_cast<char *>(memchr(mBuffer + mNext, '\n', mEnd - mNext));
++      if (nl == nullptr) {
++        mNext = mEnd;
++      } else {
++        mNext = nl - mBuffer + 1;
++        if (--mLinesLeft < 0) {
++          fail_fn("ZygoteCommandBuffer.readLine attempted to read past mEnd of command");
++        }
++        return std::make_pair(result, nl);
++      }
++    }
++  }
++
++  void reset() {
++    mNext = 0;
++  }
++
++  // Make sure the current command is fully buffered, without reading past the current command.
++  template<class FailFn>
++  void readAllLines(FailFn fail_fn) {
++     while (mLinesLeft > 0) {
++       readLine(fail_fn);
++    }
++  }
++
++  void clear() {
++    // Don't bother to actually clear the buffer; it'll be unmapped in the child anyway.
++    reset();
++    mNiceName[0] = '\0';
++    mEnd = 0;
++  }
++
++  // Insert line into the mBuffer. Checks that the mBuffer is not associated with an mFd.
++  // Implicitly adds newline separators. Allows mBuffer contents to be explicitly set.
++  void insert(const char* line, size_t lineLen) {
++    DCHECK(mFd == -1);
++    CHECK(mEnd + lineLen < MAX_COMMAND_BYTES);
++    strncpy(mBuffer + mEnd, line, lineLen);
++    mBuffer[mEnd + lineLen] = '\n';
++    mEnd += lineLen + 1;
++  }
++
++  // Clear mBuffer, start reading new command, return the number of arguments, leaving mBuffer
++  // positioned at the beginning of first argument. Return 0 on EOF.
++  template<class FailFn>
++  int getCount(FailFn fail_fn) {
++    mLinesLeft = 1;
++    auto line = readLine(fail_fn);
++    if (!line.has_value()) {
++      return 0;
++    }
++    char* countString = line.value().first;  // Newline terminated.
++    long nArgs = atol(countString);
++    if (nArgs <= 0 || nArgs >= MAX_COMMAND_BYTES / 2) {
++      fail_fn(CREATE_ERROR("Unreasonable argument count %ld", nArgs));
++    }
++    mLinesLeft = nArgs;
++    return static_cast<int>(nArgs);
++  }
++
++  // Is the mBuffer a simple fork command?
++  // We disallow request to wrap the child process, child zygotes, anything that
++  // mentions capabilities or requests uid < minUid.
++  // We insist that --setuid and --setgid arguments are explicitly included and that the
++  // command starts with --runtime-args.
++  // Assumes we are positioned at the beginning of the command after the argument count,
++  // and leaves the position at some indeterminate position in the buffer.
++  // As a side effect, this sets mNiceName to a non-empty string, if possible.
++  template<class FailFn>
++  bool isSimpleForkCommand(int minUid, FailFn fail_fn) {
++    if (mLinesLeft <= 0 || mLinesLeft  >= MAX_COMMAND_BYTES / 2) {
++      return false;
++    }
++    static const char* RUNTIME_ARGS = "--runtime-args";
++    static const char* INVOKE_WITH = "--invoke-with";
++    static const char* CHILD_ZYGOTE = "--start-child-zygote";
++    static const char* SETUID = "--setuid=";
++    static const char* SETGID = "--setgid=";
++    static const char* CAPABILITIES = "--capabilities";
++    static const char* NICE_NAME = "--nice-name=";
++    static const size_t RA_LENGTH = strlen(RUNTIME_ARGS);
++    static const size_t IW_LENGTH = strlen(INVOKE_WITH);
++    static const size_t CZ_LENGTH = strlen(CHILD_ZYGOTE);
++    static const size_t SU_LENGTH = strlen(SETUID);
++    static const size_t SG_LENGTH = strlen(SETGID);
++    static const size_t CA_LENGTH = strlen(CAPABILITIES);
++    static const size_t NN_LENGTH = strlen(NICE_NAME);
++
++    bool saw_setuid = false, saw_setgid = false;
++    bool saw_runtime_args = false;
++
++    while (mLinesLeft > 0) {
++      auto read_result = readLine(fail_fn);
++      if (!read_result.has_value()) {
++        return false;
++      }
++      auto [arg_start, arg_end] = read_result.value();
++      if (arg_end - arg_start == RA_LENGTH
++          && strncmp(arg_start, RUNTIME_ARGS, RA_LENGTH) == 0) {
++        saw_runtime_args = true;
++        continue;
++      }
++      if (arg_end - arg_start >= NN_LENGTH
++          && strncmp(arg_start, NICE_NAME, NN_LENGTH) == 0) {
++        size_t name_len = arg_end - (arg_start + NN_LENGTH);
++        size_t copy_len = std::min(name_len, NICE_NAME_BYTES - 1);
++        memcpy(mNiceName, arg_start + NN_LENGTH, copy_len);
++        mNiceName[copy_len] = '\0';
++        continue;
++      }
++      if (arg_end - arg_start == IW_LENGTH
++          && strncmp(arg_start, INVOKE_WITH, IW_LENGTH) == 0) {
++        // This also removes the need for invoke-with security checks here.
++        return false;
++      }
++      if (arg_end - arg_start == CZ_LENGTH
++          && strncmp(arg_start, CHILD_ZYGOTE, CZ_LENGTH) == 0) {
++        return false;
++      }
++      if (arg_end - arg_start >= CA_LENGTH
++          && strncmp(arg_start, CAPABILITIES, CA_LENGTH) == 0) {
++        return false;
++      }
++      if (arg_end - arg_start >= SU_LENGTH
++          && strncmp(arg_start, SETUID, SU_LENGTH) == 0) {
++        int uid = digitsVal(arg_start + SU_LENGTH, arg_end);
++        if (uid < minUid) {
++          return false;
++        }
++        saw_setuid = true;
++        continue;
++      }
++      if (arg_end - arg_start >= SG_LENGTH
++          && strncmp(arg_start, SETGID, SG_LENGTH) == 0) {
++        int gid = digitsVal(arg_start + SG_LENGTH, arg_end);
++        if (gid == -1) {
++          return false;
++        }
++        saw_setgid = true;
++      }
++    }
++    return saw_runtime_args && saw_setuid && saw_setgid;
++  }
++
++  void setFd(int new_fd) {
++    mFd = new_fd;
++  }
++
++  int getFd() const {
++    return mFd;
++  }
++
++  const char* niceNameAddr() const {
++    return mNiceName;
++  }
++
++  // Debug only:
++  void logState() const {
++    ALOGD("mbuffer starts with %c%c, nice name is %s, "
++          "mEnd = %u, mNext = %u, mLinesLeft = %d, mFd = %d",
++          mBuffer[0], (mBuffer[1] == '\n' ? ' ' : mBuffer[1]),
++          niceNameAddr(),
++          static_cast<unsigned>(mEnd), static_cast<unsigned>(mNext),
++          static_cast<int>(mLinesLeft), mFd);
++  }
++
++ private:
++  // Picky version of atoi(). No sign or unexpected characters allowed. Return -1 on failure.
++  static int digitsVal(char* start, char* end) {
++    int result = 0;
++    if (end - start > 6) {
++      return -1;
++    }
++    for (char* dp = start; dp < end; ++dp) {
++      if (*dp < '0' || *dp > '9') {
++        ALOGW("Argument failed integer format check");
++        return -1;
++      }
++      result = 10 * result + (*dp - '0');
++    }
++    return result;
++  }
++
++  uint32_t mEnd;  // Index of first empty byte in the mBuffer.
++  uint32_t mNext;  // Index of first character past last line returned by readLine.
++  int32_t mLinesLeft;  // Lines in current command that haven't yet been read.
++  int mFd;  // Open file descriptor from which we can read more. -1 if none.
++  char mNiceName[NICE_NAME_BYTES];
++  char mBuffer[MAX_COMMAND_BYTES];
++};
++
++static_assert(sizeof(NativeCommandBuffer) < 3 * 4096);
++
++static int buffersAllocd(0);
++
++// Get a new NativeCommandBuffer. Can only be called once between freeNativeBuffer calls,
++// so that only one buffer exists at a time.
++jlong com_android_internal_os_ZygoteCommandBuffer_getNativeBuffer(JNIEnv* env, jclass, jint fd) {
++  CHECK(buffersAllocd == 0);
++  ++buffersAllocd;
++  // MMap explicitly to get it page aligned.
++  void *bufferMem = mmap(NULL, sizeof(NativeCommandBuffer), PROT_READ | PROT_WRITE,
++                         MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
++  // Currently we mmap and unmap one for every request handled by the Java code.
++  // That could be improved, but unclear it matters.
++  if (bufferMem == MAP_FAILED) {
++    ZygoteFailure(env, nullptr, nullptr, "Failed to map argument buffer");
++  }
++  return (jlong) new(bufferMem) NativeCommandBuffer(fd);
++}
++
++// Delete native command buffer.
++void com_android_internal_os_ZygoteCommandBuffer_freeNativeBuffer(JNIEnv* env, jclass,
++                                                                  jlong j_buffer) {
++  CHECK(buffersAllocd == 1);
++  NativeCommandBuffer* n_buffer = reinterpret_cast<NativeCommandBuffer*>(j_buffer);
++  n_buffer->~NativeCommandBuffer();
++  if (munmap(n_buffer, sizeof(NativeCommandBuffer)) != 0) {
++    ZygoteFailure(env, nullptr, nullptr, "Failed to unmap argument buffer");
++  }
++  --buffersAllocd;
++}
++
++// Clear the buffer, read the line containing the count, and return the count.
++jint com_android_internal_os_ZygoteCommandBuffer_nativeGetCount(JNIEnv* env, jclass,
++                                                                jlong j_buffer) {
++  NativeCommandBuffer* n_buffer = reinterpret_cast<NativeCommandBuffer*>(j_buffer);
++  auto fail_fn = std::bind(ZygoteFailure, env, nullptr, nullptr, _1);
++  return n_buffer->getCount(fail_fn);
++}
++
++// Explicitly insert a string as the last line (argument) of the buffer.
++void com_android_internal_os_ZygoteCommandBuffer_insert(JNIEnv* env, jclass, jlong j_buffer,
++                                                        jstring line) {
++  NativeCommandBuffer* n_buffer = reinterpret_cast<NativeCommandBuffer*>(j_buffer);
++  size_t lineLen = static_cast<size_t>(env->GetStringUTFLength(line));
++  const char* cstring = env->GetStringUTFChars(line, NULL);
++  n_buffer->insert(cstring, lineLen);
++  env->ReleaseStringUTFChars(line, cstring);
++}
++
++// Read a line from the buffer, refilling as necessary.
++jstring com_android_internal_os_ZygoteCommandBuffer_nativeNextArg(JNIEnv* env, jclass,
++                                                                  jlong j_buffer) {
++  NativeCommandBuffer* n_buffer = reinterpret_cast<NativeCommandBuffer*>(j_buffer);
++  auto fail_fn = std::bind(ZygoteFailure, env, n_buffer->niceNameAddr(), nullptr, _1);
++  auto line = n_buffer->readLine(fail_fn);
++  if (!line.has_value()) {
++    fail_fn("Incomplete zygote command");
++  }
++  auto [cresult, endp] = line.value();
++  // OK to temporarily clobber the buffer, since this is not thread safe, and we're modifying
++  // the buffer anyway.
++  *endp = '\0';
++  jstring result = env->NewStringUTF(cresult);
++  *endp = '\n';
++  return result;
++}
++
++// Read all lines from the current command into the buffer, and then reset the buffer, so
++// we will start reading again at the beginning of the command, starting with the argument
++// count. And we don't need access to the fd to do so.
++void com_android_internal_os_ZygoteCommandBuffer_nativeReadFullyAndReset(JNIEnv* env, jclass,
++                                                                         jlong j_buffer) {
++  NativeCommandBuffer* n_buffer = reinterpret_cast<NativeCommandBuffer*>(j_buffer);
++  auto fail_fn = std::bind(ZygoteFailure, env, n_buffer->niceNameAddr(), nullptr, _1);
++  n_buffer->readAllLines(fail_fn);
++  n_buffer->reset();
++}
++
++// Fork a child as specified by the current command buffer, and refill the command
++// buffer from the given socket. So long as the result is another simple fork command,
++// repeat this process.
++// It must contain a fork command, which is currently restricted not to fork another
++// zygote or involve a wrapper process.
++// The initial buffer should be partially or entirely read; we read it fully and reset it.
++// When we return, the buffer contains the command we couldn't handle, and has been reset().
++// We return false in the parent when we see a command we didn't understand, and thus the
++// command in the buffer still needs to be executed.
++// We return true in each child.
++// We only process fork commands if the peer uid matches expected_uid.
++// For every fork command after the first, we check that the requested uid is at
++// least minUid.
++NO_PAC_FUNC
++jboolean com_android_internal_os_ZygoteCommandBuffer_nativeForkRepeatedly(
++            JNIEnv* env,
++            jclass,
++            jlong j_buffer,
++            jint zygote_socket_fd,
++            jint expected_uid,
++            jint minUid,
++            jstring managed_nice_name) {
++
++  NativeCommandBuffer* n_buffer = reinterpret_cast<NativeCommandBuffer*>(j_buffer);
++  int session_socket = n_buffer->getFd();
++  std::vector<int> session_socket_fds {session_socket};
++  auto fail_fn_1 = std::bind(ZygoteFailure, env, static_cast<const char*>(nullptr),
++                             static_cast<jstring>(managed_nice_name), _1);
++  // This binds to the nice name address; the actual names are updated by isSimpleForkCommand:
++  auto fail_fn_n = std::bind(ZygoteFailure, env, n_buffer->niceNameAddr(),
++                             static_cast<jstring>(nullptr), _1);
++  auto fail_fn_z = std::bind(ZygoteFailure, env, "zygote", nullptr, _1);
++
++  struct pollfd fd_structs[2];
++  static const int ZYGOTE_IDX = 0;
++  static const int SESSION_IDX = 1;
++  fd_structs[ZYGOTE_IDX].fd = zygote_socket_fd;
++  fd_structs[ZYGOTE_IDX].events = POLLIN;
++  fd_structs[SESSION_IDX].fd = session_socket;
++  fd_structs[SESSION_IDX].events = POLLIN;
++
++  struct timeval timeout;
++  socklen_t timeout_size = sizeof timeout;
++  if (getsockopt(session_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, &timeout_size) != 0) {
++    fail_fn_z("Failed to retrieve session socket timeout");
++  }
++
++  struct ucred credentials;
++  socklen_t cred_size = sizeof credentials;
++  if (getsockopt(n_buffer->getFd(), SOL_SOCKET, SO_PEERCRED, &credentials, &cred_size) == -1
++      || cred_size != sizeof credentials) {
++    fail_fn_1("ForkMany failed to get initial credentials, %s", strerror(errno));
++  }
++
++  bool first_time = true;
++  do {
++    if (credentials.uid != expected_uid) {
++      return JNI_FALSE;
++    }
++    n_buffer->readAllLines(first_time ? fail_fn_1 : fail_fn_n);
++    n_buffer->reset();
++    int pid = zygote::forkApp(env, /* no pipe FDs */ -1, -1, session_socket_fds,
++                              /*args_known=*/ true, /*is_priority_fork=*/ true,
++                              /*purge=*/ first_time);
++    if (pid == 0) {
++      return JNI_TRUE;
++    }
++    // We're in the parent. Write big-endian pid, followed by a boolean.
++    char pid_buf[5];
++    int tmp_pid = pid;
++    for (int i = 3; i >= 0; --i) {
++      pid_buf[i] = tmp_pid & 0xff;
++      tmp_pid >>= 8;
++    }
++    pid_buf[4] = 0;  // Process is not wrapped.
++    int res = write(session_socket, pid_buf, 5);
++    if (res != 5) {
++      if (res == -1) {
++        (first_time ? fail_fn_1 : fail_fn_n)
++            (CREATE_ERROR("Pid write error %d: %s", errno, strerror(errno)));
++      } else {
++        (first_time ? fail_fn_1 : fail_fn_n)
++            (CREATE_ERROR("Write unexpectedly returned short: %d < 5", res));
++      }
++    }
++    // Clear buffer and get count from next command.
++    n_buffer->clear();
++    for (;;) {
++      // Poll isn't strictly necessary for now. But without it, disconnect is hard to detect.
++      int poll_res = TEMP_FAILURE_RETRY(poll(fd_structs, 2, -1 /* infinite timeout */));
++      if ((fd_structs[SESSION_IDX].revents & POLLIN) != 0) {
++        if (n_buffer->getCount(fail_fn_z) != 0) {
++          break;
++        }  // else disconnected;
++      } else if (poll_res == 0 || (fd_structs[ZYGOTE_IDX].revents & POLLIN) == 0) {
++        fail_fn_z(
++            CREATE_ERROR("Poll returned with no descriptors ready! Poll returned %d", poll_res));
++      }
++      // We've now seen either a disconnect or connect request.
++      close(session_socket);
++      int new_fd = accept(zygote_socket_fd, nullptr, nullptr);
++      if (new_fd == -1) {
++        fail_fn_z("Accept(%d) failed: %s", zygote_socket_fd, strerror(errno));
++      }
++      if (new_fd != session_socket) {
++          // Move new_fd back to the old value, so that we don't have to change Java-level data
++          // structures to reflect a change. This implicitly closes the old one.
++          if (dup2(new_fd, session_socket) != session_socket) {
++            fail_fn_z(CREATE_ERROR("Failed to move fd %d to %d: %s",
++                                   new_fd, session_socket, strerror(errno)));
++          }
++          close(new_fd);
++      }
++      // If we ever return, we effectively reuse the old Java ZygoteConnection.
++      // None of its state needs to change.
++      if (setsockopt(session_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, timeout_size) != 0) {
++        fail_fn_z(CREATE_ERROR("Failed to set receive timeout for socket %d: %s",
++                               session_socket, strerror(errno)));
++      }
++      if (setsockopt(session_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, timeout_size) != 0) {
++        fail_fn_z(CREATE_ERROR("Failed to set send timeout for socket %d: %s",
++                               session_socket, strerror(errno)));
++      }
++      if (getsockopt(session_socket, SOL_SOCKET, SO_PEERCRED, &credentials, &cred_size) == -1) {
++        fail_fn_z(CREATE_ERROR("ForkMany failed to get credentials: %s", strerror(errno)));
++      }
++      if (cred_size != sizeof credentials) {
++        fail_fn_z(CREATE_ERROR("ForkMany credential size = %d, should be %d",
++                               cred_size, static_cast<int>(sizeof credentials)));
++      }
++    }
++    first_time = false;
++  } while (n_buffer->isSimpleForkCommand(minUid, fail_fn_n));
++  ALOGW("forkRepeatedly terminated due to non-simple command");
++  n_buffer->logState();
++  n_buffer->reset();
++  return JNI_FALSE;
++}
++
++#define METHOD_NAME(m) com_android_internal_os_ZygoteCommandBuffer_ ## m
++
++static const JNINativeMethod gMethods[] = {
++        {"getNativeBuffer", "(I)J", (void *) METHOD_NAME(getNativeBuffer)},
++        {"freeNativeBuffer", "(J)V", (void *) METHOD_NAME(freeNativeBuffer)},
++        {"insert", "(JLjava/lang/String;)V", (void *) METHOD_NAME(insert)},
++        {"nativeNextArg", "(J)Ljava/lang/String;", (void *) METHOD_NAME(nativeNextArg)},
++        {"nativeReadFullyAndReset", "(J)V", (void *) METHOD_NAME(nativeReadFullyAndReset)},
++        {"nativeGetCount", "(J)I", (void *) METHOD_NAME(nativeGetCount)},
++        {"nativeForkRepeatedly", "(JIIILjava/lang/String;)Z",
++          (void *) METHOD_NAME(nativeForkRepeatedly)},
++};
++
++int register_com_android_internal_os_ZygoteCommandBuffer(JNIEnv* env) {
++  return RegisterMethodsOrDie(env, "com/android/internal/os/ZygoteCommandBuffer", gMethods,
++                              NELEM(gMethods));
++}
++
++}  // namespace android
+-- 
+2.30.1
+
