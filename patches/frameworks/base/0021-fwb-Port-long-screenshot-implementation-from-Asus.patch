@@ -138,10 +138,10 @@ index 00000000..247e33dc
 +    }
 +}
 diff --git a/core/java/com/android/internal/util/ScreenshotHelper.java b/core/java/com/android/internal/util/ScreenshotHelper.java
-index 88740836..abd4ca40 100644
+index b79c25a3..b7f93ed6 100644
 --- a/core/java/com/android/internal/util/ScreenshotHelper.java
 +++ b/core/java/com/android/internal/util/ScreenshotHelper.java
-@@ -24,6 +24,8 @@ import android.os.UserHandle;
+@@ -27,6 +27,8 @@ import android.os.UserHandle;
  import android.util.Log;
  import android.view.WindowManager;
  
@@ -150,19 +150,23 @@ index 88740836..abd4ca40 100644
  import java.util.function.Consumer;
  
  public class ScreenshotHelper {
-@@ -161,9 +163,11 @@ public class ScreenshotHelper {
+@@ -164,6 +166,7 @@ public class ScreenshotHelper {
      private IBinder mScreenshotService = null;
      private ServiceConnection mScreenshotConnection = null;
      private final Context mContext;
 +    private final StitchImageUtility mStitchImageUtility;
  
-     public ScreenshotHelper(Context context) {
+     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+         @Override
+@@ -180,6 +183,7 @@ public class ScreenshotHelper {
          mContext = context;
+         IntentFilter filter = new IntentFilter(ACTION_USER_SWITCHED);
+         mContext.registerReceiver(mBroadcastReceiver, filter);
 +        mStitchImageUtility = new StitchImageUtility(mContext);
      }
  
      /**
-@@ -192,7 +196,37 @@ public class ScreenshotHelper {
+@@ -208,7 +212,37 @@ public class ScreenshotHelper {
              @Nullable Consumer<Uri> completionConsumer) {
          ScreenshotRequest screenshotRequest = new ScreenshotRequest(source, hasStatus, hasNav);
          takeScreenshot(screenshotType, SCREENSHOT_TIMEOUT_MS, handler, screenshotRequest,
@@ -201,7 +205,7 @@ index 88740836..abd4ca40 100644
      }
  
      /**
-@@ -216,7 +250,7 @@ public class ScreenshotHelper {
+@@ -232,7 +266,7 @@ public class ScreenshotHelper {
              final boolean hasNav, @NonNull Handler handler,
              @Nullable Consumer<Uri> completionConsumer) {
          takeScreenshot(screenshotType, hasStatus, hasNav, SCREENSHOT_TIMEOUT_MS, handler,
@@ -210,7 +214,7 @@ index 88740836..abd4ca40 100644
      }
  
      /**
-@@ -247,7 +281,7 @@ public class ScreenshotHelper {
+@@ -263,7 +297,7 @@ public class ScreenshotHelper {
              @Nullable Consumer<Uri> completionConsumer) {
          ScreenshotRequest screenshotRequest = new ScreenshotRequest(SCREENSHOT_OTHER, hasStatus,
                  hasNav);
@@ -219,7 +223,7 @@ index 88740836..abd4ca40 100644
      }
  
      /**
-@@ -270,13 +304,17 @@ public class ScreenshotHelper {
+@@ -286,13 +320,17 @@ public class ScreenshotHelper {
                  new ScreenshotRequest(source, screenshotBundle, boundsInScreen, insets, taskId,
                          userId, topComponent);
          takeScreenshot(WindowManager.TAKE_SCREENSHOT_PROVIDED_IMAGE, SCREENSHOT_TIMEOUT_MS,
@@ -255,7 +259,7 @@ index 6bee1974..d77e46c0 100644
          android:name=".SystemUIApplication"
          android:persistent="true"
 diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
-index 74906e25..8b5bb733 100644
+index d30b7b15..62ce147c 100644
 --- a/packages/SystemUI/res/values/config.xml
 +++ b/packages/SystemUI/res/values/config.xml
 @@ -580,4 +580,8 @@
@@ -268,7 +272,7 @@ index 74906e25..8b5bb733 100644
 +
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
-index 876560e2..8b374db9 100644
+index 2c4fbd0b..7994cd87 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 @@ -90,6 +90,7 @@ import android.view.ViewGroup;
@@ -279,7 +283,7 @@ index 876560e2..8b374db9 100644
  import android.view.accessibility.AccessibilityEvent;
  import android.widget.BaseAdapter;
  import android.widget.FrameLayout;
-@@ -1160,8 +1161,11 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+@@ -1158,8 +1159,11 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
              mHandler.postDelayed(new Runnable() {
                  @Override
                  public void run() {
@@ -331,10 +335,10 @@ index da1ef2f0..ac8655b5 100644
                  final CastDevice device = new CastDevice();
                  device.id = mProjection.getPackageName();
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 8162cb20..788d2de7 100644
+index 2689703d..b99d30d9 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-@@ -6534,4 +6534,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6505,4 +6505,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          }
      }
  
