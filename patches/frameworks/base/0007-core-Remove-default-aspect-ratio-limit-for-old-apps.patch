@@ -1,7 +1,7 @@
-From 35accf2a013aa769bac2239346fac716885754bd Mon Sep 17 00:00:00 2001
+From dc469fb8b6439c0b80f9d6a04d7af76c4454a7f3 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 3 Nov 2020 22:38:49 -0800
-Subject: [PATCH 07/47] core: Remove default aspect ratio limit for old apps
+Subject: [PATCH 07/48] core: Remove default aspect ratio limit for old apps
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit

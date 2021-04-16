@@ -1,7 +1,7 @@
-From 4ce93a8558fc4d131333f071e0f1d5d2126d42f5 Mon Sep 17 00:00:00 2001
+From 5adeb26c0ab211bc1688b34dbf5afb3671e64997 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Mon, 8 Mar 2021 10:28:18 -0300
-Subject: [PATCH 31/47] AuthBiometricFingerprintView: Fix indicator text color
+Subject: [PATCH 31/48] AuthBiometricFingerprintView: Fix indicator text color
  on dark theme
 
 Congrats Google

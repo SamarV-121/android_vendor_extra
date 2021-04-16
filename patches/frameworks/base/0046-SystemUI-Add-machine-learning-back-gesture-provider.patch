@@ -1,7 +1,7 @@
-From 710c99d96d8fd484ec38eade39ec135fe6e9ba6a Mon Sep 17 00:00:00 2001
+From 8342c83a635f9a7e22725d3d578cc742a8f1a92e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Wed, 17 Mar 2021 16:29:59 -0700
-Subject: [PATCH 46/47] SystemUI: Add machine learning back gesture provider
+Subject: [PATCH 46/48] SystemUI: Add machine learning back gesture provider
 
 This is a provider for machine learning-assisted back gestures when
 using gesture navigation. It uses TensorFlow Lite for inference, similar

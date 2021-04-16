@@ -1,7 +1,7 @@
-From 6063e143bae252e15789b34f83a603b102d5bfe4 Mon Sep 17 00:00:00 2001
+From e4db1d0945fcb29c26d709c796743152fdd827d8 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 15:55:54 -0700
-Subject: [PATCH 35/47] Revert "Pre-emptively take a snapshot when finishing an
+Subject: [PATCH 35/48] Revert "Pre-emptively take a snapshot when finishing an
  activity before changing visibility"
 
 This reverts commit 6dad90e5883db82c345a3ab592b26f0fd69fe28d.
@@ -14,7 +14,7 @@ Change-Id: Ib161679f1f3b83787f90b8ef7dcf46d246bb7c57
  1 file changed, 11 deletions(-)
 
 diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
-index 9c4dcd65..6a43eb46 100644
+index 92dbfa4f..e01b685e 100644
 --- a/services/core/java/com/android/server/wm/ActivityRecord.java
 +++ b/services/core/java/com/android/server/wm/ActivityRecord.java
 @@ -315,8 +315,6 @@ import com.android.server.wm.SurfaceAnimator.AnimationType;
@@ -26,7 +26,7 @@ index 9c4dcd65..6a43eb46 100644
  import org.xmlpull.v1.XmlPullParser;
  import org.xmlpull.v1.XmlPullParserException;
  import org.xmlpull.v1.XmlSerializer;
-@@ -2599,15 +2597,6 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+@@ -2613,15 +2611,6 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
                  }
                  mDisplayContent.prepareAppTransition(transit, false);
  

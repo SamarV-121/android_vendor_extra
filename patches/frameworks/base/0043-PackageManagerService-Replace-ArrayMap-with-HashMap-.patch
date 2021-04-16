@@ -1,7 +1,7 @@
-From d13b9451874602387234abe4695b308fb4b0d6ae Mon Sep 17 00:00:00 2001
+From 043ec1b65121543a12ee085c72679def3753d033 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:58:24 -0700
-Subject: [PATCH 43/47] PackageManagerService: Replace ArrayMap with HashMap
+Subject: [PATCH 43/48] PackageManagerService: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of
@@ -326,10 +326,10 @@ index dabcc351..37cb0936 100644
              if (packageName != null && !packageName.equals(keySetPackage)) {
                  continue;
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index c9cafa76..b9df4133 100644
+index 65ebb937..282deb71 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
-@@ -756,7 +756,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -758,7 +758,7 @@ public class PackageManagerService extends IPackageManager.Stub
  
      // Keys are String (package name), values are Package.
      @GuardedBy("mLock")
@@ -338,7 +338,7 @@ index c9cafa76..b9df4133 100644
  
      // Keys are isolated uids and values are the uid of the application
      // that created the isolated proccess.
-@@ -3016,15 +3016,18 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -3018,15 +3018,18 @@ public class PackageManagerService extends IPackageManager.Stub
  
              // Clean up orphaned packages for which the code path doesn't exist
              // and they are an update to a system app - caused by bug/32321269
@@ -362,7 +362,7 @@ index c9cafa76..b9df4133 100644
  
              if (!mOnlyCore && mFirstBoot) {
                  requestCopyPreoptedFiles();
-@@ -3527,8 +3530,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -3529,8 +3532,7 @@ public class PackageManagerService extends IPackageManager.Stub
              // profile compilation (without waiting to collect a fresh set of profiles).
              if (mIsUpgrade && !mOnlyCore) {
                  Slog.i(TAG, "Build fingerprint changed; clearing code caches");
@@ -372,7 +372,7 @@ index c9cafa76..b9df4133 100644
                      if (Objects.equals(StorageManager.UUID_PRIVATE_INTERNAL, ps.volumeUuid)) {
                          // No apps are running this early, so no need to freeze
                          clearAppDataLIF(ps.pkg, UserHandle.USER_ALL,
-@@ -3544,9 +3546,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -3546,9 +3548,7 @@ public class PackageManagerService extends IPackageManager.Stub
              // their icons in launcher.
              if (!mOnlyCore && mIsPreQUpgrade) {
                  Slog.i(TAG, "Whitelisting all existing apps to hide their icons");
@@ -383,7 +383,7 @@ index c9cafa76..b9df4133 100644
                      if ((ps.pkgFlags & ApplicationInfo.FLAG_SYSTEM) != 0) {
                          continue;
                      }
-@@ -5680,10 +5680,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -5682,10 +5682,7 @@ public class PackageManagerService extends IPackageManager.Stub
      private List<VersionedPackage> getPackagesUsingSharedLibraryLPr(
              SharedLibraryInfo libInfo, int flags, int userId) {
          List<VersionedPackage> versionedPackages = null;
@@ -395,7 +395,7 @@ index c9cafa76..b9df4133 100644
              if (ps == null) {
                  continue;
              }
-@@ -10797,8 +10794,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -10799,8 +10796,8 @@ public class PackageManagerService extends IPackageManager.Stub
                      ? changingPkgPair.first : null;
              final PackageSetting changingPkgSetting = changingPkgPair != null
                      ? changingPkgPair.second : null;
@@ -406,7 +406,7 @@ index c9cafa76..b9df4133 100644
                  final PackageSetting pkgSetting = mSettings.getPackageLPr(pkg.getPackageName());
                  if (changingPkg != null
                          && !hasString(pkg.getUsesLibraries(), changingPkg.getLibraryNames())
-@@ -20014,9 +20011,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -20016,9 +20013,7 @@ public class PackageManagerService extends IPackageManager.Stub
      /** This method takes a specific user id as well as UserHandle.USER_ALL. */
      @GuardedBy("mLock")
      private void clearIntentFilterVerificationsLPw(int userId) {
@@ -417,7 +417,7 @@ index c9cafa76..b9df4133 100644
              clearIntentFilterVerificationsLPw(pkg.getPackageName(), userId, true);
          }
      }
-@@ -22774,9 +22769,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -22776,9 +22771,7 @@ public class PackageManagerService extends IPackageManager.Stub
      private List<String> collectAbsoluteCodePaths() {
          synchronized (mLock) {
              List<String> codePaths = new ArrayList<>();
@@ -428,7 +428,7 @@ index c9cafa76..b9df4133 100644
                  codePaths.add(ps.codePath.getAbsolutePath());
              }
              return codePaths;
-@@ -24277,11 +24270,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -24279,11 +24272,8 @@ public class PackageManagerService extends IPackageManager.Stub
          @Override
          public PackageList getPackageList(PackageListObserver observer) {
              synchronized (mLock) {
@@ -442,7 +442,7 @@ index c9cafa76..b9df4133 100644
                  final PackageList packageList = new PackageList(list, observer);
                  if (observer != null) {
                      mPackageListObservers.add(packageList);
-@@ -25010,8 +25000,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25012,8 +25002,8 @@ public class PackageManagerService extends IPackageManager.Stub
          @Override
          public void forEachPackageSetting(Consumer<PackageSetting> actionLocked) {
              synchronized (mLock) {
@@ -453,7 +453,7 @@ index c9cafa76..b9df4133 100644
                  }
              }
          }
-@@ -25369,9 +25359,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25371,9 +25361,8 @@ public class PackageManagerService extends IPackageManager.Stub
  
      void forEachPackage(Consumer<AndroidPackage> actionLocked) {
          synchronized (mLock) {
@@ -465,7 +465,7 @@ index c9cafa76..b9df4133 100644
              }
          }
      }
-@@ -25379,9 +25368,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25381,9 +25370,7 @@ public class PackageManagerService extends IPackageManager.Stub
      void forEachInstalledPackage(@NonNull Consumer<AndroidPackage> actionLocked,
              @UserIdInt int userId) {
          synchronized (mLock) {
@@ -477,7 +477,7 @@ index c9cafa76..b9df4133 100644
                  if (setting == null || !setting.getInstalled(userId)) {
                      continue;
 diff --git a/services/core/java/com/android/server/pm/Settings.java b/services/core/java/com/android/server/pm/Settings.java
-index 4276a5ae..b347bcd6 100644
+index 755ea6e4..02efbde0 100644
 --- a/services/core/java/com/android/server/pm/Settings.java
 +++ b/services/core/java/com/android/server/pm/Settings.java
 @@ -137,6 +137,7 @@ import java.util.Arrays;
@@ -508,7 +508,7 @@ index 4276a5ae..b347bcd6 100644
          }
          mInstallerPackages.remove(packageName);
      }
-@@ -1942,9 +1943,7 @@ public final class Settings {
+@@ -1941,9 +1942,7 @@ public final class Settings {
      void writeAllDomainVerificationsLPr(XmlSerializer serializer, int userId)
              throws IllegalArgumentException, IllegalStateException, IOException {
          serializer.startTag(null, TAG_ALL_INTENT_FILTER_VERIFICATION);
@@ -519,7 +519,7 @@ index 4276a5ae..b347bcd6 100644
              IntentFilterVerificationInfo ivi = ps.getIntentFilterVerificationInfo();
              if (ivi != null) {
                  writeDomainVerificationsLPr(serializer, ivi);
-@@ -4509,8 +4508,7 @@ public final class Settings {
+@@ -4508,8 +4507,7 @@ public final class Settings {
       */
      List<PackageSetting> getVolumePackagesLPr(String volumeUuid) {
          ArrayList<PackageSetting> res = new ArrayList<>();
@@ -529,7 +529,7 @@ index 4276a5ae..b347bcd6 100644
              if (Objects.equals(volumeUuid, setting.volumeUuid)) {
                  res.add(setting);
              }
-@@ -5088,9 +5086,7 @@ public final class Settings {
+@@ -5087,9 +5085,7 @@ public final class Settings {
      void dumpPackagesProto(ProtoOutputStream proto) {
          List<UserInfo> users = getAllUsers(UserManagerService.getInstance());
  
@@ -540,7 +540,7 @@ index 4276a5ae..b347bcd6 100644
              ps.dumpDebug(proto, PackageServiceDumpProto.PACKAGES, users);
          }
      }
-@@ -5500,10 +5496,9 @@ public final class Settings {
+@@ -5499,10 +5495,9 @@ public final class Settings {
  
                  Map<String, List<RuntimePermissionsState.PermissionState>> packagePermissions =
                          new ArrayMap<>();
@@ -554,7 +554,7 @@ index 4276a5ae..b347bcd6 100644
                      if (packageSetting.sharedUser == null) {
                          List<RuntimePermissionsState.PermissionState> permissions =
                                  getPermissionsFromPermissionsState(
-@@ -5610,10 +5605,9 @@ public final class Settings {
+@@ -5609,10 +5604,9 @@ public final class Settings {
  
              Map<String, List<RuntimePermissionsState.PermissionState>> packagePermissions =
                      runtimePermissions.getPackagePermissions();

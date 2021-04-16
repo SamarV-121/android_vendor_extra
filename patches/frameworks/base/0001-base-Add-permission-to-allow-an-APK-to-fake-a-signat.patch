@@ -1,7 +1,7 @@
-From 62de94a76e0848b5329d5844c4573d13abeefb06 Mon Sep 17 00:00:00 2001
+From 2447573321fb6926300d9f6fef03405a77216d07 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20Rosenkr=C3=A4nzer?= <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
-Subject: [PATCH 01/47] base: Add permission to allow an APK to fake a
+Subject: [PATCH 01/48] base: Add permission to allow an APK to fake a
  signature.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -99,10 +99,10 @@ index 5f15216e..c29feb9c 100644
      field public static final String GET_ACCOUNTS = "android.permission.GET_ACCOUNTS";
      field public static final String GET_ACCOUNTS_PRIVILEGED = "android.permission.GET_ACCOUNTS_PRIVILEGED";
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index cbf2300d..c9cafa76 100644
+index 1e28db75..65ebb937 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
-@@ -4454,8 +4454,9 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -4456,8 +4456,9 @@ public class PackageManagerService extends IPackageManager.Stub
                  });
              }
  
@@ -114,7 +114,7 @@ index cbf2300d..c9cafa76 100644
  
              if (packageInfo == null) {
                  return null;
-@@ -4491,6 +4492,24 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -4493,6 +4494,24 @@ public class PackageManagerService extends IPackageManager.Stub
          }
      }
  

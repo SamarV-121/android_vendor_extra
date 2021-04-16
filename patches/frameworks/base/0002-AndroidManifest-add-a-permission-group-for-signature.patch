@@ -1,7 +1,7 @@
-From 90870803b185c32ef6858d47249553fed2540e3d Mon Sep 17 00:00:00 2001
+From 9159fc53d9f1df4edc7f695f2095f9f8c2ed8070 Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 12 Feb 2020 11:34:33 +0100
-Subject: [PATCH 02/47] AndroidManifest: add a permission group for signature
+Subject: [PATCH 02/48] AndroidManifest: add a permission group for signature
  spoofing
 
 Needed by PackageInstaller while checking for modern permission group

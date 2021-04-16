@@ -1,7 +1,7 @@
-From 02e2a10a85a9dca98c8d6602ab3b6856a56a1c9b Mon Sep 17 00:00:00 2001
+From 53a0d946649ffe6d882f59d6b0aa3ba479cb79b6 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 29 Oct 2020 20:36:31 -0700
-Subject: [PATCH 06/47] graphics: Adjust ripple animation for immediate
+Subject: [PATCH 06/48] graphics: Adjust ripple animation for immediate
  feedback
 
 Lack of immediate feedback when interacting with UI elements that use
