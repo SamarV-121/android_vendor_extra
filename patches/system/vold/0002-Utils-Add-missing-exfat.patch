@@ -1,0 +1,27 @@
+From 7117fb8a6772bbbce54143d29daa2a1982ebb1b4 Mon Sep 17 00:00:00 2001
+From: xyyx <xyyx@mail.ru>
+Date: Sun, 30 Sep 2018 12:49:36 +0800
+Subject: [PATCH 2/9] Utils: Add missing exfat
+
+Change-Id: I7c7d9ae2782e9410208e5a504c7e45e7fd00da8d
+---
+ Utils.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Utils.cpp b/Utils.cpp
+index 8ce1370..a896650 100644
+--- a/Utils.cpp
++++ b/Utils.cpp
+@@ -1002,7 +1002,8 @@ bool IsFilesystemSupported(const std::string& fsType) {
+     }
+ 
+     /* fuse filesystems */
+-    supported.append("fuse\tntfs\n");
++    supported.append("fuse\tntfs\n"
++                     "fuse\texfat\n");
+ 
+     return supported.find(fsType + "\n") != std::string::npos;
+ }
+-- 
+2.30.1
+
