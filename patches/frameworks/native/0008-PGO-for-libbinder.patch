@@ -1,0 +1,34 @@
+From 48a094a4efe19be51a99d3fb44f66fe6e47445eb Mon Sep 17 00:00:00 2001
+From: Yi Kong <yikong@google.com>
+Date: Fri, 5 Mar 2021 01:50:23 +0800
+Subject: [PATCH 8/8] PGO for libbinder
+
+This improves app launch performance by 1.70%.
+
+Test: presubmit
+Bug: 181934413
+Bug: 175205560
+Change-Id: Ic9be75234a5fafa9e9fa890006b20f8c862e6799
+---
+ libs/binder/Android.bp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/libs/binder/Android.bp b/libs/binder/Android.bp
+index f1ce758..24a1b18 100644
+--- a/libs/binder/Android.bp
++++ b/libs/binder/Android.bp
+@@ -162,6 +162,11 @@ cc_library {
+     lto: {
+         thin: true,
+     },
++
++    pgo: {
++        sampling: true,
++        profile_file: "libbinder/libbinder.profdata",
++    },
+ }
+ 
+ // AIDL interface between libbinder and framework.jar
+-- 
+2.31.1
+

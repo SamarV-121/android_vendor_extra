@@ -1,7 +1,7 @@
-From 09dea8e4501976f3e913df66d5a953d811a72721 Mon Sep 17 00:00:00 2001
+From d1932b2cf1ee7361fe80cc02b54979f226855d9a Mon Sep 17 00:00:00 2001
 From: Hans Boehm <hboehm@google.com>
 Date: Fri, 12 Feb 2021 20:17:20 -0800
-Subject: [PATCH 2/2] Add nativeZygoteJitEnabled
+Subject: [PATCH 02/27] Add nativeZygoteJitEnabled
 
 ... to allow the zygote to check whether it needs to keep the jit thread
 around.
@@ -17,7 +17,7 @@ Change-Id: I4d32aee36993cf063d2464d839f2cabda1ee8ff5
  3 files changed, 18 insertions(+), 1 deletion(-)
 
 diff --git a/runtime/jit/jit.cc b/runtime/jit/jit.cc
-index 8d434b8..0610f6d 100644
+index 8d434b8a0c..0610f6d073 100644
 --- a/runtime/jit/jit.cc
 +++ b/runtime/jit/jit.cc
 @@ -1193,6 +1193,11 @@ static bool HasImageWithProfile() {
@@ -42,7 +42,7 @@ index 8d434b8..0610f6d 100644
      // compile all methods in that profile.
      thread_pool_->AddTask(Thread::Current(), new ZygoteTask());
 diff --git a/runtime/jit/jit.h b/runtime/jit/jit.h
-index e9fd915..40a6eb7 100644
+index e9fd915fc1..40a6eb7c74 100644
 --- a/runtime/jit/jit.h
 +++ b/runtime/jit/jit.h
 @@ -393,6 +393,9 @@ class Jit {
@@ -56,7 +56,7 @@ index e9fd915..40a6eb7 100644
    // is true, methods in the profile are added to the JIT queue. Otherwise they are compiled
    // directly.
 diff --git a/runtime/native/dalvik_system_ZygoteHooks.cc b/runtime/native/dalvik_system_ZygoteHooks.cc
-index c37b8bb..bc19503 100644
+index c37b8bb51c..bc19503232 100644
 --- a/runtime/native/dalvik_system_ZygoteHooks.cc
 +++ b/runtime/native/dalvik_system_ZygoteHooks.cc
 @@ -434,11 +434,20 @@ static void ZygoteHooks_stopZygoteNoThreadCreation(JNIEnv* env ATTRIBUTE_UNUSED,
@@ -81,5 +81,5 @@ index c37b8bb..bc19503 100644
    NATIVE_METHOD(ZygoteHooks, stopZygoteNoThreadCreation, "()V"),
  };
 -- 
-2.30.1
+2.31.1
 

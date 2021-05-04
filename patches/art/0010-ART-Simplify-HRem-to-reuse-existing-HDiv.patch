@@ -1,0 +1,1074 @@
+From 49add069d0e6cce498943be9f2e80e08ae9b752f Mon Sep 17 00:00:00 2001
+From: Evgeny Astigeevich <evgeny.astigeevich@linaro.org>
+Date: Fri, 12 Jun 2020 10:51:43 +0100
+Subject: [PATCH 10/27] ART: Simplify HRem to reuse existing HDiv
+
+A pattern seen in libcore and SPECjvm2008 workloads is a pair of HRem/HDiv
+having the same dividend and divisor. The code generator processes
+them separately and generates duplicated instructions calculating HDiv.
+
+This CL adds detection of such a pattern to the instruction simplifier.
+This optimization affects HInductionVarAnalysis and HLoopOptimization
+preventing some loop optimizations. To avoid this the instruction simplifier
+has the loop_friendly mode which means not to optimize HRems if they are in a loop.
+
+A microbenchmark run on Pixel 3 shows the following improvements:
+
+            | little cores | big cores
+arm32 Int32 |  +21%        |  +40%
+arm32 Int64 |  +46%        |  +44%
+arm64 Int32 |  +27%        |  +14%
+arm64 Int64 |  +33%        |  +27%
+
+Test: 411-checker-instruct-simplifier-hrem
+Test: test.py --host --optimizing --jit --gtest --interpreter
+Test: test.py --target --optimizing --jit --interpreter
+Test: run-gtests.sh
+
+Change-Id: I376a1bd299d7fe10acad46771236edd5f85dfe56
+Signed-off-by: Jake Weinstein <jake@aospa.co>
+---
+ compiler/optimizing/code_generator_arm64.cc   |   1 -
+ compiler/optimizing/instruction_simplifier.cc |  84 +-
+ compiler/optimizing/instruction_simplifier.h  |   9 +-
+ compiler/optimizing/optimization.cc           |   8 +
+ compiler/optimizing/optimization.h            |   1 +
+ compiler/optimizing/optimizing_compiler.cc    |   4 +-
+ .../expected.txt                              |   0
+ .../info.txt                                  |   1 +
+ .../src/Main.java                             | 779 ++++++++++++++++++
+ 9 files changed, 879 insertions(+), 8 deletions(-)
+ create mode 100644 test/411-checker-instruct-simplifier-hrem/expected.txt
+ create mode 100644 test/411-checker-instruct-simplifier-hrem/info.txt
+ create mode 100644 test/411-checker-instruct-simplifier-hrem/src/Main.java
+
+diff --git a/compiler/optimizing/code_generator_arm64.cc b/compiler/optimizing/code_generator_arm64.cc
+index a499f5cdce..ed98a164dd 100644
+--- a/compiler/optimizing/code_generator_arm64.cc
++++ b/compiler/optimizing/code_generator_arm64.cc
+@@ -3064,7 +3064,6 @@ void InstructionCodeGeneratorARM64::GenerateResultRemWithAnyConstant(
+     Register quotient,
+     int64_t divisor,
+     UseScratchRegisterScope* temps_scope) {
+-  // TODO: Strength reduction for msub.
+   Register temp_imm = temps_scope->AcquireSameSizeAs(out);
+   __ Mov(temp_imm, divisor);
+   __ Msub(out, quotient, temp_imm, dividend);
+diff --git a/compiler/optimizing/instruction_simplifier.cc b/compiler/optimizing/instruction_simplifier.cc
+index 84297ec557..cec4d7123d 100644
+--- a/compiler/optimizing/instruction_simplifier.cc
++++ b/compiler/optimizing/instruction_simplifier.cc
+@@ -37,10 +37,12 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
+  public:
+   InstructionSimplifierVisitor(HGraph* graph,
+                                CodeGenerator* codegen,
+-                               OptimizingCompilerStats* stats)
++                               OptimizingCompilerStats* stats,
++                               bool be_loop_friendly)
+       : HGraphDelegateVisitor(graph),
+         codegen_(codegen),
+-        stats_(stats) {}
++        stats_(stats),
++        be_loop_friendly_(be_loop_friendly) {}
+ 
+   bool Run();
+ 
+@@ -65,6 +67,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
+   bool TryHandleAssociativeAndCommutativeOperation(HBinaryOperation* instruction);
+   bool TrySubtractionChainSimplification(HBinaryOperation* instruction);
+   bool TryCombineVecMultiplyAccumulate(HVecMul* mul);
++  void TryToReuseDiv(HRem* rem);
+ 
+   void VisitShift(HBinaryOperation* shift);
+   void VisitEqual(HEqual* equal) override;
+@@ -90,6 +93,7 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
+   void VisitAbove(HAbove* condition) override;
+   void VisitAboveOrEqual(HAboveOrEqual* condition) override;
+   void VisitDiv(HDiv* instruction) override;
++  void VisitRem(HRem* instruction) override;
+   void VisitMul(HMul* instruction) override;
+   void VisitNeg(HNeg* instruction) override;
+   void VisitNot(HNot* instruction) override;
+@@ -129,6 +133,13 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
+   OptimizingCompilerStats* stats_;
+   bool simplification_occurred_ = false;
+   int simplifications_at_current_position_ = 0;
++  // Prohibit optimizations which can affect HInductionVarAnalysis/HLoopOptimization
++  // and prevent loop optimizations:
++  //   true - avoid such optimizations.
++  //   false - allow such optimizations.
++  // Checked by the following optimizations:
++  //   - TryToReuseDiv: simplification of Div+Rem into Div+Mul+Sub.
++  bool be_loop_friendly_;
+   // We ensure we do not loop infinitely. The value should not be too high, since that
+   // would allow looping around the same basic block too many times. The value should
+   // not be too low either, however, since we want to allow revisiting a basic block
+@@ -142,7 +153,9 @@ bool InstructionSimplifier::Run() {
+     visitor.VisitReversePostOrder();
+   }
+ 
+-  InstructionSimplifierVisitor visitor(graph_, codegen_, stats_);
++  bool be_loop_friendly = (use_all_optimizations_ == false);
++
++  InstructionSimplifierVisitor visitor(graph_, codegen_, stats_, be_loop_friendly);
+   return visitor.Run();
+ }
+ 
+@@ -1698,6 +1711,71 @@ void InstructionSimplifierVisitor::VisitDiv(HDiv* instruction) {
+   }
+ }
+ 
++
++// Search HDiv having the specified dividend and divisor which is in the specified basic block.
++// Return nullptr if nothing has been found.
++static HInstruction* FindDivWithInputsInBasicBlock(HInstruction* dividend,
++                                                   HInstruction* divisor,
++                                                   HBasicBlock* basic_block) {
++  for (const HUseListNode<HInstruction*>& use : dividend->GetUses()) {
++    HInstruction* user = use.GetUser();
++    if (user->GetBlock() == basic_block && user->IsDiv() && user->InputAt(1) == divisor) {
++      return user;
++    }
++  }
++  return nullptr;
++}
++
++// If there is Div with the same inputs as Rem and in the same basic block, it can be reused.
++// Rem is replaced with Mul+Sub which use the found Div.
++void InstructionSimplifierVisitor::TryToReuseDiv(HRem* rem) {
++  // As the optimization replaces Rem with Mul+Sub they prevent some loop optimizations
++  // if the Rem is in a loop.
++  // Check if it is allowed to optimize such Rems.
++  if (rem->IsInLoop() && be_loop_friendly_) {
++    return;
++  }
++  DataType::Type type = rem->GetResultType();
++  if (!DataType::IsIntOrLongType(type)) {
++    return;
++  }
++
++  HBasicBlock* basic_block = rem->GetBlock();
++  HInstruction* dividend = rem->GetLeft();
++  HInstruction* divisor = rem->GetRight();
++
++  if (divisor->IsConstant()) {
++    HConstant* input_cst = rem->GetConstantRight();
++    DCHECK(input_cst->IsIntConstant() || input_cst->IsLongConstant());
++    int64_t cst_value = Int64FromConstant(input_cst);
++    if (cst_value == std::numeric_limits<int64_t>::min() || IsPowerOfTwo(std::abs(cst_value))) {
++      // Such cases are usually handled in the code generator because they don't need Div at all.
++      return;
++    }
++  }
++
++  HInstruction* quotient = FindDivWithInputsInBasicBlock(dividend, divisor, basic_block);
++  if (quotient == nullptr) {
++    return;
++  }
++  if (!quotient->StrictlyDominates(rem)) {
++    quotient->MoveBefore(rem);
++  }
++
++  ArenaAllocator* allocator = GetGraph()->GetAllocator();
++  HInstruction* mul = new (allocator) HMul(type, quotient, divisor);
++  basic_block->InsertInstructionBefore(mul, rem);
++  HInstruction* sub = new (allocator) HSub(type, dividend, mul);
++  basic_block->InsertInstructionBefore(sub, rem);
++  rem->ReplaceWith(sub);
++  basic_block->RemoveInstruction(rem);
++  RecordSimplification();
++}
++
++void InstructionSimplifierVisitor::VisitRem(HRem* rem) {
++  TryToReuseDiv(rem);
++}
++
+ void InstructionSimplifierVisitor::VisitMul(HMul* instruction) {
+   HConstant* input_cst = instruction->GetConstantRight();
+   HInstruction* input_other = instruction->GetLeastConstantLeft();
+diff --git a/compiler/optimizing/instruction_simplifier.h b/compiler/optimizing/instruction_simplifier.h
+index 982a24a6f0..feea771096 100644
+--- a/compiler/optimizing/instruction_simplifier.h
++++ b/compiler/optimizing/instruction_simplifier.h
+@@ -40,9 +40,11 @@ class InstructionSimplifier : public HOptimization {
+   InstructionSimplifier(HGraph* graph,
+                         CodeGenerator* codegen,
+                         OptimizingCompilerStats* stats = nullptr,
+-                        const char* name = kInstructionSimplifierPassName)
++                        const char* name = kInstructionSimplifierPassName,
++                        bool use_all_optimizations = false)
+       : HOptimization(graph, name, stats),
+-        codegen_(codegen) {}
++        codegen_(codegen),
++        use_all_optimizations_(use_all_optimizations) {}
+ 
+   static constexpr const char* kInstructionSimplifierPassName = "instruction_simplifier";
+ 
+@@ -51,6 +53,9 @@ class InstructionSimplifier : public HOptimization {
+  private:
+   CodeGenerator* codegen_;
+ 
++  // Use all optimizations without restrictions.
++  bool use_all_optimizations_;
++
+   DISALLOW_COPY_AND_ASSIGN(InstructionSimplifier);
+ };
+ 
+diff --git a/compiler/optimizing/optimization.cc b/compiler/optimizing/optimization.cc
+index 70246604a9..d2ff58da73 100644
+--- a/compiler/optimizing/optimization.cc
++++ b/compiler/optimizing/optimization.cc
+@@ -86,6 +86,7 @@ const char* OptimizationPassName(OptimizationPass pass) {
+       return HInliner::kInlinerPassName;
+     case OptimizationPass::kSelectGenerator:
+       return HSelectGenerator::kSelectGeneratorPassName;
++    case OptimizationPass::kAggressiveInstructionSimplifier:
+     case OptimizationPass::kInstructionSimplifier:
+       return InstructionSimplifier::kInstructionSimplifierPassName;
+     case OptimizationPass::kCHAGuardOptimization:
+@@ -258,6 +259,13 @@ ArenaVector<HOptimization*> ConstructOptimizations(
+       case OptimizationPass::kInstructionSimplifier:
+         opt = new (allocator) InstructionSimplifier(graph, codegen, stats, pass_name);
+         break;
++      case OptimizationPass::kAggressiveInstructionSimplifier:
++        opt = new (allocator) InstructionSimplifier(graph,
++                                                    codegen,
++                                                    stats,
++                                                    pass_name,
++                                                    /* use_all_optimizations_ = */ true);
++        break;
+       case OptimizationPass::kCHAGuardOptimization:
+         opt = new (allocator) CHAGuardOptimization(graph, pass_name);
+         break;
+diff --git a/compiler/optimizing/optimization.h b/compiler/optimizing/optimization.h
+index f4777ad754..aeadf854a6 100644
+--- a/compiler/optimizing/optimization.h
++++ b/compiler/optimizing/optimization.h
+@@ -66,6 +66,7 @@ class HOptimization : public ArenaObject<kArenaAllocOptimization> {
+ // field is preferred over a string lookup at places where performance matters.
+ // TODO: generate this table and lookup methods below automatically?
+ enum class OptimizationPass {
++  kAggressiveInstructionSimplifier,
+   kBoundsCheckElimination,
+   kCHAGuardOptimization,
+   kCodeSinking,
+diff --git a/compiler/optimizing/optimizing_compiler.cc b/compiler/optimizing/optimizing_compiler.cc
+index 9978a6fa18..7b2655adb5 100644
+--- a/compiler/optimizing/optimizing_compiler.cc
++++ b/compiler/optimizing/optimizing_compiler.cc
+@@ -659,7 +659,7 @@ void OptimizingCompiler::RunOptimizations(HGraph* graph,
+     // Simplification.
+     OptDef(OptimizationPass::kConstantFolding,
+            "constant_folding$after_bce"),
+-    OptDef(OptimizationPass::kInstructionSimplifier,
++    OptDef(OptimizationPass::kAggressiveInstructionSimplifier,
+            "instruction_simplifier$after_bce"),
+     // Other high-level optimizations.
+     OptDef(OptimizationPass::kSideEffectsAnalysis,
+@@ -673,7 +673,7 @@ void OptimizingCompiler::RunOptimizations(HGraph* graph,
+     // The codegen has a few assumptions that only the instruction simplifier
+     // can satisfy. For example, the code generator does not expect to see a
+     // HTypeConversion from a type to the same type.
+-    OptDef(OptimizationPass::kInstructionSimplifier,
++    OptDef(OptimizationPass::kAggressiveInstructionSimplifier,
+            "instruction_simplifier$before_codegen"),
+     // Eliminate constructor fences after code sinking to avoid
+     // complicated sinking logic to split a fence with many inputs.
+diff --git a/test/411-checker-instruct-simplifier-hrem/expected.txt b/test/411-checker-instruct-simplifier-hrem/expected.txt
+new file mode 100644
+index 0000000000..e69de29bb2
+diff --git a/test/411-checker-instruct-simplifier-hrem/info.txt b/test/411-checker-instruct-simplifier-hrem/info.txt
+new file mode 100644
+index 0000000000..6ad871e012
+--- /dev/null
++++ b/test/411-checker-instruct-simplifier-hrem/info.txt
+@@ -0,0 +1 @@
++Checker test for instruction_simplifier optimizations of integer remainder instructions.
+diff --git a/test/411-checker-instruct-simplifier-hrem/src/Main.java b/test/411-checker-instruct-simplifier-hrem/src/Main.java
+new file mode 100644
+index 0000000000..66845571b4
+--- /dev/null
++++ b/test/411-checker-instruct-simplifier-hrem/src/Main.java
+@@ -0,0 +1,779 @@
++/*
++ * Copyright (C) 2020 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++public class Main {
++  private static void expectEquals(long expected, long result) {
++    if (expected != result) {
++      throw new Error("Expected: " + expected + ", found: " + result);
++    }
++  }
++
++  private static void expectEquals(long[] div_rem_expected, long[] result) {
++    expectEquals(div_rem_expected[0], result[0]);
++    expectEquals(div_rem_expected[1], result[1]);
++  }
++
++  private static void remInt() {
++    expectEquals(1L, $noinline$IntDivRemBy18(1));
++    expectEquals(1L << 32 | 2L, $noinline$IntDivRemBy18(20));
++
++    expectEquals(1L, $noinline$IntRemDivBy18(1));
++    expectEquals(1L << 32 | 2L, $noinline$IntRemDivBy18(20));
++
++    expectEquals(1L, $noinline$IntDivRemBy18(1, false));
++    expectEquals(1L << 32 | 2L, $noinline$IntDivRemBy18(20, true));
++
++    expectEquals(1L, $noinline$IntDivRemByMinus18(1));
++    expectEquals(-1L, $noinline$IntDivRemBy18(-1));
++    expectEquals((-1L << 32) | 2L, $noinline$IntDivRemByMinus18(20));
++    expectEquals((1L << 32) | (-2L & 0x00000000ffffffff), $noinline$IntDivRemByMinus18(-20));
++
++    expectEquals(0L, $noinline$IntDivRemBy5(0));
++    expectEquals(1L, $noinline$IntDivRemBy5(1));
++    expectEquals(1L << 32, $noinline$IntDivRemBy5(5));
++    expectEquals((1L << 32) | 1L, $noinline$IntDivRemBy5(6));
++    expectEquals((-1L << 32) | 0x00000000ffffffff, $noinline$IntDivRemBy5(-6));
++    expectEquals(-1L << 32, $noinline$IntDivRemBy5(-5));
++    expectEquals(0x00000000ffffffff, $noinline$IntDivRemBy5(-1));
++
++    expectEquals(0L, $noinline$IntDivRemByMinus5(0));
++    expectEquals(1L, $noinline$IntDivRemByMinus5(1));
++    expectEquals(-1L << 32, $noinline$IntDivRemByMinus5(5));
++    expectEquals((-1L << 32) | 1L, $noinline$IntDivRemByMinus5(6));
++    expectEquals((1L << 32) | 0x00000000ffffffff, $noinline$IntDivRemByMinus5(-6));
++    expectEquals(1L << 32, $noinline$IntDivRemByMinus5(-5));
++    expectEquals(0x00000000ffffffff, $noinline$IntDivRemByMinus5(-1));
++
++    expectEquals(0L, $noinline$IntDivRemBy7(0));
++    expectEquals(1L, $noinline$IntDivRemBy7(1));
++    expectEquals(1L << 32, $noinline$IntDivRemBy7(7));
++    expectEquals((1L << 32) | 1L, $noinline$IntDivRemBy7(8));
++    expectEquals((-1L << 32) | 0x00000000ffffffff, $noinline$IntDivRemBy7(-8));
++    expectEquals(-1L << 32, $noinline$IntDivRemBy7(-7));
++    expectEquals(0x00000000ffffffff, $noinline$IntDivRemBy7(-1));
++
++    expectEquals(0L, $noinline$IntDivRemByMinus7(0));
++    expectEquals(1L, $noinline$IntDivRemByMinus7(1));
++    expectEquals(-1L << 32, $noinline$IntDivRemByMinus7(7));
++    expectEquals((-1L << 32) | 1L, $noinline$IntDivRemByMinus7(8));
++    expectEquals((1L << 32) | 0x00000000ffffffff, $noinline$IntDivRemByMinus7(-8));
++    expectEquals(1L << 32, $noinline$IntDivRemByMinus7(-7));
++    expectEquals(0x00000000ffffffff, $noinline$IntDivRemByMinus7(-1));
++
++    expectEquals(0L, $noinline$IntDivRemByMaxInt(0));
++    expectEquals(1L, $noinline$IntDivRemByMaxInt(1));
++    expectEquals(1L << 32, $noinline$IntDivRemByMaxInt(Integer.MAX_VALUE));
++    expectEquals(Integer.MAX_VALUE - 1, $noinline$IntDivRemByMaxInt(Integer.MAX_VALUE - 1));
++    expectEquals((-1L << 32) | 0x00000000ffffffff, $noinline$IntDivRemByMaxInt(Integer.MIN_VALUE));
++    expectEquals(0x00000000ffffffff, $noinline$IntDivRemByMaxInt(-1));
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy18(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy18(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntDivRemBy18(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #34
++  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK:                 msub w{{\d+}}, w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntDivRemBy18(int v) {
++    int q = v / 18;
++    int r = v % 18;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMinus18(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMinus18(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntDivRemByMinus18(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #34
++  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK:                 msub w{{\d+}}, w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntDivRemByMinus18(int v) {
++    int q = v / -18;
++    int r = v % -18;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntRemDivBy18(int) instruction_simplifier (before)
++  /// CHECK:           Rem
++  /// CHECK:           Div
++  //
++  /// CHECK-START: long Main.$noinline$IntRemDivBy18(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntRemDivBy18(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #34
++  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK:                 msub w{{\d+}}, w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntRemDivBy18(int v) {
++    int r = v % 18;
++    int q = v / 18;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy5(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy5(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Shl
++  /// CHECK-NEXT:      Add
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntDivRemBy5(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #33
++  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK:                 add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsl #2
++  /// CHECK:                 sub w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntDivRemBy5(int v) {
++    int q = v / 5;
++    int r = v % 5;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMinus5(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMinus5(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntDivRemByMinus5(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #33
++  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK:                 msub w{{\d+}}, w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntDivRemByMinus5(int v) {
++    int q = v / -5;
++    int r = v % -5;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy7(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy7(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Shl
++  /// CHECK-NEXT:      Sub
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntDivRemBy7(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #34
++  /// CHECK-NEXT:            cinc w{{\d+}}, w{{\d+}}, mi
++  /// CHECK:                 lsl w{{\d+}}, w{{\d+}}, #3
++  /// CHECK:                 sub w{{\d+}}, w{{\d+}}, w{{\d+}}
++  /// CHECK:                 sub w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntDivRemBy7(int v) {
++    int q = v / 7;
++    int r = v % 7;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMinus7(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMinus7(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntDivRemByMinus7(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #34
++  /// CHECK-NEXT:            cinc w{{\d+}}, w{{\d+}}, mi
++  /// CHECK:                 msub w{{\d+}}, w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntDivRemByMinus7(int v) {
++    int q = v / -7;
++    int r = v % -7;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMaxInt(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemByMaxInt(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Shl
++  /// CHECK-NEXT:      Sub
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long Main.$noinline$IntDivRemByMaxInt(int) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #61
++  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK:                 lsl w{{\d+}}, w{{\d+}}, #31
++  /// CHECK:                 sub w{{\d+}}, w{{\d+}}, w{{\d+}}
++  /// CHECK:                 sub w{{\d+}}, w{{\d+}}, w{{\d+}}
++  private static long $noinline$IntDivRemByMaxInt(int v) {
++    int q = v / Integer.MAX_VALUE;
++    int r = v % Integer.MAX_VALUE;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  HDiv with the same inputs as HRem but in another basic block is not reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy18(int, boolean) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRemBy18(int, boolean) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  private static long $noinline$IntDivRemBy18(int v, boolean do_division) {
++    long result = 0;
++    if (do_division) {
++      int q = v / 18;
++      result = (long)q << 32;
++    }
++    int r = v % 18;
++    return result | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRem(int, int) instruction_simplifier$after_gvn (before)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRem(int, int) instruction_simplifier$after_gvn (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  private static long $noinline$IntDivRem(int v, int s) {
++    int q = v / s;
++    int r = v % s;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntRemDiv(int, int) instruction_simplifier$after_gvn (before)
++  /// CHECK:           Rem
++  /// CHECK-NEXT:      Div
++  //
++  /// CHECK-START: long Main.$noinline$IntRemDiv(int, int) instruction_simplifier$after_gvn (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  private static long $noinline$IntRemDiv(int v, int s) {
++    int r = v % s;
++    int q = v / s;
++    return ((long)q << 32) | r;
++  }
++
++  // A test case to check:
++  //  HDiv with the same inputs as HRem but in another basic block is not reused.
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRem(int, int, boolean) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$IntDivRem(int, int, boolean) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  private static long $noinline$IntDivRem(int v, int s, boolean do_division) {
++    long result = 0;
++    if (do_division) {
++      int q = v / s;
++      result = (long)q << 32;
++    }
++    int r = v % s;
++    return result | r;
++  }
++
++  // A test case to check:
++  //  If HRem is in a loop, the instruction simplifier postpones its optimization till
++  //  loop analysis/optimizations are done.
++  //
++  /// CHECK-START: int Main.$noinline$IntRemBy18InLoop(int) instruction_simplifier (before)
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Rem loop:B{{\d+}}
++  //
++  /// CHECK-START: int Main.$noinline$IntRemBy18InLoop(int) instruction_simplifier (after)
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Rem loop:B{{\d+}}
++  //
++  /// CHECK-START: int Main.$noinline$IntRemBy18InLoop(int) instruction_simplifier$after_bce (before)
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Rem loop:B{{\d+}}
++  //
++  /// CHECK-START: int Main.$noinline$IntRemBy18InLoop(int) instruction_simplifier$after_bce (after)
++  /// CHECK-NOT:       Rem
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Mul loop:B{{\d+}}
++  /// CHECK-NEXT:      Sub loop:B{{\d+}}
++  private static int $noinline$IntRemBy18InLoop(int v) {
++    int[] values = new int[v];
++    for (int i = 0; i < values.length; ++i) {
++      int q = i / 18;
++      int r = i % 18;
++      values[i] = q + r;
++    }
++    return values[v - 1];
++  }
++
++  // A test case to check:
++  //  FP type HRem is not optimized by the instruction simplifier.
++  //
++  /// CHECK-START: float Main.$noinline$FloatRemBy18(float) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  //
++  /// CHECK-START: float Main.$noinline$FloatRemBy18(float) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  private static float $noinline$FloatRemBy18(float v) {
++    float q = v / 18.0f;
++    float r = v % 18.0f;
++    return q + r;
++  }
++
++  // A test case to check:
++  //  FP type HRem is not optimized by the instruction simplifier.
++  //
++  /// CHECK-START: double Main.$noinline$DoubleRemBy18(double) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  //
++  /// CHECK-START: double Main.$noinline$DoubleRemBy18(double) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  private static double $noinline$DoubleRemBy18(double v) {
++    double q = v / 18.0;
++    double r = v % 18.0;
++    return q + r;
++  }
++
++  // A test case to check:
++  //  HRem with a divisor of power 2 is not optimized by the instruction simplifier because
++  //  the case is optimized by the code generator.
++  //
++  /// CHECK-START: int Main.$noinline$IntRemByIntMin(int) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  //
++  /// CHECK-START: int Main.$noinline$IntRemByIntMin(int) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  private static int $noinline$IntRemByIntMin(int v) {
++    int q = v / Integer.MIN_VALUE;
++    int r = v % Integer.MIN_VALUE;
++    return q + r;
++  }
++
++  private static void remLong() {
++    expectEquals(1L, $noinline$LongDivRemBy18(1L));
++    expectEquals(1L << 32 | 2L, $noinline$LongDivRemBy18(20L));
++
++    expectEquals(1L, $noinline$LongRemDivBy18(1L));
++    expectEquals(1L << 32 | 2L, $noinline$LongRemDivBy18(20L));
++
++    expectEquals(1L, $noinline$LongDivRemBy18(1L, false));
++    expectEquals(1L << 32 | 2L, $noinline$LongDivRemBy18(20L, true));
++
++    expectEquals(new long[] {0L, 1L}, $noinline$LongDivRemByMinus18(1));
++    expectEquals(new long[] {0L, -1L}, $noinline$LongDivRemByMinus18(-1));
++    expectEquals(new long[] {-1L, 2L}, $noinline$LongDivRemByMinus18(20));
++    expectEquals(new long[] {1L, -2L}, $noinline$LongDivRemByMinus18(-20));
++
++    expectEquals(new long[] {0L, 0L}, $noinline$LongDivRemBy5(0));
++    expectEquals(new long[] {0L, 1L}, $noinline$LongDivRemBy5(1));
++    expectEquals(new long[] {1L, 0L}, $noinline$LongDivRemBy5(5));
++    expectEquals(new long[] {1L, 1L}, $noinline$LongDivRemBy5(6));
++    expectEquals(new long[] {-1L, -1L}, $noinline$LongDivRemBy5(-6));
++    expectEquals(new long[] {-1L, 0L}, $noinline$LongDivRemBy5(-5));
++    expectEquals(new long[] {0L, -1L}, $noinline$LongDivRemBy5(-1));
++
++    expectEquals(new long[] {0L, 0L}, $noinline$LongDivRemByMinus5(0));
++    expectEquals(new long[] {0L, 1L}, $noinline$LongDivRemByMinus5(1));
++    expectEquals(new long[] {-1L, 0L}, $noinline$LongDivRemByMinus5(5));
++    expectEquals(new long[] {-1L, 1L}, $noinline$LongDivRemByMinus5(6));
++    expectEquals(new long[] {1L, -1L}, $noinline$LongDivRemByMinus5(-6));
++    expectEquals(new long[] {1L, 0L}, $noinline$LongDivRemByMinus5(-5));
++    expectEquals(new long[] {0L, -1L}, $noinline$LongDivRemByMinus5(-1));
++
++    expectEquals(new long[] {0L, 0L}, $noinline$LongDivRemBy7(0));
++    expectEquals(new long[] {0L, 1L}, $noinline$LongDivRemBy7(1));
++    expectEquals(new long[] {1L, 0L}, $noinline$LongDivRemBy7(7));
++    expectEquals(new long[] {1L, 1L}, $noinline$LongDivRemBy7(8));
++    expectEquals(new long[] {-1L, -1L}, $noinline$LongDivRemBy7(-8));
++    expectEquals(new long[] {-1L, 0L}, $noinline$LongDivRemBy7(-7));
++    expectEquals(new long[] {0L, -1L}, $noinline$LongDivRemBy7(-1));
++
++    expectEquals(new long[] {0L, 0L}, $noinline$LongDivRemByMinus7(0));
++    expectEquals(new long[] {0L, 1L}, $noinline$LongDivRemByMinus7(1));
++    expectEquals(new long[] {-1L, 0L}, $noinline$LongDivRemByMinus7(7));
++    expectEquals(new long[] {-1L, 1L}, $noinline$LongDivRemByMinus7(8));
++    expectEquals(new long[] {1L, -1L}, $noinline$LongDivRemByMinus7(-8));
++    expectEquals(new long[] {1L, 0L}, $noinline$LongDivRemByMinus7(-7));
++    expectEquals(new long[] {0L, -1L}, $noinline$LongDivRemByMinus7(-1));
++
++    expectEquals(new long[] {0L, 0L}, $noinline$LongDivRemByMaxLong(0));
++    expectEquals(new long[] {0L, 1L}, $noinline$LongDivRemByMaxLong(1));
++    expectEquals(new long[] {1L, 0L}, $noinline$LongDivRemByMaxLong(Long.MAX_VALUE));
++    expectEquals(new long[] {0L, Long.MAX_VALUE - 1},
++                 $noinline$LongDivRemByMaxLong(Long.MAX_VALUE - 1));
++    expectEquals(new long[] {-1L, -1L}, $noinline$LongDivRemByMaxLong(Long.MIN_VALUE));
++    expectEquals(new long[] {0L, -1L}, $noinline$LongDivRemByMaxLong(-1));
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRemBy18(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRemBy18(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  private static long $noinline$LongDivRemBy18(long v) {
++    long q = v / 18L;
++    long r = v % 18L;
++    return (q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMinus18(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMinus18(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long[] Main.$noinline$LongDivRemByMinus18(long) disassembly (after)
++  /// CHECK:                 smulh x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            add   x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
++  /// CHECK:                 msub  x{{\d+}}, x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long[] $noinline$LongDivRemByMinus18(long v) {
++    long q = v / -18L;
++    long r = v % -18L;
++    return new long[] {q, r};
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$LongRemDivBy18(long) instruction_simplifier (before)
++  /// CHECK:           Rem
++  /// CHECK:           Div
++  //
++  /// CHECK-START: long Main.$noinline$LongRemDivBy18(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  private static long $noinline$LongRemDivBy18(long v) {
++    long r = v % 18L;
++    long q = v / 18L;
++    return (q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemBy5(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemBy5(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Shl
++  /// CHECK-NEXT:      Add
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long[] Main.$noinline$LongDivRemBy5(long) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #1
++  /// CHECK-NEXT:            add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
++  /// CHECK:                 add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsl #2
++  /// CHECK:                 sub x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long[] $noinline$LongDivRemBy5(long v) {
++    long q = v / 5L;
++    long r = v % 5L;
++    return new long[] {q, r};
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMinus5(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMinus5(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long[] Main.$noinline$LongDivRemByMinus5(long) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #1
++  /// CHECK-NEXT:            add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
++  /// CHECK:                 msub x{{\d+}}, x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long[] $noinline$LongDivRemByMinus5(long v) {
++    long q = v / -5L;
++    long r = v % -5L;
++    return new long[] {q, r};
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemBy7(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemBy7(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Shl
++  /// CHECK-NEXT:      Sub
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long[] Main.$noinline$LongDivRemBy7(long) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #1
++  /// CHECK-NEXT:            add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
++  /// CHECK:                 lsl x{{\d+}}, x{{\d+}}, #3
++  /// CHECK:                 sub x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK:                 sub x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long[] $noinline$LongDivRemBy7(long v) {
++    long q = v / 7L;
++    long r = v % 7L;
++    return new long[] {q, r};
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMinus7(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMinus7(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long[] Main.$noinline$LongDivRemByMinus7(long) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #1
++  /// CHECK-NEXT:            add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
++  /// CHECK:                 msub x{{\d+}}, x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long[] $noinline$LongDivRemByMinus7(long v) {
++    long q = v / -7L;
++    long r = v % -7L;
++    return new long[] {q, r};
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMaxLong(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long[] Main.$noinline$LongDivRemByMaxLong(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Shl
++  /// CHECK-NEXT:      Sub
++  /// CHECK-NEXT:      Sub
++  //
++  /// CHECK-START-ARM64: long[] Main.$noinline$LongDivRemByMaxLong(long) disassembly (after)
++  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #61
++  /// CHECK-NEXT:            add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
++  /// CHECK:                 lsl x{{\d+}}, x{{\d+}}, #63
++  /// CHECK:                 sub x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK:                 sub x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long[] $noinline$LongDivRemByMaxLong(long v) {
++    long q = v / Long.MAX_VALUE;
++    long r = v % Long.MAX_VALUE;
++    return new long[] {q, r};
++  }
++
++  // A test case to check:
++  //  HDiv with the same inputs as HRem but in another basic block is not reused.
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRemBy18(long, boolean) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRemBy18(long, boolean) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  private static long $noinline$LongDivRemBy18(long v, boolean do_division) {
++    long result = 0;
++    if (do_division) {
++      long q = v / 18L;
++      result = q << 32;
++    }
++    long r = v % 18L;
++    return result | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRem(long, long) instruction_simplifier$after_gvn (before)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRem(long, long) instruction_simplifier$after_gvn (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  private static long $noinline$LongDivRem(long v, long s) {
++    long q = v / s;
++    long r = v % s;
++    return (q << 32) | r;
++  }
++
++  // A test case to check:
++  //  If there is HDiv with the same inputs as HRem, it is reused.
++  //
++  /// CHECK-START: long Main.$noinline$LongRemDiv(long, long) instruction_simplifier$after_gvn (before)
++  /// CHECK:           Rem
++  /// CHECK-NEXT:      Div
++  //
++  /// CHECK-START: long Main.$noinline$LongRemDiv(long, long) instruction_simplifier$after_gvn (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Mul
++  /// CHECK-NEXT:      Sub
++  private static long $noinline$LongRemDiv(long v, long s) {
++    long r = v % s;
++    long q = v / s;
++    return (q << 32) | r;
++  }
++
++  // A test case to check:
++  //  HDiv with the same inputs as HRem but in another basic block is not reused.
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRem(long, long, boolean) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  //
++  /// CHECK-START: long Main.$noinline$LongDivRem(long, long, boolean) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK:           Rem
++  private static long $noinline$LongDivRem(long v, long s, boolean do_division) {
++    long result = 0;
++    if (do_division) {
++      long q = v / s;
++      result = q << 32;
++    }
++    long r = v % s;
++    return result | r;
++  }
++
++  // A test case to check:
++  //  If HRem is in a loop, the instruction simplifier postpones its optimization till
++  //  loop analysis/optimizations are done.
++  //
++  /// CHECK-START: long Main.$noinline$LongRemBy18InLoop(long) instruction_simplifier (before)
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Rem loop:B{{\d+}}
++  //
++  /// CHECK-START: long Main.$noinline$LongRemBy18InLoop(long) instruction_simplifier (after)
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Rem loop:B{{\d+}}
++  //
++  /// CHECK-START: long Main.$noinline$LongRemBy18InLoop(long) instruction_simplifier$after_bce (before)
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Rem loop:B{{\d+}}
++  //
++  /// CHECK-START: long Main.$noinline$LongRemBy18InLoop(long) instruction_simplifier$after_bce (after)
++  /// CHECK-NOT:       Rem
++  /// CHECK:           Div loop:B{{\d+}}
++  /// CHECK-NEXT:      Mul loop:B{{\d+}}
++  /// CHECK-NEXT:      Sub loop:B{{\d+}}
++  private static long $noinline$LongRemBy18InLoop(long v) {
++    long[] values = new long[(int)v];
++    for (int i = 0; i < values.length; ++i) {
++      long d = (long)i;
++      long q = d / 18L;
++      long r = d % 18L;
++      values[i] = q + r;
++    }
++    return values[values.length - 1];
++  }
++
++  // A test case to check:
++  //  HRem with a divisor of power 2 is not optimized by the instruction simplifier because
++  //  the case is optimized by the code generator.
++  //
++  /// CHECK-START: long Main.$noinline$LongRemByLongMin(long) instruction_simplifier (before)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  //
++  /// CHECK-START: long Main.$noinline$LongRemByLongMin(long) instruction_simplifier (after)
++  /// CHECK:           Div
++  /// CHECK-NEXT:      Rem
++  private static long $noinline$LongRemByLongMin(long v) {
++    long q = v / Long.MIN_VALUE;
++    long r = v % Long.MIN_VALUE;
++    return q + r;
++  }
++
++  public static void main(String args[]) {
++    remInt();
++    remLong();
++  }
++}
+-- 
+2.31.1
+

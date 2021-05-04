@@ -1,0 +1,375 @@
+From 10b966b3a0b0ff665a0ecb1880b13f0397793fcf Mon Sep 17 00:00:00 2001
+From: Elliott Hughes <enh@google.com>
+Date: Thu, 6 Aug 2020 14:32:43 -0700
+Subject: [PATCH 06/11] Switch to musl memmem (via OpenBSD).
+
+Similar to the musl strstr. This patch also increases test coverage for
+memmem, again similar to the strstr tests.
+
+Test: treehugger
+Change-Id: I7f4a2ab93a610cb692994d06d2512976e657ae9f
+---
+ libc/Android.bp                               |   2 +-
+ libc/NOTICE                                   |  23 +++
+ libc/bionic/memmem.cpp                        |  60 ------
+ .../upstream-openbsd/lib/libc/string/memmem.c | 184 ++++++++++++++++++
+ tests/string_test.cpp                         |  30 ++-
+ 5 files changed, 232 insertions(+), 67 deletions(-)
+ delete mode 100644 libc/bionic/memmem.cpp
+ create mode 100644 libc/upstream-openbsd/lib/libc/string/memmem.c
+
+diff --git a/libc/Android.bp b/libc/Android.bp
+index 219fcaf5e..f3936d341 100644
+--- a/libc/Android.bp
++++ b/libc/Android.bp
+@@ -574,6 +574,7 @@ cc_library_static {
+     srcs: [
+         "stdio/vfprintf.cpp",
+         "stdio/vfwprintf.cpp",
++        "upstream-openbsd/lib/libc/string/memmem.c",
+         "upstream-openbsd/lib/libc/string/strstr.c",
+     ],
+     cflags: [
+@@ -1094,7 +1095,6 @@ cc_library_static {
+         "bionic/mblen.cpp",
+         "bionic/mbrtoc16.cpp",
+         "bionic/mbrtoc32.cpp",
+-        "bionic/memmem.cpp",
+         "bionic/mempcpy.cpp",
+         "bionic/mkdir.cpp",
+         "bionic/mkfifo.cpp",
+diff --git a/libc/NOTICE b/libc/NOTICE
+index 7b2ca81ac..0dd7f80fe 100644
+--- a/libc/NOTICE
++++ b/libc/NOTICE
+@@ -4324,6 +4324,29 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ 
+ -------------------------------------------------------------------
+ 
++Copyright (c) 2005-2020 Rich Felker, et al.
++
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of this software and associated documentation files (the
++"Software"), to deal in the Software without restriction, including
++without limitation the rights to use, copy, modify, merge, publish,
++distribute, sublicense, and/or sell copies of the Software, and to
++permit persons to whom the Software is furnished to do so, subject to
++the following conditions:
++
++The above copyright notice and this permission notice shall be
++included in all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
++IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
++CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
++TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
++SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++
++-------------------------------------------------------------------
++
+ Copyright (c) 2007 David Schultz
+ All rights reserved.
+ 
+diff --git a/libc/bionic/memmem.cpp b/libc/bionic/memmem.cpp
+deleted file mode 100644
+index 019e7720f..000000000
+--- a/libc/bionic/memmem.cpp
++++ /dev/null
+@@ -1,60 +0,0 @@
+-/*
+- * Copyright (C) 2008 The Android Open Source Project
+- * All rights reserved.
+- *
+- * Redistribution and use in source and binary forms, with or without
+- * modification, are permitted provided that the following conditions
+- * are met:
+- *  * Redistributions of source code must retain the above copyright
+- *    notice, this list of conditions and the following disclaimer.
+- *  * Redistributions in binary form must reproduce the above copyright
+- *    notice, this list of conditions and the following disclaimer in
+- *    the documentation and/or other materials provided with the
+- *    distribution.
+- *
+- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+- * SUCH DAMAGE.
+- */
+-
+-#include <string.h>
+-
+-void* memmem(const void* void_haystack, size_t n, const void* void_needle, size_t m) {
+-  const unsigned char* haystack = reinterpret_cast<const unsigned char*>(void_haystack);
+-  const unsigned char* needle = reinterpret_cast<const unsigned char*>(void_needle);
+-
+-  if (n < m) return nullptr;
+-
+-  if (m == 0) return const_cast<void*>(void_haystack);
+-  if (m == 1) return const_cast<void*>(memchr(haystack, needle[0], n));
+-
+-  // This uses the "Not So Naive" algorithm, a very simple but usually effective algorithm.
+-  // http://www-igm.univ-mlv.fr/~lecroq/string/
+-  const unsigned char* y = haystack;
+-  const unsigned char* x = needle;
+-  size_t j = 0;
+-  size_t k = 1, l = 2;
+-
+-  if (x[0] == x[1]) {
+-    k = 2;
+-    l = 1;
+-  }
+-  while (j <= n-m) {
+-    if (x[1] != y[j+1]) {
+-      j += k;
+-    } else {
+-      if (!memcmp(x+2, y+j+2, m-2) && x[0] == y[j]) return const_cast<unsigned char*>(&y[j]);
+-      j += l;
+-    }
+-  }
+-  return nullptr;
+-}
+diff --git a/libc/upstream-openbsd/lib/libc/string/memmem.c b/libc/upstream-openbsd/lib/libc/string/memmem.c
+new file mode 100644
+index 000000000..3b180b4a6
+--- /dev/null
++++ b/libc/upstream-openbsd/lib/libc/string/memmem.c
+@@ -0,0 +1,184 @@
++/*	$OpenBSD: memmem.c,v 1.5 2020/04/16 12:39:28 claudio Exp $ */
++
++/*
++ * Copyright (c) 2005-2020 Rich Felker, et al.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining
++ * a copy of this software and associated documentation files (the
++ * "Software"), to deal in the Software without restriction, including
++ * without limitation the rights to use, copy, modify, merge, publish,
++ * distribute, sublicense, and/or sell copies of the Software, and to
++ * permit persons to whom the Software is furnished to do so, subject to
++ * the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be
++ * included in all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
++ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
++ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
++ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
++ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
++ */
++
++#include <string.h>
++#include <stdint.h>
++
++static char *
++twobyte_memmem(const unsigned char *h, size_t k, const unsigned char *n)
++{
++	uint16_t nw = n[0]<<8 | n[1], hw = h[0]<<8 | h[1];
++	for (h+=2, k-=2; k; k--, hw = hw<<8 | *h++)
++		if (hw == nw) return (char *)h-2;
++	return hw == nw ? (char *)h-2 : 0;
++}
++
++static char *
++threebyte_memmem(const unsigned char *h, size_t k, const unsigned char *n)
++{
++	uint32_t nw = n[0]<<24 | n[1]<<16 | n[2]<<8;
++	uint32_t hw = h[0]<<24 | h[1]<<16 | h[2]<<8;
++	for (h+=3, k-=3; k; k--, hw = (hw|*h++)<<8)
++		if (hw == nw) return (char *)h-3;
++	return hw == nw ? (char *)h-3 : 0;
++}
++
++static char *
++fourbyte_memmem(const unsigned char *h, size_t k, const unsigned char *n)
++{
++	uint32_t nw = n[0]<<24 | n[1]<<16 | n[2]<<8 | n[3];
++	uint32_t hw = h[0]<<24 | h[1]<<16 | h[2]<<8 | h[3];
++	for (h+=4, k-=4; k; k--, hw = hw<<8 | *h++)
++		if (hw == nw) return (char *)h-4;
++	return hw == nw ? (char *)h-4 : 0;
++}
++
++#define MAX(a,b) ((a)>(b)?(a):(b))
++#define MIN(a,b) ((a)<(b)?(a):(b))
++
++#define BITOP(a,b,op) \
++ ((a)[(size_t)(b)/(8*sizeof *(a))] op (size_t)1<<((size_t)(b)%(8*sizeof *(a))))
++
++/*
++ * Maxime Crochemore and Dominique Perrin, Two-way string-matching,
++ * Journal of the ACM, 38(3):651-675, July 1991.
++ */
++static char *
++twoway_memmem(const unsigned char *h, const unsigned char *z,
++    const unsigned char *n, size_t l)
++{
++	size_t i, ip, jp, k, p, ms, p0, mem, mem0;
++	size_t byteset[32 / sizeof(size_t)] = { 0 };
++	size_t shift[256];
++
++	/* Computing length of needle and fill shift table */
++	for (i=0; i<l; i++)
++		BITOP(byteset, n[i], |=), shift[n[i]] = i+1;
++
++	/* Compute maximal suffix */
++	ip = -1; jp = 0; k = p = 1;
++	while (jp+k<l) {
++		if (n[ip+k] == n[jp+k]) {
++			if (k == p) {
++				jp += p;
++				k = 1;
++			} else k++;
++		} else if (n[ip+k] > n[jp+k]) {
++			jp += k;
++			k = 1;
++			p = jp - ip;
++		} else {
++			ip = jp++;
++			k = p = 1;
++		}
++	}
++	ms = ip;
++	p0 = p;
++
++	/* And with the opposite comparison */
++	ip = -1; jp = 0; k = p = 1;
++	while (jp+k<l) {
++		if (n[ip+k] == n[jp+k]) {
++			if (k == p) {
++				jp += p;
++				k = 1;
++			} else k++;
++		} else if (n[ip+k] < n[jp+k]) {
++			jp += k;
++			k = 1;
++			p = jp - ip;
++		} else {
++			ip = jp++;
++			k = p = 1;
++		}
++	}
++	if (ip+1 > ms+1) ms = ip;
++	else p = p0;
++
++	/* Periodic needle? */
++	if (memcmp(n, n+p, ms+1)) {
++		mem0 = 0;
++		p = MAX(ms, l-ms-1) + 1;
++	} else mem0 = l-p;
++	mem = 0;
++
++	/* Search loop */
++	for (;;) {
++		/* If remainder of haystack is shorter than needle, done */
++		if (z-h < l) return 0;
++
++		/* Check last byte first; advance by shift on mismatch */
++		if (BITOP(byteset, h[l-1], &)) {
++			k = l-shift[h[l-1]];
++			if (k) {
++				if (k < mem) k = mem;
++				h += k;
++				mem = 0;
++				continue;
++			}
++		} else {
++			h += l;
++			mem = 0;
++			continue;
++		}
++
++		/* Compare right half */
++		for (k=MAX(ms+1,mem); k<l && n[k] == h[k]; k++);
++		if (k < l) {
++			h += k-ms;
++			mem = 0;
++			continue;
++		}
++		/* Compare left half */
++		for (k=ms+1; k>mem && n[k-1] == h[k-1]; k--);
++		if (k <= mem) return (char *)h;
++		h += p;
++		mem = mem0;
++	}
++}
++
++void *
++memmem(const void *h0, size_t k, const void *n0, size_t l)
++{
++	const unsigned char *h = h0, *n = n0;
++
++	/* Return immediately on empty needle */
++	if (!l) return (void *)h;
++
++	/* Return immediately when needle is longer than haystack */
++	if (k<l) return 0;
++
++	/* Use faster algorithms for short needles */
++	h = memchr(h0, *n, k);
++	if (!h || l==1) return (void *)h;
++	k -= h - (const unsigned char *)h0;
++	if (k<l) return 0;
++	if (l==2) return twobyte_memmem(h, k, n);
++	if (l==3) return threebyte_memmem(h, k, n);
++	if (l==4) return fourbyte_memmem(h, k, n);
++
++	return twoway_memmem(h, h+k, n, l);
++}
++DEF_WEAK(memmem);
+diff --git a/tests/string_test.cpp b/tests/string_test.cpp
+index 0ed0598f6..f157416c1 100644
+--- a/tests/string_test.cpp
++++ b/tests/string_test.cpp
+@@ -1538,13 +1538,31 @@ TEST(STRING_TEST, memmem_strstr_empty_needle) {
+ }
+ 
+ TEST(STRING_TEST, memmem_smoke) {
+-  const char haystack[] = "big\0daddy\0giant\0haystacks";
+-  ASSERT_EQ(haystack, memmem(haystack, sizeof(haystack), "", 0));
+-  ASSERT_EQ(haystack + 3, memmem(haystack, sizeof(haystack), "", 1));
++  const char haystack[] = "big\0daddy/giant\0haystacks!";
++
++  // The current memmem() implementation has special cases for needles of
++  // lengths 0, 1, 2, 3, and 4, plus a long needle case. We test matches at the
++  // beginning, middle, and end of the haystack.
++
++  ASSERT_EQ(haystack + 0, memmem(haystack, sizeof(haystack), "", 0));
++
+   ASSERT_EQ(haystack + 0, memmem(haystack, sizeof(haystack), "b", 1));
+-  ASSERT_EQ(haystack + 1, memmem(haystack, sizeof(haystack), "i", 1));
+-  ASSERT_EQ(haystack + 4, memmem(haystack, sizeof(haystack), "da", 2));
+-  ASSERT_EQ(haystack + 8, memmem(haystack, sizeof(haystack), "y\0g", 3));
++  ASSERT_EQ(haystack + 0, memmem(haystack, sizeof(haystack), "bi", 2));
++  ASSERT_EQ(haystack + 0, memmem(haystack, sizeof(haystack), "big", 3));
++  ASSERT_EQ(haystack + 0, memmem(haystack, sizeof(haystack), "big\0", 4));
++  ASSERT_EQ(haystack + 0, memmem(haystack, sizeof(haystack), "big\0d", 5));
++
++  ASSERT_EQ(haystack + 2, memmem(haystack, sizeof(haystack), "g", 1));
++  ASSERT_EQ(haystack + 10, memmem(haystack, sizeof(haystack), "gi", 2));
++  ASSERT_EQ(haystack + 10, memmem(haystack, sizeof(haystack), "gia", 3));
++  ASSERT_EQ(haystack + 10, memmem(haystack, sizeof(haystack), "gian", 4));
++  ASSERT_EQ(haystack + 10, memmem(haystack, sizeof(haystack), "giant", 5));
++
++  ASSERT_EQ(haystack + 25, memmem(haystack, sizeof(haystack), "!", 1));
++  ASSERT_EQ(haystack + 24, memmem(haystack, sizeof(haystack), "s!", 2));
++  ASSERT_EQ(haystack + 23, memmem(haystack, sizeof(haystack), "ks!", 3));
++  ASSERT_EQ(haystack + 22, memmem(haystack, sizeof(haystack), "cks!", 4));
++  ASSERT_EQ(haystack + 21, memmem(haystack, sizeof(haystack), "acks!", 5));
+ }
+ 
+ TEST(STRING_TEST, strstr_smoke) {
+-- 
+2.31.1
+

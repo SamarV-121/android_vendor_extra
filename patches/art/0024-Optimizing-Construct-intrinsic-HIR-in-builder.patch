@@ -1,0 +1,2342 @@
+From f4f6486cf119f0905ae366a61014a4db3f0be109 Mon Sep 17 00:00:00 2001
+From: Vladimir Marko <vmarko@google.com>
+Date: Thu, 9 Apr 2020 13:20:11 +0100
+Subject: [PATCH 24/27] Optimizing: Construct intrinsic HIR in builder.
+
+To help baseline compiler emit better code, construct
+intermediate representation for intrinsics that have
+corresponding HIR classes in the instruction builder,
+instead of doing it in the instruction simplifier.
+
+Note: The generated code is sometimes different than
+before because GVN uses instruction ids for input
+ordering for commutative operations.
+
+Test: m test-art-host-gtest
+Test: testrunner.py --host --optimizing
+Test: aosp_taimen-userdebug boots.
+Change-Id: Ifa3a5774f8f3fbff4e3ca359c38eceee993d62cd
+---
+ compiler/optimizing/instruction_builder.cc    | 367 ++++++++++++++----
+ compiler/optimizing/instruction_builder.h     |  23 +-
+ compiler/optimizing/instruction_simplifier.cc | 199 ++--------
+ compiler/optimizing/nodes.h                   |   4 -
+ test/004-checker-UnsafeTest18/src/Main.java   |  21 +-
+ test/441-checker-inliner/src/Main.java        |   2 +-
+ test/445-checker-licm/src/Main.java           |   6 -
+ .../smali/SmaliTests.smali                    |  14 +-
+ .../src/Main.java                             |  77 +---
+ .../src/Main.java                             |  44 +--
+ test/565-checker-rotate/smali/Main2.smali     |  22 +-
+ test/565-checker-rotate/src-art/Main.java     |  96 +----
+ test/566-checker-signum/smali/Main2.smali     |   9 +-
+ test/566-checker-signum/src-art/Main.java     |  30 +-
+ test/567-checker-compare/smali/Smali.smali    |  10 +-
+ test/567-checker-compare/src/Main.java        | 104 +----
+ test/575-checker-isnan/src/Main.java          |  16 +-
+ test/631-checker-fp-abs/src/Main.java         |  10 +-
+ .../src/SimdSadShort2.java                    |  24 +-
+ test/679-checker-minmax/src/Main.java         |  40 +-
+ test/681-checker-abs/src/Main.java            |  34 +-
+ test/709-checker-varhandles/src/Main.java     |  35 +-
+ 22 files changed, 457 insertions(+), 730 deletions(-)
+
+diff --git a/compiler/optimizing/instruction_builder.cc b/compiler/optimizing/instruction_builder.cc
+index 42dd3757ee..a38f9cf632 100644
+--- a/compiler/optimizing/instruction_builder.cc
++++ b/compiler/optimizing/instruction_builder.cc
+@@ -425,38 +425,43 @@ void HInstructionBuilder::BuildIntrinsic(ArtMethod* method) {
+   InitializeBlockLocals();
+   DCHECK(!IsBlockPopulated(current_block_));
+ 
+-  // Add the invoke and return instruction. Use HInvokeStaticOrDirect even
+-  // for methods that would normally use an HInvokeVirtual (sharpen the call).
++  // Add the intermediate representation, if available, or invoke instruction.
+   size_t in_vregs = graph_->GetNumberOfInVRegs();
+   size_t number_of_arguments =
+       in_vregs - std::count(current_locals_->end() - in_vregs, current_locals_->end(), nullptr);
+   uint32_t method_idx = dex_compilation_unit_->GetDexMethodIndex();
+-  MethodReference target_method(dex_file_, method_idx);
+-  HInvokeStaticOrDirect::DispatchInfo dispatch_info = {
+-      HInvokeStaticOrDirect::MethodLoadKind::kRuntimeCall,
+-      HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod,
+-      /* method_load_data= */ 0u
+-  };
+-  InvokeType invoke_type = dex_compilation_unit_->IsStatic() ? kStatic : kDirect;
+-  HInvokeStaticOrDirect* invoke = new (allocator_) HInvokeStaticOrDirect(
+-      allocator_,
+-      number_of_arguments,
+-      return_type_,
+-      kNoDexPc,
+-      method_idx,
+-      method,
+-      dispatch_info,
+-      invoke_type,
+-      target_method,
+-      HInvokeStaticOrDirect::ClinitCheckRequirement::kNone);
++  const char* shorty = dex_file_->GetMethodShorty(method_idx);
+   RangeInstructionOperands operands(graph_->GetNumberOfVRegs() - in_vregs, in_vregs);
+-  HandleInvoke(invoke, operands, dex_file_->GetMethodShorty(method_idx), /* is_unresolved= */ false);
++  if (!BuildSimpleIntrinsic(method, kNoDexPc, operands, shorty)) {
++    // Some intrinsics without intermediate representation still yield a leaf method,
++    // so build the invoke. Use HInvokeStaticOrDirect even for methods that would
++    // normally use an HInvokeVirtual (sharpen the call).
++    MethodReference target_method(dex_file_, method_idx);
++    HInvokeStaticOrDirect::DispatchInfo dispatch_info = {
++        HInvokeStaticOrDirect::MethodLoadKind::kRuntimeCall,
++        HInvokeStaticOrDirect::CodePtrLocation::kCallArtMethod,
++        /* method_load_data= */ 0u
++    };
++    InvokeType invoke_type = dex_compilation_unit_->IsStatic() ? kStatic : kDirect;
++    HInvokeStaticOrDirect* invoke = new (allocator_) HInvokeStaticOrDirect(
++        allocator_,
++        number_of_arguments,
++        return_type_,
++        kNoDexPc,
++        method_idx,
++        method,
++        dispatch_info,
++        invoke_type,
++        target_method,
++        HInvokeStaticOrDirect::ClinitCheckRequirement::kNone);
++    HandleInvoke(invoke, operands, shorty, /* is_unresolved= */ false);
++  }
+ 
+   // Add the return instruction.
+   if (return_type_ == DataType::Type::kVoid) {
+     AppendInstruction(new (allocator_) HReturnVoid());
+   } else {
+-    AppendInstruction(new (allocator_) HReturn(invoke));
++    AppendInstruction(new (allocator_) HReturn(latest_result_));
+   }
+ 
+   // Fill the exit block.
+@@ -999,6 +1004,17 @@ bool HInstructionBuilder::BuildInvoke(const Instruction& instruction,
+     clinit_check = ProcessClinitCheckForInvoke(dex_pc, resolved_method, &clinit_check_requirement);
+   }
+ 
++  // Try to build an HIR replacement for the intrinsic.
++  if (UNLIKELY(resolved_method->IsIntrinsic())) {
++    // All intrinsics are in the primary boot image, so their class can always be referenced
++    // and we do not need to rely on the implicit class initialization check. The class should
++    // be initialized but we do not require that here.
++    DCHECK_NE(clinit_check_requirement, HInvokeStaticOrDirect::ClinitCheckRequirement::kImplicit);
++    if (BuildSimpleIntrinsic(resolved_method, dex_pc, operands, shorty)) {
++      return true;
++    }
++  }
++
+   HInvoke* invoke = nullptr;
+   if (invoke_type == kDirect || invoke_type == kStatic || invoke_type == kSuper) {
+     if (invoke_type == kSuper) {
+@@ -1021,6 +1037,13 @@ bool HInstructionBuilder::BuildInvoke(const Instruction& instruction,
+                                                     invoke_type,
+                                                     target_method,
+                                                     clinit_check_requirement);
++    if (clinit_check != nullptr) {
++      // Add the class initialization check as last input of `invoke`.
++      DCHECK_EQ(clinit_check_requirement, HInvokeStaticOrDirect::ClinitCheckRequirement::kExplicit);
++      size_t clinit_check_index = invoke->InputCount() - 1u;
++      DCHECK(invoke->InputAt(clinit_check_index) == nullptr);
++      invoke->SetArgumentAt(clinit_check_index, clinit_check);
++    }
+   } else if (invoke_type == kVirtual) {
+     DCHECK(target_method.dex_file == nullptr);
+     invoke = new (allocator_) HInvokeVirtual(allocator_,
+@@ -1040,7 +1063,7 @@ bool HInstructionBuilder::BuildInvoke(const Instruction& instruction,
+                                                resolved_method,
+                                                /*imt_index=*/ target_method.index);
+   }
+-  return HandleInvoke(invoke, operands, shorty, /* is_unresolved= */ false, clinit_check);
++  return HandleInvoke(invoke, operands, shorty, /* is_unresolved= */ false);
+ }
+ 
+ bool HInstructionBuilder::BuildInvokePolymorphic(uint32_t dex_pc,
+@@ -1423,54 +1446,86 @@ HClinitCheck* HInstructionBuilder::ProcessClinitCheckForInvoke(
+   return clinit_check;
+ }
+ 
+-bool HInstructionBuilder::SetupInvokeArguments(HInvoke* invoke,
++bool HInstructionBuilder::SetupInvokeArguments(HInstruction* invoke,
+                                                const InstructionOperands& operands,
+                                                const char* shorty,
+-                                               size_t start_index,
+-                                               size_t* argument_index) {
++                                               ReceiverArg receiver_arg) {
++  // Note: The `invoke` can be an intrinsic replacement, so not necessaritly HInvoke.
++  // In that case, do not log errors, they shall be reported when we try to build the HInvoke.
+   uint32_t shorty_index = 1;  // Skip the return type.
+   const size_t number_of_operands = operands.GetNumberOfOperands();
+-  for (size_t i = start_index;
+-       // Make sure we don't go over the expected arguments or over the number of
+-       // dex registers given. If the instruction was seen as dead by the verifier,
+-       // it hasn't been properly checked.
+-       (i < number_of_operands) && (*argument_index < invoke->GetNumberOfArguments());
+-       i++, (*argument_index)++) {
++  bool argument_length_error = false;
++
++  size_t start_index = 0u;
++  size_t argument_index = 0u;
++  if (receiver_arg != ReceiverArg::kNone) {
++    if (number_of_operands == 0u) {
++      argument_length_error = true;
++    } else {
++      start_index = 1u;
++      if (receiver_arg != ReceiverArg::kIgnored) {
++        uint32_t obj_reg = operands.GetOperand(0u);
++        HInstruction* arg = (receiver_arg == ReceiverArg::kPlainArg)
++            ? LoadLocal(obj_reg, DataType::Type::kReference)
++            : LoadNullCheckedLocal(obj_reg, invoke->GetDexPc());
++        if (receiver_arg != ReceiverArg::kNullCheckedOnly) {
++          invoke->SetRawInputAt(0u, arg);
++          argument_index = 1u;
++        }
++      }
++    }
++  }
++
++  for (size_t i = start_index; i < number_of_operands; ++i, ++argument_index) {
++    // Make sure we don't go over the expected arguments or over the number of
++    // dex registers given. If the instruction was seen as dead by the verifier,
++    // it hasn't been properly checked.
++    if (UNLIKELY(shorty[shorty_index] == 0)) {
++      argument_length_error = true;
++      break;
++    }
+     DataType::Type type = DataType::FromShorty(shorty[shorty_index++]);
+     bool is_wide = (type == DataType::Type::kInt64) || (type == DataType::Type::kFloat64);
+     if (is_wide && ((i + 1 == number_of_operands) ||
+                     (operands.GetOperand(i) + 1 != operands.GetOperand(i + 1)))) {
+-      // Longs and doubles should be in pairs, that is, sequential registers. The verifier should
+-      // reject any class where this is violated. However, the verifier only does these checks
+-      // on non trivially dead instructions, so we just bailout the compilation.
+-      VLOG(compiler) << "Did not compile "
+-                     << dex_file_->PrettyMethod(dex_compilation_unit_->GetDexMethodIndex())
+-                     << " because of non-sequential dex register pair in wide argument";
+-      MaybeRecordStat(compilation_stats_,
+-                      MethodCompilationStat::kNotCompiledMalformedOpcode);
++      if (invoke->IsInvoke()) {
++        // Longs and doubles should be in pairs, that is, sequential registers. The verifier should
++        // reject any class where this is violated. However, the verifier only does these checks
++        // on non trivially dead instructions, so we just bailout the compilation.
++        VLOG(compiler) << "Did not compile "
++                       << dex_file_->PrettyMethod(dex_compilation_unit_->GetDexMethodIndex())
++                       << " because of non-sequential dex register pair in wide argument";
++        MaybeRecordStat(compilation_stats_,
++                        MethodCompilationStat::kNotCompiledMalformedOpcode);
++      }
+       return false;
+     }
+     HInstruction* arg = LoadLocal(operands.GetOperand(i), type);
+-    invoke->SetArgumentAt(*argument_index, arg);
++    DCHECK(invoke->InputAt(argument_index) == nullptr);
++    invoke->SetRawInputAt(argument_index, arg);
+     if (is_wide) {
+-      i++;
++      ++i;
+     }
+   }
+ 
+-  if (*argument_index != invoke->GetNumberOfArguments()) {
+-    VLOG(compiler) << "Did not compile "
+-                   << dex_file_->PrettyMethod(dex_compilation_unit_->GetDexMethodIndex())
+-                   << " because of wrong number of arguments in invoke instruction";
+-    MaybeRecordStat(compilation_stats_,
+-                    MethodCompilationStat::kNotCompiledMalformedOpcode);
++  argument_length_error = argument_length_error || shorty[shorty_index] != 0;
++  if (argument_length_error) {
++    if (invoke->IsInvoke()) {
++      VLOG(compiler) << "Did not compile "
++                     << dex_file_->PrettyMethod(dex_compilation_unit_->GetDexMethodIndex())
++                     << " because of wrong number of arguments in invoke instruction";
++      MaybeRecordStat(compilation_stats_,
++                      MethodCompilationStat::kNotCompiledMalformedOpcode);
++    }
+     return false;
+   }
+ 
+   if (invoke->IsInvokeStaticOrDirect() &&
+       HInvokeStaticOrDirect::NeedsCurrentMethodInput(
+           invoke->AsInvokeStaticOrDirect()->GetMethodLoadKind())) {
+-    invoke->SetArgumentAt(*argument_index, graph_->GetCurrentMethod());
+-    (*argument_index)++;
++    DCHECK_EQ(argument_index, invoke->AsInvokeStaticOrDirect()->GetSpecialInputIndex());
++    DCHECK(invoke->InputAt(argument_index) == nullptr);
++    invoke->SetRawInputAt(argument_index, graph_->GetCurrentMethod());
+   }
+ 
+   return true;
+@@ -1479,37 +1534,201 @@ bool HInstructionBuilder::SetupInvokeArguments(HInvoke* invoke,
+ bool HInstructionBuilder::HandleInvoke(HInvoke* invoke,
+                                        const InstructionOperands& operands,
+                                        const char* shorty,
+-                                       bool is_unresolved,
+-                                       HClinitCheck* clinit_check) {
++                                       bool is_unresolved) {
+   DCHECK(!invoke->IsInvokeStaticOrDirect() || !invoke->AsInvokeStaticOrDirect()->IsStringInit());
+ 
+-  size_t start_index = 0;
+-  size_t argument_index = 0;
+-  if (invoke->GetInvokeType() != InvokeType::kStatic) {  // Instance call.
+-    uint32_t obj_reg = operands.GetOperand(0);
+-    HInstruction* arg = is_unresolved
+-        ? LoadLocal(obj_reg, DataType::Type::kReference)
+-        : LoadNullCheckedLocal(obj_reg, invoke->GetDexPc());
+-    invoke->SetArgumentAt(0, arg);
+-    start_index = 1;
+-    argument_index = 1;
++  ReceiverArg receiver_arg = (invoke->GetInvokeType() == InvokeType::kStatic)
++      ? ReceiverArg::kNone
++      : (is_unresolved ? ReceiverArg::kPlainArg : ReceiverArg::kNullCheckedArg);
++  if (!SetupInvokeArguments(invoke, operands, shorty, receiver_arg)) {
++    return false;
+   }
+ 
+-  if (!SetupInvokeArguments(invoke, operands, shorty, start_index, &argument_index)) {
++  AppendInstruction(invoke);
++  latest_result_ = invoke;
++
++  return true;
++}
++
++bool HInstructionBuilder::BuildSimpleIntrinsic(ArtMethod* method,
++                                               uint32_t dex_pc,
++                                               const InstructionOperands& operands,
++                                               const char* shorty) {
++  Intrinsics intrinsic = static_cast<Intrinsics>(method->GetIntrinsic());
++  DCHECK_NE(intrinsic, Intrinsics::kNone);
++  constexpr DataType::Type kInt32 = DataType::Type::kInt32;
++  constexpr DataType::Type kInt64 = DataType::Type::kInt64;
++  constexpr DataType::Type kFloat32 = DataType::Type::kFloat32;
++  constexpr DataType::Type kFloat64 = DataType::Type::kFloat64;
++  ReceiverArg receiver_arg = method->IsStatic() ? ReceiverArg::kNone : ReceiverArg::kNullCheckedArg;
++  HInstruction* instruction = nullptr;
++  switch (intrinsic) {
++    case Intrinsics::kIntegerRotateRight:
++    case Intrinsics::kIntegerRotateLeft:
++      // For rotate left, we negate the distance below.
++      instruction = new (allocator_) HRor(kInt32, /*value=*/ nullptr, /*distance=*/ nullptr);
++      break;
++    case Intrinsics::kLongRotateRight:
++    case Intrinsics::kLongRotateLeft:
++      // For rotate left, we negate the distance below.
++      instruction = new (allocator_) HRor(kInt64, /*value=*/ nullptr, /*distance=*/ nullptr);
++      break;
++    case Intrinsics::kIntegerCompare:
++      instruction = new (allocator_) HCompare(
++          kInt32, /*first=*/ nullptr, /*second=*/ nullptr, ComparisonBias::kNoBias, dex_pc);
++      break;
++    case Intrinsics::kLongCompare:
++      instruction = new (allocator_) HCompare(
++          kInt64, /*first=*/ nullptr, /*second=*/ nullptr, ComparisonBias::kNoBias, dex_pc);
++      break;
++    case Intrinsics::kIntegerSignum:
++      instruction = new (allocator_) HCompare(
++          kInt32, /*first=*/ nullptr, graph_->GetIntConstant(0), ComparisonBias::kNoBias, dex_pc);
++      break;
++    case Intrinsics::kLongSignum:
++      instruction = new (allocator_) HCompare(
++          kInt64, /*first=*/ nullptr, graph_->GetLongConstant(0), ComparisonBias::kNoBias, dex_pc);
++      break;
++    case Intrinsics::kFloatIsNaN:
++    case Intrinsics::kDoubleIsNaN: {
++      // IsNaN(x) is the same as x != x.
++      instruction = new (allocator_) HNotEqual(/*first=*/ nullptr, /*second=*/ nullptr, dex_pc);
++      instruction->AsCondition()->SetBias(ComparisonBias::kLtBias);
++      break;
++    }
++    case Intrinsics::kStringCharAt:
++      // We treat String as an array to allow DCE and BCE to seamlessly work on strings.
++      instruction = new (allocator_) HArrayGet(/*array=*/ nullptr,
++                                               /*index=*/ nullptr,
++                                               DataType::Type::kUint16,
++                                               SideEffects::None(),  // Strings are immutable.
++                                               dex_pc,
++                                               /*is_string_char_at=*/ true);
++      break;
++    case Intrinsics::kStringIsEmpty:
++    case Intrinsics::kStringLength:
++      // We treat String as an array to allow DCE and BCE to seamlessly work on strings.
++      // For String.isEmpty(), we add a comparison with 0 below.
++      instruction =
++          new (allocator_) HArrayLength(/*array=*/ nullptr, dex_pc, /* is_string_length= */ true);
++      break;
++    case Intrinsics::kUnsafeLoadFence:
++      receiver_arg = ReceiverArg::kNullCheckedOnly;
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kLoadAny, dex_pc);
++      break;
++    case Intrinsics::kUnsafeStoreFence:
++      receiver_arg = ReceiverArg::kNullCheckedOnly;
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kAnyStore, dex_pc);
++      break;
++    case Intrinsics::kUnsafeFullFence:
++      receiver_arg = ReceiverArg::kNullCheckedOnly;
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kAnyAny, dex_pc);
++      break;
++    case Intrinsics::kVarHandleFullFence:
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kAnyAny, dex_pc);
++      break;
++    case Intrinsics::kVarHandleAcquireFence:
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kLoadAny, dex_pc);
++      break;
++    case Intrinsics::kVarHandleReleaseFence:
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kAnyStore, dex_pc);
++      break;
++    case Intrinsics::kVarHandleLoadLoadFence:
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kLoadAny, dex_pc);
++      break;
++    case Intrinsics::kVarHandleStoreStoreFence:
++      instruction = new (allocator_) HMemoryBarrier(MemBarrierKind::kStoreStore, dex_pc);
++      break;
++    case Intrinsics::kMathMinIntInt:
++      instruction = new (allocator_) HMin(kInt32, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathMinLongLong:
++      instruction = new (allocator_) HMin(kInt64, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathMinFloatFloat:
++      instruction = new (allocator_) HMin(kFloat32, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathMinDoubleDouble:
++      instruction = new (allocator_) HMin(kFloat64, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathMaxIntInt:
++      instruction = new (allocator_) HMax(kInt32, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathMaxLongLong:
++      instruction = new (allocator_) HMax(kInt64, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathMaxFloatFloat:
++      instruction = new (allocator_) HMax(kFloat32, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathMaxDoubleDouble:
++      instruction = new (allocator_) HMax(kFloat64, /*left=*/ nullptr, /*right=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathAbsInt:
++      instruction = new (allocator_) HAbs(kInt32, /*input=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathAbsLong:
++      instruction = new (allocator_) HAbs(kInt64, /*input=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathAbsFloat:
++      instruction = new (allocator_) HAbs(kFloat32, /*input=*/ nullptr, dex_pc);
++      break;
++    case Intrinsics::kMathAbsDouble:
++      instruction = new (allocator_) HAbs(kFloat64, /*input=*/ nullptr, dex_pc);
++      break;
++    default:
++      // We do not have intermediate representation for other intrinsics.
++      return false;
++  }
++  DCHECK(instruction != nullptr);
++  if (!SetupInvokeArguments(instruction, operands, shorty, receiver_arg)) {
+     return false;
+   }
+ 
+-  if (clinit_check != nullptr) {
+-    // Add the class initialization check as last input of `invoke`.
+-    DCHECK(invoke->IsInvokeStaticOrDirect());
+-    DCHECK(invoke->AsInvokeStaticOrDirect()->GetClinitCheckRequirement()
+-        == HInvokeStaticOrDirect::ClinitCheckRequirement::kExplicit);
+-    invoke->SetArgumentAt(argument_index, clinit_check);
+-    argument_index++;
++  switch (intrinsic) {
++    case Intrinsics::kIntegerRotateLeft:
++    case Intrinsics::kLongRotateLeft: {
++      // Negate the distance value for rotate left.
++      DCHECK(instruction->IsRor());
++      HNeg* neg = new (allocator_) HNeg(kInt32, instruction->InputAt(1u));
++      AppendInstruction(neg);
++      instruction->SetRawInputAt(1u, neg);
++      break;
++    }
++    case Intrinsics::kFloatIsNaN:
++    case Intrinsics::kDoubleIsNaN:
++      // Set the second input to be the same as first.
++      DCHECK(instruction->IsNotEqual());
++      DCHECK(instruction->InputAt(1u) == nullptr);
++      instruction->SetRawInputAt(1u, instruction->InputAt(0u));
++      break;
++    case Intrinsics::kStringCharAt: {
++      // Add bounds check.
++      HInstruction* array = instruction->InputAt(0u);
++      HInstruction* index = instruction->InputAt(1u);
++      HInstruction* length =
++          new (allocator_) HArrayLength(array, dex_pc, /*is_string_length=*/ true);
++      AppendInstruction(length);
++      HBoundsCheck* bounds_check =
++          new (allocator_) HBoundsCheck(index, length, dex_pc, /*is_string_char_at=*/ true);
++      AppendInstruction(bounds_check);
++      graph_->SetHasBoundsChecks(true);
++      instruction->SetRawInputAt(1u, bounds_check);
++      break;
++    }
++    case Intrinsics::kStringIsEmpty: {
++      // Compare the length with 0.
++      DCHECK(instruction->IsArrayLength());
++      AppendInstruction(instruction);
++      HEqual* equal = new (allocator_) HEqual(instruction, graph_->GetIntConstant(0), dex_pc);
++      instruction = equal;
++      break;
++    }
++    default:
++      break;
+   }
+ 
+-  AppendInstruction(invoke);
+-  latest_result_ = invoke;
++  AppendInstruction(instruction);
++  latest_result_ = instruction;
+ 
+   return true;
+ }
+@@ -1520,9 +1739,7 @@ bool HInstructionBuilder::HandleStringInit(HInvoke* invoke,
+   DCHECK(invoke->IsInvokeStaticOrDirect());
+   DCHECK(invoke->AsInvokeStaticOrDirect()->IsStringInit());
+ 
+-  size_t start_index = 1;
+-  size_t argument_index = 0;
+-  if (!SetupInvokeArguments(invoke, operands, shorty, start_index, &argument_index)) {
++  if (!SetupInvokeArguments(invoke, operands, shorty, ReceiverArg::kIgnored)) {
+     return false;
+   }
+ 
+diff --git a/compiler/optimizing/instruction_builder.h b/compiler/optimizing/instruction_builder.h
+index c0211342ff..95d331558f 100644
+--- a/compiler/optimizing/instruction_builder.h
++++ b/compiler/optimizing/instruction_builder.h
+@@ -243,17 +243,22 @@ class HInstructionBuilder : public ValueObject {
+                                      uint32_t dex_pc,
+                                      HInvoke* invoke);
+ 
+-  bool SetupInvokeArguments(HInvoke* invoke,
++  enum class ReceiverArg {
++    kNone,             // No receiver, static method.
++    kNullCheckedArg,   // Normal instance invoke, null check and pass the argument.
++    kNullCheckedOnly,  // Null check but do not use the arg, used for intrinsic replacements.
++    kPlainArg,         // Do not null check but pass the argument, used for unresolved methods.
++    kIgnored,          // No receiver despite allocated vreg, used for String.<init>.
++  };
++  bool SetupInvokeArguments(HInstruction* invoke,
+                             const InstructionOperands& operands,
+                             const char* shorty,
+-                            size_t start_index,
+-                            size_t* argument_index);
++                            ReceiverArg receiver_arg);
+ 
+   bool HandleInvoke(HInvoke* invoke,
+                     const InstructionOperands& operands,
+                     const char* shorty,
+-                    bool is_unresolved,
+-                    HClinitCheck* clinit_check = nullptr);
++                    bool is_unresolved);
+ 
+   bool HandleStringInit(HInvoke* invoke,
+                         const InstructionOperands& operands,
+@@ -265,6 +270,14 @@ class HInstructionBuilder : public ValueObject {
+       ArtMethod* method,
+       HInvokeStaticOrDirect::ClinitCheckRequirement* clinit_check_requirement);
+ 
++  // Try to build a replacement for an intrinsic invoke. Returns true on success,
++  // false on failure. Failure can be either lack of replacement HIR classes, or
++  // input register mismatch.
++  bool BuildSimpleIntrinsic(ArtMethod* method,
++                            uint32_t dex_pc,
++                            const InstructionOperands& operands,
++                            const char* shorty);
++
+   // Build a HNewInstance instruction.
+   HNewInstance* BuildNewInstance(dex::TypeIndex type_index, uint32_t dex_pc);
+ 
+diff --git a/compiler/optimizing/instruction_simplifier.cc b/compiler/optimizing/instruction_simplifier.cc
+index cec4d7123d..907870562b 100644
+--- a/compiler/optimizing/instruction_simplifier.cc
++++ b/compiler/optimizing/instruction_simplifier.cc
+@@ -112,22 +112,15 @@ class InstructionSimplifierVisitor : public HGraphDelegateVisitor {
+ 
+   bool CanEnsureNotNullAt(HInstruction* instr, HInstruction* at) const;
+ 
+-  void SimplifyRotate(HInvoke* invoke, bool is_left, DataType::Type type);
+   void SimplifySystemArrayCopy(HInvoke* invoke);
+   void SimplifyStringEquals(HInvoke* invoke);
+-  void SimplifyCompare(HInvoke* invoke, bool is_signum, DataType::Type type);
+-  void SimplifyIsNaN(HInvoke* invoke);
+   void SimplifyFP2Int(HInvoke* invoke);
+   void SimplifyStringCharAt(HInvoke* invoke);
+-  void SimplifyStringIsEmptyOrLength(HInvoke* invoke);
++  void SimplifyStringLength(HInvoke* invoke);
+   void SimplifyStringIndexOf(HInvoke* invoke);
+   void SimplifyNPEOnArgN(HInvoke* invoke, size_t);
+   void SimplifyReturnThis(HInvoke* invoke);
+   void SimplifyAllocationIntrinsic(HInvoke* invoke);
+-  void SimplifyMemBarrier(HInvoke* invoke, MemBarrierKind barrier_kind);
+-  void SimplifyMin(HInvoke* invoke, DataType::Type type);
+-  void SimplifyMax(HInvoke* invoke, DataType::Type type);
+-  void SimplifyAbs(HInvoke* invoke, DataType::Type type);
+ 
+   CodeGenerator* codegen_;
+   OptimizingCompilerStats* stats_;
+@@ -2205,34 +2198,6 @@ void InstructionSimplifierVisitor::SimplifyStringEquals(HInvoke* instruction) {
+   }
+ }
+ 
+-void InstructionSimplifierVisitor::SimplifyRotate(HInvoke* invoke,
+-                                                  bool is_left,
+-                                                  DataType::Type type) {
+-  DCHECK(invoke->IsInvokeStaticOrDirect());
+-  DCHECK_EQ(invoke->GetInvokeType(), InvokeType::kStatic);
+-  HInstruction* value = invoke->InputAt(0);
+-  HInstruction* distance = invoke->InputAt(1);
+-  // Replace the invoke with an HRor.
+-  if (is_left) {
+-    // Unconditionally set the type of the negated distance to `int`,
+-    // as shift and rotate operations expect a 32-bit (or narrower)
+-    // value for their distance input.
+-    distance = new (GetGraph()->GetAllocator()) HNeg(DataType::Type::kInt32, distance);
+-    invoke->GetBlock()->InsertInstructionBefore(distance, invoke);
+-  }
+-  HRor* ror = new (GetGraph()->GetAllocator()) HRor(type, value, distance);
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, ror);
+-  // Remove ClinitCheck and LoadClass, if possible.
+-  HInstruction* clinit = invoke->GetInputs().back();
+-  if (clinit->IsClinitCheck() && !clinit->HasUses()) {
+-    clinit->GetBlock()->RemoveInstruction(clinit);
+-    HInstruction* ldclass = clinit->InputAt(0);
+-    if (ldclass->IsLoadClass() && !ldclass->HasUses()) {
+-      ldclass->GetBlock()->RemoveInstruction(ldclass);
+-    }
+-  }
+-}
+-
+ static bool IsArrayLengthOf(HInstruction* potential_length, HInstruction* potential_array) {
+   if (potential_length->IsArrayLength()) {
+     return potential_length->InputAt(0) == potential_array;
+@@ -2350,35 +2315,6 @@ void InstructionSimplifierVisitor::SimplifySystemArrayCopy(HInvoke* instruction)
+   }
+ }
+ 
+-void InstructionSimplifierVisitor::SimplifyCompare(HInvoke* invoke,
+-                                                   bool is_signum,
+-                                                   DataType::Type type) {
+-  DCHECK(invoke->IsInvokeStaticOrDirect());
+-  uint32_t dex_pc = invoke->GetDexPc();
+-  HInstruction* left = invoke->InputAt(0);
+-  HInstruction* right;
+-  if (!is_signum) {
+-    right = invoke->InputAt(1);
+-  } else if (type == DataType::Type::kInt64) {
+-    right = GetGraph()->GetLongConstant(0);
+-  } else {
+-    right = GetGraph()->GetIntConstant(0);
+-  }
+-  HCompare* compare = new (GetGraph()->GetAllocator())
+-      HCompare(type, left, right, ComparisonBias::kNoBias, dex_pc);
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, compare);
+-}
+-
+-void InstructionSimplifierVisitor::SimplifyIsNaN(HInvoke* invoke) {
+-  DCHECK(invoke->IsInvokeStaticOrDirect());
+-  uint32_t dex_pc = invoke->GetDexPc();
+-  // IsNaN(x) is the same as x != x.
+-  HInstruction* x = invoke->InputAt(0);
+-  HCondition* condition = new (GetGraph()->GetAllocator()) HNotEqual(x, x, dex_pc);
+-  condition->SetBias(ComparisonBias::kLtBias);
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, condition);
+-}
+-
+ void InstructionSimplifierVisitor::SimplifyFP2Int(HInvoke* invoke) {
+   DCHECK(invoke->IsInvokeStaticOrDirect());
+   uint32_t dex_pc = invoke->GetDexPc();
+@@ -2433,25 +2369,14 @@ void InstructionSimplifierVisitor::SimplifyStringCharAt(HInvoke* invoke) {
+   GetGraph()->SetHasBoundsChecks(true);
+ }
+ 
+-void InstructionSimplifierVisitor::SimplifyStringIsEmptyOrLength(HInvoke* invoke) {
++void InstructionSimplifierVisitor::SimplifyStringLength(HInvoke* invoke) {
+   HInstruction* str = invoke->InputAt(0);
+   uint32_t dex_pc = invoke->GetDexPc();
+   // We treat String as an array to allow DCE and BCE to seamlessly work on strings,
+   // so create the HArrayLength.
+   HArrayLength* length =
+       new (GetGraph()->GetAllocator()) HArrayLength(str, dex_pc, /* is_string_length= */ true);
+-  HInstruction* replacement;
+-  if (invoke->GetIntrinsic() == Intrinsics::kStringIsEmpty) {
+-    // For String.isEmpty(), create the `HEqual` representing the `length == 0`.
+-    invoke->GetBlock()->InsertInstructionBefore(length, invoke);
+-    HIntConstant* zero = GetGraph()->GetIntConstant(0);
+-    HEqual* equal = new (GetGraph()->GetAllocator()) HEqual(length, zero, dex_pc);
+-    replacement = equal;
+-  } else {
+-    DCHECK_EQ(invoke->GetIntrinsic(), Intrinsics::kStringLength);
+-    replacement = length;
+-  }
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, replacement);
++  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, length);
+ }
+ 
+ void InstructionSimplifierVisitor::SimplifyStringIndexOf(HInvoke* invoke) {
+@@ -2741,35 +2666,6 @@ void InstructionSimplifierVisitor::SimplifyAllocationIntrinsic(HInvoke* invoke)
+   }
+ }
+ 
+-void InstructionSimplifierVisitor::SimplifyMemBarrier(HInvoke* invoke,
+-                                                      MemBarrierKind barrier_kind) {
+-  uint32_t dex_pc = invoke->GetDexPc();
+-  HMemoryBarrier* mem_barrier =
+-      new (GetGraph()->GetAllocator()) HMemoryBarrier(barrier_kind, dex_pc);
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, mem_barrier);
+-}
+-
+-void InstructionSimplifierVisitor::SimplifyMin(HInvoke* invoke, DataType::Type type) {
+-  DCHECK(invoke->IsInvokeStaticOrDirect());
+-  HMin* min = new (GetGraph()->GetAllocator())
+-      HMin(type, invoke->InputAt(0), invoke->InputAt(1), invoke->GetDexPc());
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, min);
+-}
+-
+-void InstructionSimplifierVisitor::SimplifyMax(HInvoke* invoke, DataType::Type type) {
+-  DCHECK(invoke->IsInvokeStaticOrDirect());
+-  HMax* max = new (GetGraph()->GetAllocator())
+-      HMax(type, invoke->InputAt(0), invoke->InputAt(1), invoke->GetDexPc());
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, max);
+-}
+-
+-void InstructionSimplifierVisitor::SimplifyAbs(HInvoke* invoke, DataType::Type type) {
+-  DCHECK(invoke->IsInvokeStaticOrDirect());
+-  HAbs* abs = new (GetGraph()->GetAllocator())
+-      HAbs(type, invoke->InputAt(0), invoke->GetDexPc());
+-  invoke->GetBlock()->ReplaceAndRemoveInstructionWith(invoke, abs);
+-}
+-
+ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
+   switch (instruction->GetIntrinsic()) {
+     case Intrinsics::kStringEquals:
+@@ -2778,44 +2674,19 @@ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
+     case Intrinsics::kSystemArrayCopy:
+       SimplifySystemArrayCopy(instruction);
+       break;
+-    case Intrinsics::kIntegerRotateRight:
+-      SimplifyRotate(instruction, /* is_left= */ false, DataType::Type::kInt32);
+-      break;
+-    case Intrinsics::kLongRotateRight:
+-      SimplifyRotate(instruction, /* is_left= */ false, DataType::Type::kInt64);
+-      break;
+-    case Intrinsics::kIntegerRotateLeft:
+-      SimplifyRotate(instruction, /* is_left= */ true, DataType::Type::kInt32);
+-      break;
+-    case Intrinsics::kLongRotateLeft:
+-      SimplifyRotate(instruction, /* is_left= */ true, DataType::Type::kInt64);
+-      break;
+-    case Intrinsics::kIntegerCompare:
+-      SimplifyCompare(instruction, /* is_signum= */ false, DataType::Type::kInt32);
+-      break;
+-    case Intrinsics::kLongCompare:
+-      SimplifyCompare(instruction, /* is_signum= */ false, DataType::Type::kInt64);
+-      break;
+-    case Intrinsics::kIntegerSignum:
+-      SimplifyCompare(instruction, /* is_signum= */ true, DataType::Type::kInt32);
+-      break;
+-    case Intrinsics::kLongSignum:
+-      SimplifyCompare(instruction, /* is_signum= */ true, DataType::Type::kInt64);
+-      break;
+-    case Intrinsics::kFloatIsNaN:
+-    case Intrinsics::kDoubleIsNaN:
+-      SimplifyIsNaN(instruction);
+-      break;
+     case Intrinsics::kFloatFloatToIntBits:
+     case Intrinsics::kDoubleDoubleToLongBits:
+       SimplifyFP2Int(instruction);
+       break;
+     case Intrinsics::kStringCharAt:
++      // Instruction builder creates intermediate representation directly
++      // but the inliner can sharpen CharSequence.charAt() to String.charAt().
+       SimplifyStringCharAt(instruction);
+       break;
+-    case Intrinsics::kStringIsEmpty:
+     case Intrinsics::kStringLength:
+-      SimplifyStringIsEmptyOrLength(instruction);
++      // Instruction builder creates intermediate representation directly
++      // but the inliner can sharpen CharSequence.length() to String.length().
++      SimplifyStringLength(instruction);
+       break;
+     case Intrinsics::kStringIndexOf:
+     case Intrinsics::kStringIndexOfAfter:
+@@ -2842,66 +2713,40 @@ void InstructionSimplifierVisitor::VisitInvoke(HInvoke* instruction) {
+     case Intrinsics::kStringBuilderToString:
+       SimplifyAllocationIntrinsic(instruction);
+       break;
++    case Intrinsics::kIntegerRotateRight:
++    case Intrinsics::kLongRotateRight:
++    case Intrinsics::kIntegerRotateLeft:
++    case Intrinsics::kLongRotateLeft:
++    case Intrinsics::kIntegerCompare:
++    case Intrinsics::kLongCompare:
++    case Intrinsics::kIntegerSignum:
++    case Intrinsics::kLongSignum:
++    case Intrinsics::kFloatIsNaN:
++    case Intrinsics::kDoubleIsNaN:
++    case Intrinsics::kStringIsEmpty:
+     case Intrinsics::kUnsafeLoadFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kLoadAny);
+-      break;
+     case Intrinsics::kUnsafeStoreFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kAnyStore);
+-      break;
+     case Intrinsics::kUnsafeFullFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kAnyAny);
+-      break;
+     case Intrinsics::kVarHandleFullFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kAnyAny);
+-      break;
+     case Intrinsics::kVarHandleAcquireFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kLoadAny);
+-      break;
+     case Intrinsics::kVarHandleReleaseFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kAnyStore);
+-      break;
+     case Intrinsics::kVarHandleLoadLoadFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kLoadAny);
+-      break;
+     case Intrinsics::kVarHandleStoreStoreFence:
+-      SimplifyMemBarrier(instruction, MemBarrierKind::kStoreStore);
+-      break;
+     case Intrinsics::kMathMinIntInt:
+-      SimplifyMin(instruction, DataType::Type::kInt32);
+-      break;
+     case Intrinsics::kMathMinLongLong:
+-      SimplifyMin(instruction, DataType::Type::kInt64);
+-      break;
+     case Intrinsics::kMathMinFloatFloat:
+-      SimplifyMin(instruction, DataType::Type::kFloat32);
+-      break;
+     case Intrinsics::kMathMinDoubleDouble:
+-      SimplifyMin(instruction, DataType::Type::kFloat64);
+-      break;
+     case Intrinsics::kMathMaxIntInt:
+-      SimplifyMax(instruction, DataType::Type::kInt32);
+-      break;
+     case Intrinsics::kMathMaxLongLong:
+-      SimplifyMax(instruction, DataType::Type::kInt64);
+-      break;
+     case Intrinsics::kMathMaxFloatFloat:
+-      SimplifyMax(instruction, DataType::Type::kFloat32);
+-      break;
+     case Intrinsics::kMathMaxDoubleDouble:
+-      SimplifyMax(instruction, DataType::Type::kFloat64);
+-      break;
+     case Intrinsics::kMathAbsInt:
+-      SimplifyAbs(instruction, DataType::Type::kInt32);
+-      break;
+     case Intrinsics::kMathAbsLong:
+-      SimplifyAbs(instruction, DataType::Type::kInt64);
+-      break;
+     case Intrinsics::kMathAbsFloat:
+-      SimplifyAbs(instruction, DataType::Type::kFloat32);
+-      break;
+     case Intrinsics::kMathAbsDouble:
+-      SimplifyAbs(instruction, DataType::Type::kFloat64);
+-      break;
++      // These are replaced by intermediate representation in the instruction builder.
++      LOG(FATAL) << "Unexpected " << static_cast<Intrinsics>(instruction->GetIntrinsic());
++      UNREACHABLE();
+     default:
+       break;
+   }
+diff --git a/compiler/optimizing/nodes.h b/compiler/optimizing/nodes.h
+index fe14908814..fbae1d106c 100644
+--- a/compiler/optimizing/nodes.h
++++ b/compiler/optimizing/nodes.h
+@@ -4155,8 +4155,6 @@ class HCompare final : public HBinaryOperation {
+                          SideEffectsForArchRuntimeCalls(comparison_type),
+                          dex_pc) {
+     SetPackedField<ComparisonBiasField>(bias);
+-    DCHECK_EQ(comparison_type, DataType::Kind(first->GetType()));
+-    DCHECK_EQ(comparison_type, DataType::Kind(second->GetType()));
+   }
+ 
+   template <typename T>
+@@ -5548,8 +5546,6 @@ class HRor final : public HBinaryOperation {
+  public:
+   HRor(DataType::Type result_type, HInstruction* value, HInstruction* distance)
+       : HBinaryOperation(kRor, result_type, value, distance) {
+-    DCHECK_EQ(result_type, DataType::Kind(value->GetType()));
+-    DCHECK_EQ(DataType::Type::kInt32, DataType::Kind(distance->GetType()));
+   }
+ 
+   template <typename T>
+diff --git a/test/004-checker-UnsafeTest18/src/Main.java b/test/004-checker-UnsafeTest18/src/Main.java
+index 927d0da975..26e76ea254 100644
+--- a/test/004-checker-UnsafeTest18/src/Main.java
++++ b/test/004-checker-UnsafeTest18/src/Main.java
+@@ -91,36 +91,27 @@ public class Main {
+   //
+ 
+   /// CHECK-START: void Main.load() builder (after)
+-  /// CHECK-DAG: InvokeVirtual intrinsic:UnsafeLoadFence
++  /// CHECK-NOT: InvokeVirtual
+   //
+-  /// CHECK-START: void Main.load() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeVirtual intrinsic:UnsafeLoadFence
+-  //
+-  /// CHECK-START: void Main.load() instruction_simplifier (after)
++  /// CHECK-START: void Main.load() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:LoadAny
+   private static void load() {
+     unsafe.loadFence();
+   }
+ 
+   /// CHECK-START: void Main.store() builder (after)
+-  /// CHECK-DAG: InvokeVirtual intrinsic:UnsafeStoreFence
+-  //
+-  /// CHECK-START: void Main.store() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeVirtual intrinsic:UnsafeStoreFence
++  /// CHECK-NOT: InvokeVirtual
+   //
+-  /// CHECK-START: void Main.store() instruction_simplifier (after)
++  /// CHECK-START: void Main.store() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:AnyStore
+   private static void store() {
+     unsafe.storeFence();
+   }
+ 
+   /// CHECK-START: void Main.full() builder (after)
+-  /// CHECK-DAG: InvokeVirtual intrinsic:UnsafeFullFence
+-  //
+-  /// CHECK-START: void Main.full() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeVirtual intrinsic:UnsafeFullFence
++  /// CHECK-NOT: InvokeVirtual
+   //
+-  /// CHECK-START: void Main.full() instruction_simplifier (after)
++  /// CHECK-START: void Main.full() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:AnyAny
+   private static void full() {
+     unsafe.fullFence();
+diff --git a/test/441-checker-inliner/src/Main.java b/test/441-checker-inliner/src/Main.java
+index 6c75962b75..1dfe5f607c 100644
+--- a/test/441-checker-inliner/src/Main.java
++++ b/test/441-checker-inliner/src/Main.java
+@@ -136,7 +136,7 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.returnAbs(int) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>>      InvokeStaticOrDirect intrinsic:MathAbsInt
++  /// CHECK-DAG:     <<Result:i\d+>>      Abs
+   /// CHECK-DAG:                          Return [<<Result>>]
+ 
+   private static int returnAbs(int i) {
+diff --git a/test/445-checker-licm/src/Main.java b/test/445-checker-licm/src/Main.java
+index 517aacd9f2..5f2c4eaef9 100644
+--- a/test/445-checker-licm/src/Main.java
++++ b/test/445-checker-licm/src/Main.java
+@@ -153,9 +153,6 @@ public class Main {
+     return result;
+   }
+ 
+-  /// CHECK-START: int Main.invariantBoundIntrinsic(int) instruction_simplifier (before)
+-  /// CHECK-DAG: InvokeStaticOrDirect loop:{{B\d+}}
+-  //
+   /// CHECK-START: int Main.invariantBoundIntrinsic(int) licm (before)
+   /// CHECK-DAG: Abs loop:{{B\d+}}
+ 
+@@ -175,9 +172,6 @@ public class Main {
+     return result;
+   }
+ 
+-  /// CHECK-START: int Main.invariantBodyIntrinsic(int, int) instruction_simplifier (before)
+-  /// CHECK-DAG: InvokeStaticOrDirect loop:{{B\d+}}
+-
+   /// CHECK-START: int Main.invariantBodyIntrinsic(int, int) licm (before)
+   /// CHECK-DAG: Max loop:{{B\d+}}
+ 
+diff --git a/test/536-checker-intrinsic-optimization/smali/SmaliTests.smali b/test/536-checker-intrinsic-optimization/smali/SmaliTests.smali
+index 87aca6f798..53b52f7e01 100644
+--- a/test/536-checker-intrinsic-optimization/smali/SmaliTests.smali
++++ b/test/536-checker-intrinsic-optimization/smali/SmaliTests.smali
+@@ -15,11 +15,7 @@
+ .class public LSmaliTests;
+ .super Ljava/lang/Object;
+ 
+-## CHECK-START: char SmaliTests.$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (before)
+-## CHECK-DAG:  <<Char:c\d+>>     InvokeVirtual intrinsic:StringCharAt
+-## CHECK-DAG:                    Return [<<Char>>]
+-
+-## CHECK-START: char SmaliTests.$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (after)
++## CHECK-START: char SmaliTests.$noinline$stringCharAtCatch(java.lang.String, int) builder (after)
+ ## CHECK-DAG:  <<String:l\d+>>   ParameterValue
+ ## CHECK-DAG:  <<Pos:i\d+>>      ParameterValue
+ ## CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
+@@ -54,13 +50,7 @@
+     return v1
+ .end method
+ 
+-##  CHECK-START: char SmaliTests.stringCharAtCatchPhiReturn(java.lang.String, int) instruction_simplifier (before)
+-##  CHECK-DAG:  <<Int:i\d+>>      IntConstant 0
+-##  CHECK-DAG:  <<Char:c\d+>>     InvokeVirtual intrinsic:StringCharAt
+-##  CHECK-DAG:  <<Phi:i\d+>>      Phi [<<Char>>,<<Int>>]
+-##  CHECK-DAG:                    Return [<<Phi>>]
+-
+-##  CHECK-START: char SmaliTests.stringCharAtCatchPhiReturn(java.lang.String, int) instruction_simplifier (after)
++##  CHECK-START: char SmaliTests.stringCharAtCatchPhiReturn(java.lang.String, int) builder (after)
+ ##  CHECK-DAG:  <<String:l\d+>>   ParameterValue
+ ##  CHECK-DAG:  <<Pos:i\d+>>      ParameterValue
+ ##  CHECK-DAG:  <<Int:i\d+>>      IntConstant 0
+diff --git a/test/536-checker-intrinsic-optimization/src/Main.java b/test/536-checker-intrinsic-optimization/src/Main.java
+index 980df7021d..711920eba0 100644
+--- a/test/536-checker-intrinsic-optimization/src/Main.java
++++ b/test/536-checker-intrinsic-optimization/src/Main.java
+@@ -152,28 +152,20 @@ public class Main {
+     }
+   }
+ 
+-  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) instruction_simplifier (before)
+-  /// CHECK-DAG:  <<Length:i\d+>>   InvokeVirtual intrinsic:StringLength
+-  /// CHECK-DAG:                    Return [<<Length>>]
+-
+-  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) instruction_simplifier (after)
++  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) builder (after)
+   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
+   /// CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
+   /// CHECK-DAG:  <<Length:i\d+>>   ArrayLength [<<NullCk>>] is_string_length:true
+   /// CHECK-DAG:                    Return [<<Length>>]
+ 
+-  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) instruction_simplifier (after)
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringLength
++  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) builder (after)
++  /// CHECK-NOT:                    InvokeVirtual
+ 
+   static public int $opt$noinline$getStringLength(String s) {
+     return s.length();
+   }
+ 
+-  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) instruction_simplifier (before)
+-  /// CHECK-DAG:  <<IsEmpty:z\d+>>  InvokeVirtual intrinsic:StringIsEmpty
+-  /// CHECK-DAG:                    Return [<<IsEmpty>>]
+-
+-  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) instruction_simplifier (after)
++  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) builder (after)
+   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
+   /// CHECK-DAG:  <<Const0:i\d+>>   IntConstant 0
+   /// CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
+@@ -181,18 +173,14 @@ public class Main {
+   /// CHECK-DAG:  <<IsEmpty:z\d+>>  Equal [<<Length>>,<<Const0>>]
+   /// CHECK-DAG:                    Return [<<IsEmpty>>]
+ 
+-  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) instruction_simplifier (after)
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringIsEmpty
++  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) builder (after)
++  /// CHECK-NOT:                    InvokeVirtual
+ 
+   static public boolean $opt$noinline$isStringEmpty(String s) {
+     return s.isEmpty();
+   }
+ 
+-  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (before)
+-  /// CHECK-DAG:  <<Char:c\d+>>     InvokeVirtual intrinsic:StringCharAt
+-  /// CHECK-DAG:                    Return [<<Char>>]
+-
+-  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (after)
++  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) builder (after)
+   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
+   /// CHECK-DAG:  <<Pos:i\d+>>      ParameterValue
+   /// CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
+@@ -201,23 +189,14 @@ public class Main {
+   /// CHECK-DAG:  <<Char:c\d+>>     ArrayGet [<<NullCk>>,<<Bounds>>] is_string_char_at:true
+   /// CHECK-DAG:                    Return [<<Char>>]
+ 
+-  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (after)
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
++  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) builder (after)
++  /// CHECK-NOT:                    InvokeVirtual
+ 
+   static public char $opt$noinline$stringCharAt(String s, int pos) {
+     return s.charAt(pos);
+   }
+ 
+-  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (before)
+-  /// CHECK-DAG:  <<Int:i\d+>>      IntConstant 0
+-  /// CHECK-DAG:  <<Char:c\d+>>     InvokeVirtual intrinsic:StringCharAt
+-
+-  //                                The return value can come from a Phi should the two returns be merged.
+-  //                                Please refer to the Smali code for a more detailed verification.
+-
+-  /// CHECK-DAG:                    Return [{{(c|i)\d+}}]
+-
+-  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (after)
++  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) builder (after)
+   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
+   /// CHECK-DAG:  <<Pos:i\d+>>      ParameterValue
+   /// CHECK-DAG:  <<Int:i\d+>>      IntConstant 0
+@@ -227,8 +206,8 @@ public class Main {
+   /// CHECK-DAG:  <<Char:c\d+>>     ArrayGet [<<NullCk>>,<<Bounds>>] is_string_char_at:true
+   /// CHECK-DAG:                    Return [{{(c|i)\d+}}]
+ 
+-  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (after)
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
++  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) builder (after)
++  /// CHECK-NOT:                    InvokeVirtual
+ 
+   static public char $opt$noinline$stringCharAtCatch(String s, int pos) {
+     try {
+@@ -238,19 +217,14 @@ public class Main {
+     }
+   }
+ 
+-  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (before)
+-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringLength
+-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
+-
+-  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (after)
++  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) builder (after)
+   /// CHECK-DAG:                    ArrayLength is_string_length:true
+   /// CHECK-DAG:                    ArrayLength is_string_length:true
+   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
+   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
+ 
+-  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (after)
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringLength
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
++  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) builder (after)
++  /// CHECK-NOT:                    InvokeVirtual
+ 
+   /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) GVN (after)
+   /// CHECK-DAG:                    ArrayLength is_string_length:true
+@@ -268,16 +242,13 @@ public class Main {
+     return sum;
+   }
+ 
+-  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) instruction_simplifier (before)
+-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
+-
+-  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) builder (after)
+   /// CHECK-DAG:                    ArrayLength is_string_length:true
+   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
+   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
+ 
+-  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) instruction_simplifier (after)
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
++  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) builder (after)
++  /// CHECK-NOT:                    InvokeVirtual
+ 
+   /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) BCE (after)
+   /// CHECK-DAG:                    Deoptimize env:[[{{[^\]]*}}]]
+@@ -293,13 +264,7 @@ public class Main {
+     return sum;
+   }
+ 
+-  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) instruction_simplifier (before)
+-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
+-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
+-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
+-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
+-
+-  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) instruction_simplifier (after)
++  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) builder (after)
+   /// CHECK-DAG:                    ArrayLength is_string_length:true
+   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
+   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
+@@ -313,8 +278,8 @@ public class Main {
+   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
+   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
+ 
+-  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) instruction_simplifier (after)
+-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
++  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) builder (after)
++  /// CHECK-NOT:                    InvokeVirtual
+ 
+   /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) BCE (after)
+   /// CHECK-DAG:                    Deoptimize env:[[{{[^\]]*}}]]
+diff --git a/test/557-checker-instruct-simplifier-ror/src/Main.java b/test/557-checker-instruct-simplifier-ror/src/Main.java
+index 3631353b39..1c52f07d8d 100644
+--- a/test/557-checker-instruct-simplifier-ror/src/Main.java
++++ b/test/557-checker-instruct-simplifier-ror/src/Main.java
+@@ -28,82 +28,62 @@ public class Main {
+     }
+   }
+ 
+-  /// CHECK-START: int Main.rotateIntegerRight(int, int) instruction_simplifier (before)
+-  /// CHECK:          <<ArgValue:i\d+>>     ParameterValue
+-  /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+-  /// CHECK:          <<Invoke:i\d+>>       InvokeStaticOrDirect intrinsic:IntegerRotateRight
+-
+-  /// CHECK-START: int Main.rotateIntegerRight(int, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateIntegerRight(int, int) builder (after)
+   /// CHECK:          <<ArgValue:i\d+>>     ParameterValue
+   /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+   /// CHECK:          <<Ror:i\d+>>          Ror [<<ArgValue>>,<<ArgDistance>>]
+   /// CHECK:                                Return [<<Ror>>]
+ 
+-  /// CHECK-START: int Main.rotateIntegerRight(int, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateIntegerRight(int, int) builder (after)
+   /// CHECK-NOT:      LoadClass
+   /// CHECK-NOT:      ClinitCheck
+   /// CHECK-NOT:      InvokeStaticOrDirect
+   public static int rotateIntegerRight(int value, int distance) {
+-    return java.lang.Integer.rotateRight(value, distance);
++    return Integer.rotateRight(value, distance);
+   }
+ 
+-  /// CHECK-START: int Main.rotateIntegerLeft(int, int) instruction_simplifier (before)
+-  /// CHECK:          <<ArgValue:i\d+>>     ParameterValue
+-  /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+-  /// CHECK:          <<Invoke:i\d+>>       InvokeStaticOrDirect intrinsic:IntegerRotateLeft
+-
+-  /// CHECK-START: int Main.rotateIntegerLeft(int, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateIntegerLeft(int, int) builder (after)
+   /// CHECK:          <<ArgValue:i\d+>>     ParameterValue
+   /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+   /// CHECK:          <<Neg:i\d+>>          Neg [<<ArgDistance>>]
+   /// CHECK:          <<Ror:i\d+>>          Ror [<<ArgValue>>,<<Neg>>]
+   /// CHECK:                                Return [<<Ror>>]
+ 
+-  /// CHECK-START: int Main.rotateIntegerLeft(int, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateIntegerLeft(int, int) builder (after)
+   /// CHECK-NOT:      LoadClass
+   /// CHECK-NOT:      ClinitCheck
+   /// CHECK-NOT:      InvokeStaticOrDirect
+   public static int rotateIntegerLeft(int value, int distance) {
+-    return java.lang.Integer.rotateLeft(value, distance);
++    return Integer.rotateLeft(value, distance);
+   }
+ 
+-  /// CHECK-START: long Main.rotateLongRight(long, int) instruction_simplifier (before)
+-  /// CHECK:          <<ArgValue:j\d+>>     ParameterValue
+-  /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+-  /// CHECK:          <<Invoke:j\d+>>       InvokeStaticOrDirect intrinsic:LongRotateRight
+-
+-  /// CHECK-START: long Main.rotateLongRight(long, int) instruction_simplifier (after)
++  /// CHECK-START: long Main.rotateLongRight(long, int) builder (after)
+   /// CHECK:          <<ArgValue:j\d+>>     ParameterValue
+   /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+   /// CHECK:          <<Ror:j\d+>>          Ror [<<ArgValue>>,<<ArgDistance>>]
+   /// CHECK:                                Return [<<Ror>>]
+ 
+-  /// CHECK-START: long Main.rotateLongRight(long, int) instruction_simplifier (after)
++  /// CHECK-START: long Main.rotateLongRight(long, int) builder (after)
+   /// CHECK-NOT:      LoadClass
+   /// CHECK-NOT:      ClinitCheck
+   /// CHECK-NOT:      InvokeStaticOrDirect
+   public static long rotateLongRight(long value, int distance) {
+-    return java.lang.Long.rotateRight(value, distance);
++    return Long.rotateRight(value, distance);
+   }
+ 
+-  /// CHECK-START: long Main.rotateLongLeft(long, int) instruction_simplifier (before)
+-  /// CHECK:          <<ArgValue:j\d+>>     ParameterValue
+-  /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+-  /// CHECK:          <<Invoke:j\d+>>       InvokeStaticOrDirect intrinsic:LongRotateLeft
+-
+-  /// CHECK-START: long Main.rotateLongLeft(long, int) instruction_simplifier (after)
++  /// CHECK-START: long Main.rotateLongLeft(long, int) builder (after)
+   /// CHECK:          <<ArgValue:j\d+>>     ParameterValue
+   /// CHECK:          <<ArgDistance:i\d+>>  ParameterValue
+   /// CHECK:          <<Neg:i\d+>>          Neg [<<ArgDistance>>]
+   /// CHECK:          <<Ror:j\d+>>          Ror [<<ArgValue>>,<<Neg>>]
+   /// CHECK:                                Return [<<Ror>>]
+ 
+-  /// CHECK-START: long Main.rotateLongLeft(long, int) instruction_simplifier (after)
++  /// CHECK-START: long Main.rotateLongLeft(long, int) builder (after)
+   /// CHECK-NOT:      LoadClass
+   /// CHECK-NOT:      ClinitCheck
+   /// CHECK-NOT:      InvokeStaticOrDirect
+   public static long rotateLongLeft(long value, int distance) {
+-    return java.lang.Long.rotateLeft(value, distance);
++    return Long.rotateLeft(value, distance);
+   }
+ 
+   //  (i >>> #distance) | (i << #(reg_bits - distance))
+diff --git a/test/565-checker-rotate/smali/Main2.smali b/test/565-checker-rotate/smali/Main2.smali
+index 768c9d0454..4b9e1cd71e 100644
+--- a/test/565-checker-rotate/smali/Main2.smali
++++ b/test/565-checker-rotate/smali/Main2.smali
+@@ -21,20 +21,11 @@
+ ## CHECK-DAG:     <<Zero:i\d+>>    IntConstant 0
+ ## CHECK-DAG:     <<One:i\d+>>     IntConstant 1
+ ## CHECK-DAG:     <<Val:i\d+>>     Phi [<<One>>,<<Zero>>]
+-## CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<Val>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateLeft
+-## CHECK-DAG:                      Return [<<Result>>]
+-
+-## CHECK-START: int Main2.rotateLeftBoolean(boolean, int) instruction_simplifier (after)
+-## CHECK:         <<ArgVal:z\d+>>  ParameterValue
+-## CHECK:         <<ArgDist:i\d+>> ParameterValue
+-## CHECK-DAG:     <<Zero:i\d+>>    IntConstant 0
+-## CHECK-DAG:     <<One:i\d+>>     IntConstant 1
+-## CHECK-DAG:     <<Val:i\d+>>     Phi [<<One>>,<<Zero>>]
+ ## CHECK-DAG:     <<NegDist:i\d+>> Neg [<<ArgDist>>]
+ ## CHECK-DAG:     <<Result:i\d+>>  Ror [<<Val>>,<<NegDist>>]
+ ## CHECK-DAG:                      Return [<<Result>>]
+ 
+-## CHECK-START: int Main2.rotateLeftBoolean(boolean, int) instruction_simplifier (after)
++## CHECK-START: int Main2.rotateLeftBoolean(boolean, int) builder (after)
+ ## CHECK-NOT:                      InvokeStaticOrDirect
+ 
+ ## CHECK-START: int Main2.rotateLeftBoolean(boolean, int) select_generator (after)
+@@ -96,19 +87,10 @@
+ ## CHECK-DAG:     <<Zero:i\d+>>    IntConstant 0
+ ## CHECK-DAG:     <<One:i\d+>>     IntConstant 1
+ ## CHECK-DAG:     <<Val:i\d+>>     Phi [<<One>>,<<Zero>>]
+-## CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<Val>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateRight
+-## CHECK-DAG:                      Return [<<Result>>]
+-
+-## CHECK-START: int Main2.rotateRightBoolean(boolean, int) instruction_simplifier (after)
+-## CHECK:         <<ArgVal:z\d+>>  ParameterValue
+-## CHECK:         <<ArgDist:i\d+>> ParameterValue
+-## CHECK-DAG:     <<Zero:i\d+>>    IntConstant 0
+-## CHECK-DAG:     <<One:i\d+>>     IntConstant 1
+-## CHECK-DAG:     <<Val:i\d+>>     Phi [<<One>>,<<Zero>>]
+ ## CHECK-DAG:     <<Result:i\d+>>  Ror [<<Val>>,<<ArgDist>>]
+ ## CHECK-DAG:                      Return [<<Result>>]
+ 
+-## CHECK-START: int Main2.rotateRightBoolean(boolean, int) instruction_simplifier (after)
++## CHECK-START: int Main2.rotateRightBoolean(boolean, int) builder (after)
+ ## CHECK-NOT:                      InvokeStaticOrDirect
+ 
+ ## CHECK-START: int Main2.rotateRightBoolean(boolean, int) select_generator (after)
+diff --git a/test/565-checker-rotate/src-art/Main.java b/test/565-checker-rotate/src-art/Main.java
+index 867feb8ea8..3dc770987b 100644
+--- a/test/565-checker-rotate/src-art/Main.java
++++ b/test/565-checker-rotate/src-art/Main.java
+@@ -23,17 +23,11 @@ public class Main {
+   /// CHECK-START: int Main.rotateLeftByte(byte, int) builder (after)
+   /// CHECK:         <<ArgVal:b\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateLeft
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateLeftByte(byte, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:b\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<NegDist:i\d+>> Neg [<<ArgDist>>]
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<NegDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateLeftByte(byte, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateLeftByte(byte, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateLeftByte(byte value, int distance) {
+@@ -43,17 +37,11 @@ public class Main {
+   /// CHECK-START: int Main.rotateLeftShort(short, int) builder (after)
+   /// CHECK:         <<ArgVal:s\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateLeft
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateLeftShort(short, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:s\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<NegDist:i\d+>> Neg [<<ArgDist>>]
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<NegDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateLeftShort(short, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateLeftShort(short, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateLeftShort(short value, int distance) {
+@@ -63,17 +51,11 @@ public class Main {
+   /// CHECK-START: int Main.rotateLeftChar(char, int) builder (after)
+   /// CHECK:         <<ArgVal:c\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateLeft
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateLeftChar(char, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:c\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<NegDist:i\d+>> Neg [<<ArgDist>>]
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<NegDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateLeftChar(char, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateLeftChar(char, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateLeftChar(char value, int distance) {
+@@ -83,17 +65,11 @@ public class Main {
+   /// CHECK-START: int Main.rotateLeftInt(int, int) builder (after)
+   /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateLeft
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateLeftInt(int, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<NegDist:i\d+>> Neg [<<ArgDist>>]
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<NegDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateLeftInt(int, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateLeftInt(int, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateLeftInt(int value, int distance) {
+@@ -103,17 +79,11 @@ public class Main {
+   /// CHECK-START: long Main.rotateLeftLong(long, int) builder (after)
+   /// CHECK:         <<ArgVal:j\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:j\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:LongRotateLeft
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: long Main.rotateLeftLong(long, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:j\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<NegDist:i\d+>> Neg [<<ArgDist>>]
+   /// CHECK-DAG:     <<Result:j\d+>>  Ror [<<ArgVal>>,<<NegDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: long Main.rotateLeftLong(long, int) instruction_simplifier (after)
++  /// CHECK-START: long Main.rotateLeftLong(long, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static long rotateLeftLong(long value, int distance) {
+@@ -123,16 +93,10 @@ public class Main {
+   /// CHECK-START: int Main.rotateRightByte(byte, int) builder (after)
+   /// CHECK:         <<ArgVal:b\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateRight
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateRightByte(byte, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:b\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<ArgDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateRightByte(byte, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateRightByte(byte, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateRightByte(byte value, int distance) {
+@@ -142,16 +106,10 @@ public class Main {
+   /// CHECK-START: int Main.rotateRightShort(short, int) builder (after)
+   /// CHECK:         <<ArgVal:s\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateRight
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateRightShort(short, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:s\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<ArgDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateRightShort(short, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateRightShort(short, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateRightShort(short value, int distance) {
+@@ -161,16 +119,10 @@ public class Main {
+   /// CHECK-START: int Main.rotateRightChar(char, int) builder (after)
+   /// CHECK:         <<ArgVal:c\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateRight
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateRightChar(char, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:c\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<ArgDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateRightChar(char, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateRightChar(char, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateRightChar(char value, int distance) {
+@@ -180,16 +132,10 @@ public class Main {
+   /// CHECK-START: int Main.rotateRightInt(int, int) builder (after)
+   /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateRight
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateRightInt(int, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<ArgDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateRightInt(int, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateRightInt(int, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateRightInt(int value, int distance) {
+@@ -199,16 +145,10 @@ public class Main {
+   /// CHECK-START: long Main.rotateRightLong(long, int) builder (after)
+   /// CHECK:         <<ArgVal:j\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:j\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:LongRotateRight
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: long Main.rotateRightLong(long, int) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:j\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:i\d+>> ParameterValue
+   /// CHECK-DAG:     <<Result:j\d+>>  Ror [<<ArgVal>>,<<ArgDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: long Main.rotateRightLong(long, int) instruction_simplifier (after)
++  /// CHECK-START: long Main.rotateRightLong(long, int) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static long rotateRightLong(long value, int distance) {
+@@ -219,17 +159,11 @@ public class Main {
+   /// CHECK-START: int Main.rotateLeftIntWithByteDistance(int, byte) builder (after)
+   /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:b\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateLeft
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateLeftIntWithByteDistance(int, byte) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:b\d+>> ParameterValue
+   /// CHECK-DAG:     <<NegDist:i\d+>> Neg [<<ArgDist>>]
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<NegDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateLeftIntWithByteDistance(int, byte) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateLeftIntWithByteDistance(int, byte) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateLeftIntWithByteDistance(int value, byte distance) {
+@@ -239,16 +173,10 @@ public class Main {
+   /// CHECK-START: int Main.rotateRightIntWithByteDistance(int, byte) builder (after)
+   /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+   /// CHECK:         <<ArgDist:b\d+>> ParameterValue
+-  /// CHECK-DAG:     <<Result:i\d+>>  InvokeStaticOrDirect [<<ArgVal>>,<<ArgDist>>{{(,[ij]\d+)?}}] intrinsic:IntegerRotateRight
+-  /// CHECK-DAG:                      Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.rotateRightIntWithByteDistance(int, byte) instruction_simplifier (after)
+-  /// CHECK:         <<ArgVal:i\d+>>  ParameterValue
+-  /// CHECK:         <<ArgDist:b\d+>> ParameterValue
+   /// CHECK-DAG:     <<Result:i\d+>>  Ror [<<ArgVal>>,<<ArgDist>>]
+   /// CHECK-DAG:                      Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.rotateRightIntWithByteDistance(int, byte) instruction_simplifier (after)
++  /// CHECK-START: int Main.rotateRightIntWithByteDistance(int, byte) builder (after)
+   /// CHECK-NOT:                      InvokeStaticOrDirect
+ 
+   private static int rotateRightIntWithByteDistance(int value, byte distance) {
+diff --git a/test/566-checker-signum/smali/Main2.smali b/test/566-checker-signum/smali/Main2.smali
+index 767bed213c..66d4524f41 100644
+--- a/test/566-checker-signum/smali/Main2.smali
++++ b/test/566-checker-signum/smali/Main2.smali
+@@ -19,17 +19,10 @@
+ ## CHECK-DAG:     <<Zero:i\d+>>   IntConstant 0
+ ## CHECK-DAG:     <<One:i\d+>>    IntConstant 1
+ ## CHECK-DAG:     <<Phi:i\d+>>    Phi [<<One>>,<<Zero>>]
+-## CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect [<<Phi>>{{(,[ij]\d+)?}}] intrinsic:IntegerSignum
+-## CHECK-DAG:                     Return [<<Result>>]
+-
+-## CHECK-START: int Main2.signBoolean(boolean) instruction_simplifier (after)
+-## CHECK-DAG:     <<Zero:i\d+>>   IntConstant 0
+-## CHECK-DAG:     <<One:i\d+>>    IntConstant 1
+-## CHECK-DAG:     <<Phi:i\d+>>    Phi [<<One>>,<<Zero>>]
+ ## CHECK-DAG:     <<Result:i\d+>> Compare [<<Phi>>,<<Zero>>]
+ ## CHECK-DAG:                     Return [<<Result>>]
+ 
+-## CHECK-START: int Main2.signBoolean(boolean) instruction_simplifier (after)
++## CHECK-START: int Main2.signBoolean(boolean) builder (after)
+ ## CHECK-NOT:                     InvokeStaticOrDirect
+ 
+ ## CHECK-START: int Main2.signBoolean(boolean) select_generator (after)
+diff --git a/test/566-checker-signum/src-art/Main.java b/test/566-checker-signum/src-art/Main.java
+index ea01785331..9a8abb3793 100644
+--- a/test/566-checker-signum/src-art/Main.java
++++ b/test/566-checker-signum/src-art/Main.java
+@@ -19,14 +19,10 @@ import java.lang.reflect.Method;
+ public class Main {
+ 
+   /// CHECK-START: int Main.signByte(byte) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerSignum
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.signByte(byte) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.signByte(byte) instruction_simplifier (after)
++  /// CHECK-START: int Main.signByte(byte) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int signByte(byte x) {
+@@ -34,14 +30,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.signShort(short) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerSignum
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.signShort(short) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.signShort(short) instruction_simplifier (after)
++  /// CHECK-START: int Main.signShort(short) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int signShort(short x) {
+@@ -49,14 +41,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.signChar(char) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerSignum
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.signChar(char) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.signChar(char) instruction_simplifier (after)
++  /// CHECK-START: int Main.signChar(char) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int signChar(char x) {
+@@ -64,14 +52,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.signInt(int) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerSignum
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.signInt(int) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.signInt(int) instruction_simplifier (after)
++  /// CHECK-START: int Main.signInt(int) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int signInt(int x) {
+@@ -79,14 +63,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.signLong(long) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:LongSignum
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.signLong(long) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.signLong(long) instruction_simplifier (after)
++  /// CHECK-START: int Main.signLong(long) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int signLong(long x) {
+diff --git a/test/567-checker-compare/smali/Smali.smali b/test/567-checker-compare/smali/Smali.smali
+index fb6d241cc6..f7648f3916 100644
+--- a/test/567-checker-compare/smali/Smali.smali
++++ b/test/567-checker-compare/smali/Smali.smali
+@@ -20,18 +20,10 @@
+ ##  CHECK-DAG:     <<One:i\d+>>    IntConstant 1
+ ##  CHECK-DAG:     <<PhiX:i\d+>>   Phi [<<One>>,<<Zero>>]
+ ##  CHECK-DAG:     <<PhiY:i\d+>>   Phi [<<One>>,<<Zero>>]
+-##  CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect [<<PhiX>>,<<PhiY>>{{(,[ij]\d+)?}}] intrinsic:IntegerCompare
+-##  CHECK-DAG:                     Return [<<Result>>]
+-
+-##  CHECK-START: int Smali.compareBooleans(boolean, boolean) instruction_simplifier (after)
+-##  CHECK-DAG:     <<Zero:i\d+>>   IntConstant 0
+-##  CHECK-DAG:     <<One:i\d+>>    IntConstant 1
+-##  CHECK-DAG:     <<PhiX:i\d+>>   Phi [<<One>>,<<Zero>>]
+-##  CHECK-DAG:     <<PhiY:i\d+>>   Phi [<<One>>,<<Zero>>]
+ ##  CHECK-DAG:     <<Result:i\d+>> Compare [<<PhiX>>,<<PhiY>>]
+ ##  CHECK-DAG:                     Return [<<Result>>]
+ 
+-##  CHECK-START: int Smali.compareBooleans(boolean, boolean) instruction_simplifier (after)
++##  CHECK-START: int Smali.compareBooleans(boolean, boolean) builder (after)
+ ##  CHECK-NOT:                     InvokeStaticOrDirect
+ 
+ ##  CHECK-START: int Smali.compareBooleans(boolean, boolean) select_generator (after)
+diff --git a/test/567-checker-compare/src/Main.java b/test/567-checker-compare/src/Main.java
+index 25d88aa7f9..589224e431 100644
+--- a/test/567-checker-compare/src/Main.java
++++ b/test/567-checker-compare/src/Main.java
+@@ -21,7 +21,7 @@ public class Main {
+   /// CHECK-START: void Main.$opt$noinline$testReplaceInputWithItself(int) builder (after)
+   /// CHECK-DAG:     <<ArgX:i\d+>>   ParameterValue
+   /// CHECK-DAG:     <<Zero:i\d+>>   IntConstant 0
+-  /// CHECK-DAG:     <<Cmp:i\d+>>    InvokeStaticOrDirect [<<ArgX>>,<<Zero>>{{(,[ij]\d+)?}}] intrinsic:IntegerCompare
++  /// CHECK-DAG:     <<Cmp:i\d+>>    Compare [<<ArgX>>,<<Zero>>]
+   /// CHECK-DAG:                     GreaterThanOrEqual [<<Cmp>>,<<Zero>>]
+ 
+   /// CHECK-START: void Main.$opt$noinline$testReplaceInputWithItself(int) instruction_simplifier (after)
+@@ -62,14 +62,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareBytes(byte, byte) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareBytes(byte, byte) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareBytes(byte, byte) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareBytes(byte, byte) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int compareBytes(byte x, byte y) {
+@@ -77,14 +73,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareShorts(short, short) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareShorts(short, short) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareShorts(short, short) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareShorts(short, short) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int compareShorts(short x, short y) {
+@@ -92,14 +84,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareChars(char, char) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareChars(char, char) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareChars(char, char) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareChars(char, char) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int compareChars(char x, char y) {
+@@ -107,14 +95,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareInts(int, int) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareInts(int, int) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareInts(int, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareInts(int, int) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int compareInts(int x, int y) {
+@@ -122,14 +106,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareLongs(long, long) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:LongCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareLongs(long, long) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareLongs(long, long) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareLongs(long, long) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   private static int compareLongs(long x, long y) {
+@@ -138,14 +118,10 @@ public class Main {
+ 
+ 
+   /// CHECK-START: int Main.compareByteShort(byte, short) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareByteShort(byte, short) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareByteShort(byte, short) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareByteShort(byte, short) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareByteShort(byte x, short y) {
+@@ -153,14 +129,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareByteChar(byte, char) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareByteChar(byte, char) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareByteChar(byte, char) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareByteChar(byte, char) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareByteChar(byte x, char y) {
+@@ -168,14 +140,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareByteInt(byte, int) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareByteInt(byte, int) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareByteInt(byte, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareByteInt(byte, int) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareByteInt(byte x, int y) {
+@@ -184,14 +152,10 @@ public class Main {
+ 
+ 
+   /// CHECK-START: int Main.compareShortByte(short, byte) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareShortByte(short, byte) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareShortByte(short, byte) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareShortByte(short, byte) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareShortByte(short x, byte y) {
+@@ -199,14 +163,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareShortChar(short, char) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareShortChar(short, char) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareShortChar(short, char) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareShortChar(short, char) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareShortChar(short x, char y) {
+@@ -214,14 +174,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareShortInt(short, int) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareShortInt(short, int) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareShortInt(short, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareShortInt(short, int) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareShortInt(short x, int y) {
+@@ -230,14 +186,10 @@ public class Main {
+ 
+ 
+   /// CHECK-START: int Main.compareCharByte(char, byte) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareCharByte(char, byte) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareCharByte(char, byte) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareCharByte(char, byte) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareCharByte(char x, byte y) {
+@@ -245,14 +197,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareCharShort(char, short) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareCharShort(char, short) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareCharShort(char, short) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareCharShort(char, short) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareCharShort(char x, short y) {
+@@ -260,14 +208,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareCharInt(char, int) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareCharInt(char, int) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareCharInt(char, int) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareCharInt(char, int) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareCharInt(char x, int y) {
+@@ -276,14 +220,10 @@ public class Main {
+ 
+ 
+   /// CHECK-START: int Main.compareIntByte(int, byte) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareIntByte(int, byte) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareIntByte(int, byte) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareIntByte(int, byte) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareIntByte(int x, byte y) {
+@@ -291,14 +231,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareIntShort(int, short) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareIntShort(int, short) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareIntShort(int, short) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareIntShort(int, short) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareIntShort(int x, short y) {
+@@ -306,14 +242,10 @@ public class Main {
+   }
+ 
+   /// CHECK-START: int Main.compareIntChar(int, char) builder (after)
+-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
+-  /// CHECK-DAG:                     Return [<<Result>>]
+-
+-  /// CHECK-START: int Main.compareIntChar(int, char) instruction_simplifier (after)
+   /// CHECK-DAG:     <<Result:i\d+>> Compare
+   /// CHECK-DAG:                     Return [<<Result>>]
+ 
+-  /// CHECK-START: int Main.compareIntChar(int, char) instruction_simplifier (after)
++  /// CHECK-START: int Main.compareIntChar(int, char) builder (after)
+   /// CHECK-NOT:                     InvokeStaticOrDirect
+ 
+   public static int compareIntChar(int x, char y) {
+diff --git a/test/575-checker-isnan/src/Main.java b/test/575-checker-isnan/src/Main.java
+index cc71e5e27d..4773f636eb 100644
+--- a/test/575-checker-isnan/src/Main.java
++++ b/test/575-checker-isnan/src/Main.java
+@@ -16,29 +16,21 @@
+ 
+ public class Main {
+ 
+-  /// CHECK-START: boolean Main.isNaN32(float) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Result:z\d+>> InvokeStaticOrDirect
+-  /// CHECK-DAG: Return [<<Result>>]
+-  //
+-  /// CHECK-START: boolean Main.isNaN32(float) instruction_simplifier (after)
++  /// CHECK-START: boolean Main.isNaN32(float) builder (after)
+   /// CHECK-DAG: <<Result:z\d+>> NotEqual
+   /// CHECK-DAG: Return [<<Result>>]
+   //
+-  /// CHECK-START: boolean Main.isNaN32(float) instruction_simplifier (after)
++  /// CHECK-START: boolean Main.isNaN32(float) builder (after)
+   /// CHECK-NOT: InvokeStaticOrDirect
+   private static boolean isNaN32(float x) {
+     return Float.isNaN(x);
+   }
+ 
+-  /// CHECK-START: boolean Main.isNaN64(double) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Result:z\d+>> InvokeStaticOrDirect
+-  /// CHECK-DAG: Return [<<Result>>]
+-  //
+-  /// CHECK-START: boolean Main.isNaN64(double) instruction_simplifier (after)
++  /// CHECK-START: boolean Main.isNaN64(double) builder (after)
+   /// CHECK-DAG: <<Result:z\d+>> NotEqual
+   /// CHECK-DAG: Return [<<Result>>]
+   //
+-  /// CHECK-START: boolean Main.isNaN64(double) instruction_simplifier (after)
++  /// CHECK-START: boolean Main.isNaN64(double) builder (after)
+   /// CHECK-NOT: InvokeStaticOrDirect
+   private static boolean isNaN64(double x) {
+     return Double.isNaN(x);
+diff --git a/test/631-checker-fp-abs/src/Main.java b/test/631-checker-fp-abs/src/Main.java
+index 2d04e36d02..6e0e6dbad6 100644
+--- a/test/631-checker-fp-abs/src/Main.java
++++ b/test/631-checker-fp-abs/src/Main.java
+@@ -32,22 +32,16 @@ public class Main {
+   public static boolean doThrow = false;
+ 
+   /// CHECK-START: float Main.$opt$noinline$absSP(float) builder (after)
+-  /// CHECK-DAG: <<Result:f\d+>> InvokeStaticOrDirect intrinsic:MathAbsFloat
++  /// CHECK-DAG: <<Result:f\d+>> Abs
+   /// CHECK-DAG:                 Return [<<Result>>]
+   private static float $opt$noinline$absSP(float f) {
+-    if (doThrow) {
+-      throw new Error("Something to prevent inlining");
+-    }
+     return Math.abs(f);
+   }
+ 
+   /// CHECK-START: double Main.$opt$noinline$absDP(double) builder (after)
+-  /// CHECK-DAG: <<Result:d\d+>> InvokeStaticOrDirect intrinsic:MathAbsDouble
++  /// CHECK-DAG: <<Result:d\d+>> Abs
+   /// CHECK-DAG:                 Return [<<Result>>]
+   private static double $opt$noinline$absDP(double d) {
+-    if (doThrow) {
+-      throw new Error("Something to prevent inlining");
+-    }
+     return Math.abs(d);
+   }
+ 
+diff --git a/test/660-checker-simd-sad/src/SimdSadShort2.java b/test/660-checker-simd-sad/src/SimdSadShort2.java
+index b110bb43aa..020d8d81e1 100644
+--- a/test/660-checker-simd-sad/src/SimdSadShort2.java
++++ b/test/660-checker-simd-sad/src/SimdSadShort2.java
+@@ -68,8 +68,8 @@ public class SimdSadShort2 {
+   /// CHECK-DAG: <<Cnv1:s\d+>>   TypeConversion [<<Get1>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Cnv2:s\d+>>   TypeConversion [<<Get2>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Sub:i\d+>>    Sub [<<Cnv1>>,<<Cnv2>>]        loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG: <<Intrin:i\d+>> InvokeStaticOrDirect [<<Sub>>] intrinsic:MathAbsInt loop:<<Loop>> outer_loop:none
+-  /// CHECK-DAG:                 Add [<<Phi2>>,<<Intrin>>]      loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG: <<Abs:i\d+>>    Abs [<<Sub>>]                  loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG:                 Add [<<Phi2>>,<<Abs>>]         loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG:                 Add [<<Phi1>>,<<Cons1>>]       loop:<<Loop>>      outer_loop:none
+   //
+   /// CHECK-START: int SimdSadShort2.sadCastedChar2Int(char[], char[]) loop_optimization (before)
+@@ -80,8 +80,8 @@ public class SimdSadShort2 {
+   /// CHECK-DAG: <<Get1:s\d+>>   ArrayGet [{{l\d+}},<<Phi1>>]   loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Get2:s\d+>>   ArrayGet [{{l\d+}},<<Phi1>>]   loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Sub:i\d+>>    Sub [<<Get1>>,<<Get2>>]        loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG: <<Intrin:i\d+>> Abs [<<Sub>>]                  loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG:                 Add [<<Phi2>>,<<Intrin>>]      loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG: <<Abs:i\d+>>    Abs [<<Sub>>]                  loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG:                 Add [<<Phi2>>,<<Abs>>]         loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG:                 Add [<<Phi1>>,<<Cons1>>]       loop:<<Loop>>      outer_loop:none
+   //
+   /// CHECK-START-ARM64: int SimdSadShort2.sadCastedChar2Int(char[], char[]) loop_optimization (after)
+@@ -220,8 +220,8 @@ public class SimdSadShort2 {
+   /// CHECK-DAG: <<Cnv3:j\d+>>   TypeConversion [<<Cnv1>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Cnv4:j\d+>>   TypeConversion [<<Cnv2>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Sub:j\d+>>    Sub [<<Cnv3>>,<<Cnv4>>]        loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG: <<Intrin:j\d+>> InvokeStaticOrDirect [<<Sub>>] intrinsic:MathAbsLong loop:<<Loop>> outer_loop:none
+-  /// CHECK-DAG:                 Add [<<Phi2>>,<<Intrin>>]      loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG: <<Abs:j\d+>>    Abs [<<Sub>>]                  loop:<<Loop>> outer_loop:none
++  /// CHECK-DAG:                 Add [<<Phi2>>,<<Abs>>]         loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG:                 Add [<<Phi1>>,<<Cons1>>]       loop:<<Loop>>      outer_loop:none
+   //
+   /// CHECK-START: long SimdSadShort2.sadCastedChar2Long(char[], char[]) loop_optimization (before)
+@@ -235,8 +235,8 @@ public class SimdSadShort2 {
+   /// CHECK-DAG: <<Cnv1:j\d+>>   TypeConversion [<<Get1>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Cnv2:j\d+>>   TypeConversion [<<Get2>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Sub:j\d+>>    Sub [<<Cnv1>>,<<Cnv2>>]        loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG: <<Intrin:j\d+>> Abs [<<Sub>>]                  loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG:                 Add [<<Phi2>>,<<Intrin>>]      loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG: <<Abs:j\d+>>    Abs [<<Sub>>]                  loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG:                 Add [<<Phi2>>,<<Abs>>]         loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG:                 Add [<<Phi1>>,<<Cons1>>]       loop:<<Loop>>      outer_loop:none
+   //
+   /// CHECK-START-ARM64: long SimdSadShort2.sadCastedChar2Long(char[], char[]) loop_optimization (after)
+@@ -276,8 +276,8 @@ public class SimdSadShort2 {
+   /// CHECK-DAG: <<Cnv3:j\d+>>   TypeConversion [<<Cnv1>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Cnv4:j\d+>>   TypeConversion [<<Cnv2>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Sub:j\d+>>    Sub [<<Cnv3>>,<<Cnv4>>]        loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG: <<Intrin:j\d+>> InvokeStaticOrDirect [<<Sub>>] intrinsic:MathAbsLong loop:<<Loop>> outer_loop:none
+-  /// CHECK-DAG:                 Add [<<Phi2>>,<<Intrin>>]      loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG: <<Abs:j\d+>>    Abs [<<Sub>>]                  loop:<<Loop>> outer_loop:none
++  /// CHECK-DAG:                 Add [<<Phi2>>,<<Abs>>]         loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG:                 Add [<<Phi1>>,<<Cons1>>]       loop:<<Loop>>      outer_loop:none
+   //
+   /// CHECK-START: long SimdSadShort2.sadCastedChar2LongAt1(char[], char[]) loop_optimization (before)
+@@ -291,8 +291,8 @@ public class SimdSadShort2 {
+   /// CHECK-DAG: <<Cnv1:j\d+>>   TypeConversion [<<Get1>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Cnv2:j\d+>>   TypeConversion [<<Get2>>]      loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG: <<Sub:j\d+>>    Sub [<<Cnv1>>,<<Cnv2>>]        loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG: <<Intrin:j\d+>> Abs [<<Sub>>]                  loop:<<Loop>>      outer_loop:none
+-  /// CHECK-DAG:                 Add [<<Phi2>>,<<Intrin>>]      loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG: <<Abs:j\d+>>    Abs [<<Sub>>]                  loop:<<Loop>>      outer_loop:none
++  /// CHECK-DAG:                 Add [<<Phi2>>,<<Abs>>]         loop:<<Loop>>      outer_loop:none
+   /// CHECK-DAG:                 Add [<<Phi1>>,<<Cons1>>]       loop:<<Loop>>      outer_loop:none
+   //
+   /// CHECK-START-ARM64: long SimdSadShort2.sadCastedChar2LongAt1(char[], char[]) loop_optimization (after)
+diff --git a/test/679-checker-minmax/src/Main.java b/test/679-checker-minmax/src/Main.java
+index 4b7265642a..0e13264f5a 100644
+--- a/test/679-checker-minmax/src/Main.java
++++ b/test/679-checker-minmax/src/Main.java
+@@ -23,19 +23,13 @@ public class Main {
+   // Direct intrinsics.
+   //
+ 
+-  /// CHECK-START: int Main.minI(int) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Par:i\d+>> ParameterValue
+-  /// CHECK-DAG: <<Con:i\d+>> IntConstant 20
+-  /// CHECK-DAG: <<Min:i\d+>> InvokeStaticOrDirect [<<Par>>,<<Con>>] intrinsic:MathMinIntInt
+-  /// CHECK-DAG:              Return [<<Min>>]
+-  //
+-  /// CHECK-START: int Main.minI(int) instruction_simplifier (after)
++  /// CHECK-START: int Main.minI(int) builder (after)
+   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
+   /// CHECK-DAG: <<Con:i\d+>> IntConstant 20
+   /// CHECK-DAG: <<Min:i\d+>> Min [<<Par>>,<<Con>>]
+   /// CHECK-DAG:              Return [<<Min>>]
+   //
+-  /// CHECK-START: int Main.minI(int) instruction_simplifier (after)
++  /// CHECK-START: int Main.minI(int) builder (after)
+   /// CHECK-NOT:              InvokeStaticOrDirect
+   //
+   /// CHECK-START-ARM64: int Main.minI(int) disassembly (after)
+@@ -48,19 +42,13 @@ public class Main {
+     return Math.min(a, 20);
+   }
+ 
+-  /// CHECK-START: long Main.minL(long) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Par:j\d+>> ParameterValue
+-  /// CHECK-DAG: <<Con:j\d+>> LongConstant 20
+-  /// CHECK-DAG: <<Min:j\d+>> InvokeStaticOrDirect [<<Par>>,<<Con>>] intrinsic:MathMinLongLong
+-  /// CHECK-DAG:              Return [<<Min>>]
+-  //
+-  /// CHECK-START: long Main.minL(long) instruction_simplifier (after)
++  /// CHECK-START: long Main.minL(long) builder (after)
+   /// CHECK-DAG: <<Par:j\d+>> ParameterValue
+   /// CHECK-DAG: <<Con:j\d+>> LongConstant 20
+   /// CHECK-DAG: <<Min:j\d+>> Min [<<Par>>,<<Con>>]
+   /// CHECK-DAG:              Return [<<Min>>]
+   //
+-  /// CHECK-START: long Main.minL(long) instruction_simplifier (after)
++  /// CHECK-START: long Main.minL(long) builder (after)
+   /// CHECK-NOT:              InvokeStaticOrDirect
+   //
+   /// CHECK-START-ARM64: long Main.minL(long) disassembly (after)
+@@ -73,19 +61,13 @@ public class Main {
+     return Math.min(a, 20L);
+   }
+ 
+-  /// CHECK-START: int Main.maxI(int) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Par:i\d+>> ParameterValue
+-  /// CHECK-DAG: <<Con:i\d+>> IntConstant 20
+-  /// CHECK-DAG: <<Max:i\d+>> InvokeStaticOrDirect [<<Par>>,<<Con>>] intrinsic:MathMaxIntInt
+-  /// CHECK-DAG:              Return [<<Max>>]
+-  //
+-  /// CHECK-START: int Main.maxI(int) instruction_simplifier (after)
++  /// CHECK-START: int Main.maxI(int) builder (after)
+   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
+   /// CHECK-DAG: <<Con:i\d+>> IntConstant 20
+   /// CHECK-DAG: <<Max:i\d+>> Max [<<Par>>,<<Con>>]
+   /// CHECK-DAG:              Return [<<Max>>]
+   //
+-  /// CHECK-START: int Main.maxI(int) instruction_simplifier (after)
++  /// CHECK-START: int Main.maxI(int) builder (after)
+   /// CHECK-NOT:              InvokeStaticOrDirect
+   //
+   /// CHECK-START-ARM64: int Main.maxI(int) disassembly (after)
+@@ -98,19 +80,13 @@ public class Main {
+     return Math.max(a, 20);
+   }
+ 
+-  /// CHECK-START: long Main.maxL(long) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Par:j\d+>> ParameterValue
+-  /// CHECK-DAG: <<Con:j\d+>> LongConstant 20
+-  /// CHECK-DAG: <<Max:j\d+>> InvokeStaticOrDirect [<<Par>>,<<Con>>] intrinsic:MathMaxLongLong
+-  /// CHECK-DAG:              Return [<<Max>>]
+-  //
+-  /// CHECK-START: long Main.maxL(long) instruction_simplifier (after)
++  /// CHECK-START: long Main.maxL(long) builder (after)
+   /// CHECK-DAG: <<Par:j\d+>> ParameterValue
+   /// CHECK-DAG: <<Con:j\d+>> LongConstant 20
+   /// CHECK-DAG: <<Max:j\d+>> Max [<<Par>>,<<Con>>]
+   /// CHECK-DAG:              Return [<<Max>>]
+   //
+-  /// CHECK-START: long Main.maxL(long) instruction_simplifier (after)
++  /// CHECK-START: long Main.maxL(long) builder (after)
+   /// CHECK-NOT:              InvokeStaticOrDirect
+   //
+   /// CHECK-START-ARM64: long Main.maxL(long) disassembly (after)
+diff --git a/test/681-checker-abs/src/Main.java b/test/681-checker-abs/src/Main.java
+index 00390c3145..7c68e178ad 100644
+--- a/test/681-checker-abs/src/Main.java
++++ b/test/681-checker-abs/src/Main.java
+@@ -23,33 +23,23 @@ public class Main {
+   // Intrinsics.
+   //
+ 
+-  /// CHECK-START: int Main.absI(int) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Par:i\d+>> ParameterValue
+-  /// CHECK-DAG: <<Abs:i\d+>> InvokeStaticOrDirect [<<Par>>] intrinsic:MathAbsInt
+-  /// CHECK-DAG:              Return [<<Abs>>]
+-  //
+-  /// CHECK-START: int Main.absI(int) instruction_simplifier (after)
++  /// CHECK-START: int Main.absI(int) builder (after)
+   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
+   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
+   /// CHECK-DAG:              Return [<<Abs>>]
+   //
+-  /// CHECK-START: int Main.absI(int) instruction_simplifier (after)
++  /// CHECK-START: int Main.absI(int) builder (after)
+   /// CHECK-NOT:              InvokeStaticOrDirect
+   public static int absI(int a) {
+     return Math.abs(a);
+   }
+ 
+-  /// CHECK-START: long Main.absL(long) instruction_simplifier (before)
+-  /// CHECK-DAG: <<Par:j\d+>> ParameterValue
+-  /// CHECK-DAG: <<Abs:j\d+>> InvokeStaticOrDirect [<<Par>>] intrinsic:MathAbsLong
+-  /// CHECK-DAG:              Return [<<Abs>>]
+-  //
+-  /// CHECK-START: long Main.absL(long) instruction_simplifier (after)
++  /// CHECK-START: long Main.absL(long) builder (after)
+   /// CHECK-DAG: <<Par:j\d+>> ParameterValue
+   /// CHECK-DAG: <<Abs:j\d+>> Abs [<<Par>>]
+   /// CHECK-DAG:              Return [<<Abs>>]
+   //
+-  /// CHECK-START: long Main.absL(long) instruction_simplifier (after)
++  /// CHECK-START: long Main.absL(long) builder (after)
+   /// CHECK-NOT:              InvokeStaticOrDirect
+   public static long absL(long a) {
+     return Math.abs(a);
+@@ -223,7 +213,7 @@ public class Main {
+   /// CHECK-DAG: <<Par:b\d+>> ParameterValue
+   /// CHECK-DAG: <<Msk:i\d+>> IntConstant 255
+   /// CHECK-DAG: <<And:i\d+>> [<<Par>>,<<Msk>>]
+-  /// CHECK-DAG: <<Abs:i\d+>> InvokeStaticOrDirect [<<And>>] intrinsic:MathAbsInt
++  /// CHECK-DAG: <<Abs:i\d+>> Abs
+   /// CHECK-DAG:              Return [<<Abs>>]
+   //
+   /// CHECK-START: int Main.zabs1(byte) instruction_simplifier (after)
+@@ -232,7 +222,6 @@ public class Main {
+   /// CHECK-DAG:              Return [<<Cnv>>]
+   //
+   /// CHECK-START: int Main.zabs1(byte) instruction_simplifier (after)
+-  /// CHECK-NOT:              InvokeStaticOrDirect
+   /// CHECK-NOT:              Abs
+   public static int zabs1(byte a) {
+     return Math.abs(a & 0xff);
+@@ -242,7 +231,7 @@ public class Main {
+   /// CHECK-DAG: <<Par:s\d+>> ParameterValue
+   /// CHECK-DAG: <<Msk:i\d+>> IntConstant 65535
+   /// CHECK-DAG: <<And:i\d+>> [<<Msk>>,<<Par>>]
+-  /// CHECK-DAG: <<Abs:i\d+>> InvokeStaticOrDirect [<<And>>] intrinsic:MathAbsInt
++  /// CHECK-DAG: <<Abs:i\d+>> Abs
+   /// CHECK-DAG:              Return [<<Abs>>]
+   //
+   /// CHECK-START: int Main.zabs2(short) instruction_simplifier (after)
+@@ -251,7 +240,6 @@ public class Main {
+   /// CHECK-DAG:              Return [<<Cnv>>]
+   //
+   /// CHECK-START: int Main.zabs2(short) instruction_simplifier (after)
+-  /// CHECK-NOT:              InvokeStaticOrDirect
+   /// CHECK-NOT:              Abs
+   public static int zabs2(short a) {
+     return Math.abs(a & 0xffff);
+@@ -259,20 +247,14 @@ public class Main {
+ 
+   /// CHECK-START: int Main.zabs3(char) instruction_simplifier (before)
+   /// CHECK-DAG: <<Par:c\d+>> ParameterValue
+-  /// CHECK-DAG: <<Abs:i\d+>> InvokeStaticOrDirect [<<Par>>] intrinsic:MathAbsInt
++  /// CHECK-DAG: <<Abs:i\d+>> Abs
+   /// CHECK-DAG:              Return [<<Abs>>]
+   //
+   /// CHECK-START: int Main.zabs3(char) instruction_simplifier (after)
+   /// CHECK-DAG: <<Par:c\d+>> ParameterValue
+-  /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
+-  /// CHECK-DAG:              Return [<<Abs>>]
+-  //
+-  /// CHECK-START: int Main.zabs3(char) instruction_simplifier$after_gvn (after)
+-  /// CHECK-DAG: <<Par:c\d+>> ParameterValue
+   /// CHECK-DAG:              Return [<<Par>>]
+   //
+-  /// CHECK-START: int Main.zabs3(char) instruction_simplifier$after_gvn (after)
+-  /// CHECK-NOT:              InvokeStaticOrDirect
++  /// CHECK-START: int Main.zabs3(char) instruction_simplifier (after)
+   /// CHECK-NOT:              Abs
+   public static int zabs3(char a) {
+     return Math.abs(a);
+diff --git a/test/709-checker-varhandles/src/Main.java b/test/709-checker-varhandles/src/Main.java
+index d0ea8345c3..8bb0434592 100644
+--- a/test/709-checker-varhandles/src/Main.java
++++ b/test/709-checker-varhandles/src/Main.java
+@@ -29,60 +29,45 @@ public class Main {
+   //
+ 
+   /// CHECK-START: void Main.fullFence() builder (after)
+-  /// CHECK-DAG: InvokeStaticOrDirect intrinsic:VarHandleFullFence
++  /// CHECK-NOT: InvokeStaticOrDirect
+   //
+-  /// CHECK-START: void Main.fullFence() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeStaticOrDirect intrinsic:VarHandleFullFence
+-  //
+-  /// CHECK-START: void Main.fullFence() instruction_simplifier (after)
++  /// CHECK-START: void Main.fullFence() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:AnyAny
+   private static void fullFence() {
+       VarHandle.fullFence();
+   }
+ 
+   /// CHECK-START: void Main.acquireFence() builder (after)
+-  /// CHECK-DAG: InvokeStaticOrDirect intrinsic:VarHandleAcquireFence
+-  //
+-  /// CHECK-START: void Main.acquireFence() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeStaticOrDirect intrinsic:VarHandleAcquireFence
++  /// CHECK-NOT: InvokeStaticOrDirect
+   //
+-  /// CHECK-START: void Main.acquireFence() instruction_simplifier (after)
++  /// CHECK-START: void Main.acquireFence() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:LoadAny
+   private static void acquireFence() {
+       VarHandle.acquireFence();
+   }
+ 
+   /// CHECK-START: void Main.releaseFence() builder (after)
+-  /// CHECK-DAG: InvokeStaticOrDirect intrinsic:VarHandleReleaseFence
+-  //
+-  /// CHECK-START: void Main.releaseFence() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeStaticOrDirect intrinsic:VarHandleReleaseFence
++  /// CHECK-NOT: InvokeStaticOrDirect
+   //
+-  /// CHECK-START: void Main.releaseFence() instruction_simplifier (after)
++  /// CHECK-START: void Main.releaseFence() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:AnyStore
+   private static void releaseFence() {
+       VarHandle.releaseFence();
+   }
+ 
+   /// CHECK-START: void Main.loadLoadFence() builder (after)
+-  /// CHECK-DAG: InvokeStaticOrDirect intrinsic:VarHandleLoadLoadFence
+-  //
+-  /// CHECK-START: void Main.loadLoadFence() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeStaticOrDirect intrinsic:VarHandleLoadLoadFence
++  /// CHECK-NOT: InvokeStaticOrDirect
+   //
+-  /// CHECK-START: void Main.loadLoadFence() instruction_simplifier (after)
++  /// CHECK-START: void Main.loadLoadFence() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:LoadAny
+   private static void loadLoadFence() {
+       VarHandle.loadLoadFence();
+   }
+ 
+   /// CHECK-START: void Main.storeStoreFence() builder (after)
+-  /// CHECK-DAG: InvokeStaticOrDirect intrinsic:VarHandleStoreStoreFence
++  /// CHECK-NOT: InvokeStaticOrDirect
+   //
+-  /// CHECK-START: void Main.storeStoreFence() instruction_simplifier (after)
+-  /// CHECK-NOT: InvokeStaticOrDirect intrinsic:VarHandleStoreStoreFence
+-  //
+-  /// CHECK-START: void Main.storeStoreFence() instruction_simplifier (after)
++  /// CHECK-START: void Main.storeStoreFence() builder (after)
+   /// CHECK-DAG: MemoryBarrier kind:StoreStore
+   private static void storeStoreFence() {
+       VarHandle.storeStoreFence();
+-- 
+2.31.1
+

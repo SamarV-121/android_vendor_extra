@@ -1,0 +1,30 @@
+From 1037625ff3124521861c606216db3266c057d6df Mon Sep 17 00:00:00 2001
+From: xNombre <kartapolska@gmail.com>
+Date: Sun, 21 Mar 2021 15:49:39 +0100
+Subject: [PATCH 2/8] binder: Enable ThinLTO
+
+Binder is performance-critical service and thus I believe it should be optimized better.
+
+Signed-off-by: xNombre <kartapolska@gmail.com>
+---
+ libs/binder/Android.bp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libs/binder/Android.bp b/libs/binder/Android.bp
+index b24a577..f1ce758 100644
+--- a/libs/binder/Android.bp
++++ b/libs/binder/Android.bp
+@@ -158,6 +158,10 @@ cc_library {
+         misc_undefined: ["integer"],
+     },
+     min_sdk_version: "29",
++
++    lto: {
++        thin: true,
++    },
+ }
+ 
+ // AIDL interface between libbinder and framework.jar
+-- 
+2.31.1
+

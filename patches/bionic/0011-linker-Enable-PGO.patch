@@ -1,0 +1,58 @@
+From 4be6aa72585e45db573a134778f9ac125d0b9343 Mon Sep 17 00:00:00 2001
+From: Yi Kong <yikong@google.com>
+Date: Thu, 10 Dec 2020 01:27:44 +0800
+Subject: [PATCH 11/11] linker: Enable PGO
+
+linker-reloc-bench shows 1.2% improvement on flame.
+
+                        PGO         No PGO
+BM_linker_relocation/
+real_time_mean          52215 us    52916 us
+
+Test: linker-reloc-bench --benchmark_repetitions=25
+Bug: 175205560
+Change-Id: I6abbbd51912f86fcf8112c024d1cf2519056bea7
+---
+ linker/Android.bp | 26 +++++++++++++++++++++++++-
+ 1 file changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/linker/Android.bp b/linker/Android.bp
+index 582a9e41e..c4cc2c9be 100644
+--- a/linker/Android.bp
++++ b/linker/Android.bp
+@@ -353,7 +353,31 @@ cc_binary {
+             static_libs: [
+                 "liblinker_debuggerd_stub",
+             ],
+-        }
++        },
++        android_arm64: {
++            pgo: {
++                profile_file: "bionic/linker_arm_arm64.profdata",
++            },
++        },
++        android_arm: {
++            pgo: {
++                profile_file: "bionic/linker_arm_arm64.profdata",
++            },
++        },
++        android_x86_64: {
++            pgo: {
++                profile_file: "bionic/linker_x86_x86_64.profdata",
++            },
++        },
++        android_x86: {
++            pgo: {
++                profile_file: "bionic/linker_x86_x86_64.profdata",
++            },
++        },
++    },
++
++    pgo: {
++        sampling: true,
+     },
+ }
+ 
+-- 
+2.31.1
+

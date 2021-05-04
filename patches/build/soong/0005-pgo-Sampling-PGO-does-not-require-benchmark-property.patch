@@ -1,0 +1,49 @@
+From 0c976502e84413a6312115727b6ac0f82bde0503 Mon Sep 17 00:00:00 2001
+From: Yi Kong <yikong@google.com>
+Date: Tue, 21 Jul 2020 15:38:23 +0800
+Subject: [PATCH 5/8] [pgo] Sampling PGO does not require benchmark property
+
+Test: build with Sampling PGO
+Bug: 79161490
+Change-Id: I70bb8dc2e4492d6a3713ca16fcb3f1216615f8ac
+---
+ cc/pgo.go | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/cc/pgo.go b/cc/pgo.go
+index 9298e7a74..42bc5d264 100644
+--- a/cc/pgo.go
++++ b/cc/pgo.go
+@@ -199,8 +199,8 @@ func (props *PgoProperties) isPGO(ctx BaseModuleContext) bool {
+ 		return false
+ 	}
+ 
+-	// If at least one property exists, validate that all properties exist
+-	if !profileKindPresent || !filePresent || !benchmarksPresent {
++	// profileKindPresent and filePresent are mandatory properties.
++	if !profileKindPresent || !filePresent {
+ 		var missing []string
+ 		if !profileKindPresent {
+ 			missing = append(missing, "profile kind (either \"instrumentation\" or \"sampling\" property)")
+@@ -208,13 +208,15 @@ func (props *PgoProperties) isPGO(ctx BaseModuleContext) bool {
+ 		if !filePresent {
+ 			missing = append(missing, "profile_file property")
+ 		}
+-		if !benchmarksPresent {
+-			missing = append(missing, "non-empty benchmarks property")
+-		}
+ 		missingProps := strings.Join(missing, ", ")
+ 		ctx.ModuleErrorf("PGO specification is missing properties: " + missingProps)
+ 	}
+ 
++	// Benchmark property is mandatory for instrumentation PGO.
++	if isInstrumentation && !benchmarksPresent {
++		ctx.ModuleErrorf("Instrumentation PGO specification is missing benchmark property")
++	}
++
+ 	if isSampling && isInstrumentation {
+ 		ctx.PropertyErrorf("pgo", "Exactly one of \"instrumentation\" and \"sampling\" properties must be set")
+ 	}
+-- 
+2.31.1
+

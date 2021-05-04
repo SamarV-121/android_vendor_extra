@@ -1,0 +1,84 @@
+From 89b23ff1b2d3919f8719fe863480de67bd10a2f1 Mon Sep 17 00:00:00 2001
+From: Yi Kong <yikong@google.com>
+Date: Sat, 24 Oct 2020 22:54:39 +0800
+Subject: [PATCH 26/27] Unified sampling PGO for art
+
+Use a combined sampling PGO profile for ART libraries.
+
+Test: build
+Bug: 79161490
+Change-Id: I2eeb1ac07971e37ee23848ebfb718b4651b9ac75
+---
+ build/Android.bp      | 30 ++++++++++++++++++++++++++++++
+ libartbase/Android.bp |  1 +
+ runtime/Android.bp    |  1 +
+ 3 files changed, 32 insertions(+)
+
+diff --git a/build/Android.bp b/build/Android.bp
+index 6329785818..a5d95fe134 100644
+--- a/build/Android.bp
++++ b/build/Android.bp
+@@ -216,6 +216,36 @@ art_global_defaults {
+     ],
+ }
+ 
++cc_defaults {
++    name: "art_pgo_defaults",
++    visibility: ["//art:__subpackages__"],
++    pgo: {
++        sampling: true,
++    },
++    target: {
++        android_arm64: {
++            pgo: {
++                profile_file: "art/art_arm_arm64.profdata",
++            },
++        },
++        android_arm: {
++            pgo: {
++                profile_file: "art/art_arm_arm64.profdata",
++            },
++        },
++        android_x86_64: {
++            pgo: {
++                profile_file: "art/art_x86_x86_64.profdata",
++            },
++        },
++        android_x86: {
++            pgo: {
++                profile_file: "art/art_x86_x86_64.profdata",
++            },
++        },
++    },
++}
++
+ art_debug_defaults {
+     name: "art_debug_defaults",
+     visibility: ["//art:__subpackages__"],
+diff --git a/libartbase/Android.bp b/libartbase/Android.bp
+index cb2ff6af0e..3a11cd99f4 100644
+--- a/libartbase/Android.bp
++++ b/libartbase/Android.bp
+@@ -171,6 +171,7 @@ art_cc_library {
+     defaults: [
+         "libartbase_defaults",
+         "libart_nativeunwind_defaults",
++        "art_pgo_defaults",
+     ],
+     visibility: [
+         // TODO(b/133140750): Clean this up.
+diff --git a/runtime/Android.bp b/runtime/Android.bp
+index 7e750160fb..866fd0e6c3 100644
+--- a/runtime/Android.bp
++++ b/runtime/Android.bp
+@@ -519,6 +519,7 @@ art_cc_library {
+     defaults: [
+         "libart_defaults",
+         "libart_nativeunwind_defaults",
++        "art_pgo_defaults",
+     ],
+     whole_static_libs: [
+     ],
+-- 
+2.31.1
+

@@ -1,0 +1,1507 @@
+From 31909d2539d74be6370fc03dd35f89c0ea04376d Mon Sep 17 00:00:00 2001
+From: Evgeny Astigeevich <evgeny.astigeevich@linaro.org>
+Date: Fri, 26 Jun 2020 13:28:33 +0100
+Subject: [PATCH 15/27] ARM: Optimize Div/Rem by 2^n for non-negative dividends
+
+When it can be proved that dividends are non-negative or the min integer
+if their type is integral, there is no need to generate instructions
+correcting the result.
+
+The CL implements this optimization for ARM32/ARM64.
+
+Test: 411-checker-hdiv-hrem-pow2
+Test: test.py --host --optimizing --jit --gtest --interpreter
+Test: test.py -target --optimizing --jit --interpreter
+Test: run-gtests.sh
+
+Change-Id: I11211a42918b5801fce8e78f305e69549739c23c
+Signed-off-by: Jake Weinstein <jake@aospa.co>
+---
+ compiler/optimizing/code_generator_arm64.cc   |  77 ++-
+ .../optimizing/code_generator_arm_vixl.cc     |  77 ++-
+ compiler/optimizing/code_generator_utils.cc   |  11 +
+ compiler/optimizing/code_generator_utils.h    |   4 +
+ compiler/optimizing/induction_var_range.cc    |  22 -
+ compiler/optimizing/nodes.cc                  |  18 +
+ compiler/optimizing/nodes.h                   |   4 +
+ test/411-checker-hdiv-hrem-pow2/info.txt      |   2 +-
+ .../src/DivTest.java                          | 397 +++++++++++++--
+ .../src/RemTest.java                          | 478 ++++++++++++++++--
+ 10 files changed, 954 insertions(+), 136 deletions(-)
+
+diff --git a/compiler/optimizing/code_generator_arm64.cc b/compiler/optimizing/code_generator_arm64.cc
+index ed98a164dd..2e895ae910 100644
+--- a/compiler/optimizing/code_generator_arm64.cc
++++ b/compiler/optimizing/code_generator_arm64.cc
+@@ -3013,22 +3013,50 @@ void InstructionCodeGeneratorARM64::GenerateIntDivForPower2Denom(HDiv* instructi
+   Register out = OutputRegister(instruction);
+   Register dividend = InputRegisterAt(instruction, 0);
+ 
+-  if (abs_imm == 2) {
+-    int bits = DataType::Size(instruction->GetResultType()) * kBitsPerByte;
+-    __ Add(out, dividend, Operand(dividend, LSR, bits - 1));
++  Register final_dividend;
++  if (HasNonNegativeResultOrMinInt(instruction->GetLeft())) {
++    // No need to adjust the result for non-negative dividends or the INT32_MIN/INT64_MIN dividends.
++    // NOTE: The generated code for HDiv correctly works for the INT32_MIN/INT64_MIN dividends:
++    //   imm == 2
++    //     add out, dividend(0x80000000), dividend(0x80000000), lsr #31 => out = 0x80000001
++    //     asr out, out(0x80000001), #1 => out = 0xc0000000
++    //     This is the same as 'asr out, 0x80000000, #1'
++    //
++    //   imm > 2
++    //     add temp, dividend(0x80000000), imm - 1 => temp = 0b10..01..1, where the number
++    //         of the rightmost 1s is ctz_imm.
++    //     cmp dividend(0x80000000), 0 => N = 1, V = 0 (lt is true)
++    //     csel out, temp(0b10..01..1), dividend(0x80000000), lt => out = 0b10..01..1
++    //     asr out, out(0b10..01..1), #ctz_imm => out = 0b1..10..0, where the number of the
++    //         leftmost 1s is ctz_imm + 1.
++    //     This is the same as 'asr out, dividend(0x80000000), #ctz_imm'.
++    //
++    //   imm == INT32_MIN
++    //     add tmp, dividend(0x80000000), #0x7fffffff => tmp = -1
++    //     cmp dividend(0x80000000), 0 => N = 1, V = 0 (lt is true)
++    //     csel out, temp(-1), dividend(0x80000000), lt => out = -1
++    //     neg out, out(-1), asr #31 => out = 1
++    //     This is the same as 'neg out, dividend(0x80000000), asr #31'.
++    final_dividend = dividend;
+   } else {
+-    UseScratchRegisterScope temps(GetVIXLAssembler());
+-    Register temp = temps.AcquireSameSizeAs(out);
+-    __ Add(temp, dividend, abs_imm - 1);
+-    __ Cmp(dividend, 0);
+-    __ Csel(out, temp, dividend, lt);
++    if (abs_imm == 2) {
++      int bits = DataType::Size(instruction->GetResultType()) * kBitsPerByte;
++      __ Add(out, dividend, Operand(dividend, LSR, bits - 1));
++    } else {
++      UseScratchRegisterScope temps(GetVIXLAssembler());
++      Register temp = temps.AcquireSameSizeAs(out);
++      __ Add(temp, dividend, abs_imm - 1);
++      __ Cmp(dividend, 0);
++      __ Csel(out, temp, dividend, lt);
++    }
++    final_dividend = out;
+   }
+ 
+   int ctz_imm = CTZ(abs_imm);
+   if (imm > 0) {
+-    __ Asr(out, out, ctz_imm);
++    __ Asr(out, final_dividend, ctz_imm);
+   } else {
+-    __ Neg(out, Operand(out, ASR, ctz_imm));
++    __ Neg(out, Operand(final_dividend, ASR, ctz_imm));
+   }
+ }
+ 
+@@ -5474,18 +5502,27 @@ void InstructionCodeGeneratorARM64::GenerateIntRemForPower2Denom(HRem *instructi
+   Register out = OutputRegister(instruction);
+   Register dividend = InputRegisterAt(instruction, 0);
+ 
+-  if (abs_imm == 2) {
+-    __ Cmp(dividend, 0);
+-    __ And(out, dividend, 1);
+-    __ Csneg(out, out, out, ge);
++  if (HasNonNegativeResultOrMinInt(instruction->GetLeft())) {
++    // No need to adjust the result for non-negative dividends or the INT32_MIN/INT64_MIN dividends.
++    // NOTE: The generated code for HRem correctly works for the INT32_MIN/INT64_MIN dividends.
++    // INT*_MIN % imm must be 0 for any imm of power 2. 'and' works only with bits
++    // 0..30 (Int32 case)/0..62 (Int64 case) of a dividend. For INT32_MIN/INT64_MIN they are zeros.
++    // So 'and' always produces zero.
++    __ And(out, dividend, abs_imm - 1);
+   } else {
+-    UseScratchRegisterScope temps(GetVIXLAssembler());
+-    Register temp = temps.AcquireSameSizeAs(out);
++    if (abs_imm == 2) {
++      __ Cmp(dividend, 0);
++      __ And(out, dividend, 1);
++      __ Csneg(out, out, out, ge);
++    } else {
++      UseScratchRegisterScope temps(GetVIXLAssembler());
++      Register temp = temps.AcquireSameSizeAs(out);
+ 
+-    __ Negs(temp, dividend);
+-    __ And(out, dividend, abs_imm - 1);
+-    __ And(temp, temp, abs_imm - 1);
+-    __ Csneg(out, out, temp, mi);
++      __ Negs(temp, dividend);
++      __ And(out, dividend, abs_imm - 1);
++      __ And(temp, temp, abs_imm - 1);
++      __ Csneg(out, out, temp, mi);
++    }
+   }
+ }
+ 
+diff --git a/compiler/optimizing/code_generator_arm_vixl.cc b/compiler/optimizing/code_generator_arm_vixl.cc
+index f55e8eb776..928b79a4d1 100644
+--- a/compiler/optimizing/code_generator_arm_vixl.cc
++++ b/compiler/optimizing/code_generator_arm_vixl.cc
+@@ -4156,21 +4156,69 @@ void InstructionCodeGeneratorARMVIXL::DivRemByPowerOfTwo(HBinaryOperation* instr
+   uint32_t abs_imm = static_cast<uint32_t>(AbsOrMin(imm));
+   int ctz_imm = CTZ(abs_imm);
+ 
+-  vixl32::Register add_right_input = dividend;
+-  if (ctz_imm > 1) {
+-    __ Asr(out, dividend, 31);
+-    add_right_input = out;
+-  }
+-  __ Add(out, dividend, Operand(add_right_input, vixl32::LSR, 32 - ctz_imm));
+-
+-  if (instruction->IsDiv()) {
+-    __ Asr(out, out, ctz_imm);
++  auto generate_div_code = [this, imm, ctz_imm](vixl32::Register out, vixl32::Register in) {
++    __ Asr(out, in, ctz_imm);
+     if (imm < 0) {
+       __ Rsb(out, out, 0);
+     }
++  };
++
++  if (HasNonNegativeResultOrMinInt(instruction->GetLeft())) {
++    // No need to adjust the result for non-negative dividends or the INT32_MIN dividend.
++    // NOTE: The generated code for HDiv/HRem correctly works for the INT32_MIN dividend:
++    //   imm == 2
++    //     HDiv
++    //      add out, dividend(0x80000000), dividend(0x80000000), lsr #31 => out = 0x80000001
++    //      asr out, out(0x80000001), #1 => out = 0xc0000000
++    //      This is the same as 'asr out, dividend(0x80000000), #1'
++    //
++    //   imm > 2
++    //     HDiv
++    //      asr out, dividend(0x80000000), #31 => out = -1
++    //      add out, dividend(0x80000000), out(-1), lsr #(32 - ctz_imm) => out = 0b10..01..1,
++    //          where the number of the rightmost 1s is ctz_imm.
++    //      asr out, out(0b10..01..1), #ctz_imm => out = 0b1..10..0, where the number of the
++    //          leftmost 1s is ctz_imm + 1.
++    //      This is the same as 'asr out, dividend(0x80000000), #ctz_imm'.
++    //
++    //   imm == INT32_MIN
++    //     HDiv
++    //      asr out, dividend(0x80000000), #31 => out = -1
++    //      add out, dividend(0x80000000), out(-1), lsr #1 => out = 0xc0000000
++    //      asr out, out(0xc0000000), #31 => out = -1
++    //      rsb out, out(-1), #0 => out = 1
++    //      This is the same as
++    //        asr out, dividend(0x80000000), #31
++    //        rsb out, out, #0
++    //
++    //
++    //   INT_MIN % imm must be 0 for any imm of power 2. 'and' and 'ubfx' work only with bits
++    //   0..30 of a dividend. For INT32_MIN those bits are zeros. So 'and' and 'ubfx' always
++    //   produce zero.
++    if (instruction->IsDiv()) {
++      generate_div_code(out, dividend);
++    } else {
++      if (GetVIXLAssembler()->IsModifiedImmediate(abs_imm - 1)) {
++        __ And(out, dividend, abs_imm - 1);
++      } else {
++        __ Ubfx(out, dividend, 0, ctz_imm);
++      }
++      return;
++    }
+   } else {
+-    __ Bfc(out, 0, ctz_imm);
+-    __ Sub(out, dividend, out);
++    vixl32::Register add_right_input = dividend;
++    if (ctz_imm > 1) {
++      __ Asr(out, dividend, 31);
++      add_right_input = out;
++    }
++    __ Add(out, dividend, Operand(add_right_input, vixl32::LSR, 32 - ctz_imm));
++
++    if (instruction->IsDiv()) {
++      generate_div_code(out, out);
++    } else {
++      __ Bfc(out, 0, ctz_imm);
++      __ Sub(out, dividend, out);
++    }
+   }
+ }
+ 
+@@ -4261,7 +4309,10 @@ void LocationsBuilderARMVIXL::VisitDiv(HDiv* div) {
+         Location::OutputOverlap out_overlaps = Location::kNoOutputOverlap;
+         if (value == 1 || value == 0 || value == -1) {
+           // No temp register required.
+-        } else if (IsPowerOfTwo(AbsOrMin(value))) {
++        } else if (IsPowerOfTwo(AbsOrMin(value)) &&
++                   value != 2 &&
++                   value != -2 &&
++                   !HasNonNegativeResultOrMinInt(div)) {
+           // The "out" register is used as a temporary, so it overlaps with the inputs.
+           out_overlaps = Location::kOutputOverlap;
+         } else {
+@@ -4375,7 +4426,7 @@ void LocationsBuilderARMVIXL::VisitRem(HRem* rem) {
+         Location::OutputOverlap out_overlaps = Location::kNoOutputOverlap;
+         if (value == 1 || value == 0 || value == -1) {
+           // No temp register required.
+-        } else if (IsPowerOfTwo(AbsOrMin(value))) {
++        } else if (IsPowerOfTwo(AbsOrMin(value)) && !HasNonNegativeResultOrMinInt(rem)) {
+           // The "out" register is used as a temporary, so it overlaps with the inputs.
+           out_overlaps = Location::kOutputOverlap;
+         } else {
+diff --git a/compiler/optimizing/code_generator_utils.cc b/compiler/optimizing/code_generator_utils.cc
+index dd47a1fc6c..9da520161f 100644
+--- a/compiler/optimizing/code_generator_utils.cc
++++ b/compiler/optimizing/code_generator_utils.cc
+@@ -100,4 +100,15 @@ bool IsBooleanValueOrMaterializedCondition(HInstruction* cond_input) {
+   return !cond_input->IsCondition() || !cond_input->IsEmittedAtUseSite();
+ }
+ 
++bool HasNonNegativeResultOrMinInt(HInstruction* instruction) {
++  // 1. The instruction itself has always a non-negative result or the min value of
++  //    the integral type if the instruction has the integral type.
++  // 2. TODO: The instruction can be an expression which uses an induction variable.
++  //    Induction variable often start from 0 and are only increased. Such an
++  //    expression might be always non-negative.
++  return instruction->IsAbs() ||
++         IsInt64Value(instruction, DataType::MinValueOfIntegralType(instruction->GetType())) ||
++         IsGEZero(instruction);
++}
++
+ }  // namespace art
+diff --git a/compiler/optimizing/code_generator_utils.h b/compiler/optimizing/code_generator_utils.h
+index a6b41c0588..711f9296ed 100644
+--- a/compiler/optimizing/code_generator_utils.h
++++ b/compiler/optimizing/code_generator_utils.h
+@@ -40,6 +40,10 @@ template <typename T> T AbsOrMin(T value) {
+       : std::abs(value);
+ }
+ 
++// Return true if the specified instruction produces only non-negative results or the min value of
++// the integral type if the instruction has the integral type.
++bool HasNonNegativeResultOrMinInt(HInstruction* instruction);
++
+ }  // namespace art
+ 
+ #endif  // ART_COMPILER_OPTIMIZING_CODE_GENERATOR_UTILS_H_
+diff --git a/compiler/optimizing/induction_var_range.cc b/compiler/optimizing/induction_var_range.cc
+index 4c78fa8f06..72c2064d89 100644
+--- a/compiler/optimizing/induction_var_range.cc
++++ b/compiler/optimizing/induction_var_range.cc
+@@ -70,28 +70,6 @@ static int64_t IntPow(int64_t b, int64_t e, /*out*/ bool* overflow) {
+   return pow;
+ }
+ 
+-/**
+- * Detects an instruction that is >= 0. As long as the value is carried by
+- * a single instruction, arithmetic wrap-around cannot occur.
+- */
+-static bool IsGEZero(HInstruction* instruction) {
+-  DCHECK(instruction != nullptr);
+-  if (instruction->IsArrayLength()) {
+-    return true;
+-  } else if (instruction->IsMin()) {
+-    // Instruction MIN(>=0, >=0) is >= 0.
+-    return IsGEZero(instruction->InputAt(0)) &&
+-           IsGEZero(instruction->InputAt(1));
+-  } else if (instruction->IsAbs()) {
+-    // Instruction ABS(>=0) is >= 0.
+-    // NOTE: ABS(minint) = minint prevents assuming
+-    //       >= 0 without looking at the argument.
+-    return IsGEZero(instruction->InputAt(0));
+-  }
+-  int64_t value = -1;
+-  return IsInt64AndGet(instruction, &value) && value >= 0;
+-}
+-
+ /** Hunts "under the hood" for a suitable instruction at the hint. */
+ static bool IsMaxAtHint(
+     HInstruction* instruction, HInstruction* hint, /*out*/HInstruction** suitable) {
+diff --git a/compiler/optimizing/nodes.cc b/compiler/optimizing/nodes.cc
+index 810871c18f..411050e308 100644
+--- a/compiler/optimizing/nodes.cc
++++ b/compiler/optimizing/nodes.cc
+@@ -3256,4 +3256,22 @@ void HInvoke::SetResolvedMethod(ArtMethod* method) {
+   resolved_method_ = method;
+ }
+ 
++bool IsGEZero(HInstruction* instruction) {
++  DCHECK(instruction != nullptr);
++  if (instruction->IsArrayLength()) {
++    return true;
++  } else if (instruction->IsMin()) {
++    // Instruction MIN(>=0, >=0) is >= 0.
++    return IsGEZero(instruction->InputAt(0)) &&
++           IsGEZero(instruction->InputAt(1));
++  } else if (instruction->IsAbs()) {
++    // Instruction ABS(>=0) is >= 0.
++    // NOTE: ABS(minint) = minint prevents assuming
++    //       >= 0 without looking at the argument.
++    return IsGEZero(instruction->InputAt(0));
++  }
++  int64_t value = -1;
++  return IsInt64AndGet(instruction, &value) && value >= 0;
++}
++
+ }  // namespace art
+diff --git a/compiler/optimizing/nodes.h b/compiler/optimizing/nodes.h
+index 7ed5bca947..b25f93d3ec 100644
+--- a/compiler/optimizing/nodes.h
++++ b/compiler/optimizing/nodes.h
+@@ -8125,6 +8125,10 @@ void RemoveEnvironmentUses(HInstruction* instruction);
+ bool HasEnvironmentUsedByOthers(HInstruction* instruction);
+ void ResetEnvironmentInputRecords(HInstruction* instruction);
+ 
++// Detects an instruction that is >= 0. As long as the value is carried by
++// a single instruction, arithmetic wrap-around cannot occur.
++bool IsGEZero(HInstruction* instruction);
++
+ }  // namespace art
+ 
+ #endif  // ART_COMPILER_OPTIMIZING_NODES_H_
+diff --git a/test/411-checker-hdiv-hrem-pow2/info.txt b/test/411-checker-hdiv-hrem-pow2/info.txt
+index df1c988052..e6fe1deec6 100644
+--- a/test/411-checker-hdiv-hrem-pow2/info.txt
++++ b/test/411-checker-hdiv-hrem-pow2/info.txt
+@@ -1,2 +1,2 @@
+ Test the optimization of integer division and remainder instructions when
+-the denominator is power of 2 on arm64.
++the denominator is power of 2.
+diff --git a/test/411-checker-hdiv-hrem-pow2/src/DivTest.java b/test/411-checker-hdiv-hrem-pow2/src/DivTest.java
+index e9e338cff5..28dfaf1214 100644
+--- a/test/411-checker-hdiv-hrem-pow2/src/DivTest.java
++++ b/test/411-checker-hdiv-hrem-pow2/src/DivTest.java
+@@ -64,6 +64,64 @@ public class DivTest {
+     expectEquals(0xc0000001, $noinline$IntDivByMinus2(Integer.MAX_VALUE));
+     expectEquals(0x40000000, $noinline$IntDivByMinus2(Integer.MIN_VALUE));
+ 
++    expectEquals(0, $noinline$IntAbsDivBy2(0));
++    expectEquals(0, $noinline$IntAbsDivBy2(1));
++    expectEquals(0, $noinline$IntAbsDivBy2(-1));
++    expectEquals(1, $noinline$IntAbsDivBy2(2));
++    expectEquals(1, $noinline$IntAbsDivBy2(-2));
++    expectEquals(1, $noinline$IntAbsDivBy2(3));
++    expectEquals(1, $noinline$IntAbsDivBy2(-3));
++    expectEquals(3, $noinline$IntAbsDivBy2(7));
++    expectEquals(3, $noinline$IntAbsDivBy2(-7));
++    expectEquals(4, $noinline$IntAbsDivBy2(8));
++    expectEquals(4, $noinline$IntAbsDivBy2(-8));
++    expectEquals(7, $noinline$IntAbsDivBy2(0x0f));
++    expectEquals(0x007f, $noinline$IntAbsDivBy2(0x00ff));
++    expectEquals(0x07ff, $noinline$IntAbsDivBy2(0x0fff));
++    expectEquals(0x007fff, $noinline$IntAbsDivBy2(0x00ffff));
++    expectEquals(0x3fffffff, $noinline$IntAbsDivBy2(Integer.MAX_VALUE));
++    expectEquals(0xc0000000, $noinline$IntAbsDivBy2(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntAbsDivByMinus2(0));
++    expectEquals(0, $noinline$IntAbsDivByMinus2(1));
++    expectEquals(0, $noinline$IntAbsDivByMinus2(-1));
++    expectEquals(-1, $noinline$IntAbsDivByMinus2(2));
++    expectEquals(-1, $noinline$IntAbsDivByMinus2(-2));
++    expectEquals(-1, $noinline$IntAbsDivByMinus2(3));
++    expectEquals(-1, $noinline$IntAbsDivByMinus2(-3));
++    expectEquals(-3, $noinline$IntAbsDivByMinus2(7));
++    expectEquals(-3, $noinline$IntAbsDivByMinus2(-7));
++    expectEquals(-4, $noinline$IntAbsDivByMinus2(8));
++    expectEquals(-4, $noinline$IntAbsDivByMinus2(-8));
++    expectEquals(-7, $noinline$IntAbsDivByMinus2(0x0f));
++    expectEquals(0xffffff81, $noinline$IntAbsDivByMinus2(0x00ff));
++    expectEquals(0xfffff801, $noinline$IntAbsDivByMinus2(0x0fff));
++    expectEquals(0xffff8001, $noinline$IntAbsDivByMinus2(0x00ffff));
++    expectEquals(0xc0000001, $noinline$IntAbsDivByMinus2(Integer.MAX_VALUE));
++    expectEquals(0x40000000, $noinline$IntAbsDivByMinus2(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntALenDivBy2(new int[0]));
++    expectEquals(0, $noinline$IntALenDivBy2(new int[1]));
++    expectEquals(1, $noinline$IntALenDivBy2(new int[2]));
++    expectEquals(1, $noinline$IntALenDivBy2(new int[3]));
++    expectEquals(3, $noinline$IntALenDivBy2(new int[7]));
++    expectEquals(4, $noinline$IntALenDivBy2(new int[8]));
++    expectEquals(7, $noinline$IntALenDivBy2(new int[0x0f]));
++    expectEquals(0x007f, $noinline$IntALenDivBy2(new int[0x00ff]));
++    expectEquals(0x07ff, $noinline$IntALenDivBy2(new int[0x0fff]));
++    expectEquals(0x007fff, $noinline$IntALenDivBy2(new int[0x00ffff]));
++
++    expectEquals(0, $noinline$IntALenDivByMinus2(new int[0]));
++    expectEquals(0, $noinline$IntALenDivByMinus2(new int[1]));
++    expectEquals(-1, $noinline$IntALenDivByMinus2(new int[2]));
++    expectEquals(-1, $noinline$IntALenDivByMinus2(new int[3]));
++    expectEquals(-3, $noinline$IntALenDivByMinus2(new int[7]));
++    expectEquals(-4, $noinline$IntALenDivByMinus2(new int[8]));
++    expectEquals(-7, $noinline$IntALenDivByMinus2(new int[0x0f]));
++    expectEquals(0xffffff81, $noinline$IntALenDivByMinus2(new int[0x00ff]));
++    expectEquals(0xfffff801, $noinline$IntALenDivByMinus2(new int[0x0fff]));
++    expectEquals(0xffff8001, $noinline$IntALenDivByMinus2(new int[0x00ffff]));
++
+     expectEquals(0, $noinline$IntDivBy16(0));
+     expectEquals(1, $noinline$IntDivBy16(16));
+     expectEquals(-1, $noinline$IntDivBy16(-16));
+@@ -84,20 +142,60 @@ public class DivTest {
+     expectEquals(0xf8000001, $noinline$IntDivByMinus16(Integer.MAX_VALUE));
+     expectEquals(0x08000000, $noinline$IntDivByMinus16(Integer.MIN_VALUE));
+ 
++    expectEquals(0, $noinline$IntAbsDivBy16(0));
++    expectEquals(1, $noinline$IntAbsDivBy16(16));
++    expectEquals(1, $noinline$IntAbsDivBy16(-16));
++    expectEquals(2, $noinline$IntAbsDivBy16(33));
++    expectEquals(0x000f, $noinline$IntAbsDivBy16(0x00ff));
++    expectEquals(0x00ff, $noinline$IntAbsDivBy16(0x0fff));
++    expectEquals(0x000fff, $noinline$IntAbsDivBy16(0x00ffff));
++    expectEquals(0x07ffffff, $noinline$IntAbsDivBy16(Integer.MAX_VALUE));
++    expectEquals(0xf8000000, $noinline$IntAbsDivBy16(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntAbsDivByMinus16(0));
++    expectEquals(-1, $noinline$IntAbsDivByMinus16(16));
++    expectEquals(-1, $noinline$IntAbsDivByMinus16(-16));
++    expectEquals(-2, $noinline$IntAbsDivByMinus16(33));
++    expectEquals(0xfffffff1, $noinline$IntAbsDivByMinus16(0x00ff));
++    expectEquals(0xffffff01, $noinline$IntAbsDivByMinus16(0x0fff));
++    expectEquals(0xfffff001, $noinline$IntAbsDivByMinus16(0x00ffff));
++    expectEquals(0xf8000001, $noinline$IntAbsDivByMinus16(Integer.MAX_VALUE));
++    expectEquals(0x08000000, $noinline$IntAbsDivByMinus16(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntALenDivBy16(new int[0]));
++    expectEquals(1, $noinline$IntALenDivBy16(new int[16]));
++    expectEquals(2, $noinline$IntALenDivBy16(new int[33]));
++    expectEquals(0x000f, $noinline$IntALenDivBy16(new int[0x00ff]));
++    expectEquals(0x00ff, $noinline$IntALenDivBy16(new int[0x0fff]));
++    expectEquals(0x000fff, $noinline$IntALenDivBy16(new int[0x00ffff]));
++
++    expectEquals(0, $noinline$IntALenDivByMinus16(new int[0]));
++    expectEquals(-1, $noinline$IntALenDivByMinus16(new int[16]));
++    expectEquals(-2, $noinline$IntALenDivByMinus16(new int[33]));
++    expectEquals(0xfffffff1, $noinline$IntALenDivByMinus16(new int[0x00ff]));
++    expectEquals(0xffffff01, $noinline$IntALenDivByMinus16(new int[0x0fff]));
++    expectEquals(0xfffff001, $noinline$IntALenDivByMinus16(new int[0x00ffff]));
++
+     expectEquals(0, $noinline$IntDivByIntMin(0));
+     expectEquals(0, $noinline$IntDivByIntMin(1));
+     expectEquals(0, $noinline$IntDivByIntMin(-1));
+     expectEquals(1, $noinline$IntDivByIntMin(Integer.MIN_VALUE));
+     expectEquals(0, $noinline$IntDivByIntMin(Integer.MAX_VALUE));
++
++    expectEquals(0, $noinline$IntAbsDivByIntMin(0));
++    expectEquals(0, $noinline$IntAbsDivByIntMin(1));
++    expectEquals(0, $noinline$IntAbsDivByIntMin(-1));
++    expectEquals(1, $noinline$IntAbsDivByIntMin(Integer.MIN_VALUE));
++    expectEquals(0, $noinline$IntAbsDivByIntMin(Integer.MAX_VALUE));
+   }
+ 
+   /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntDivBy2(int) disassembly (after)
+   /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #31
+-  /// CHECK:                 asr{{s?}} r{{\d+}}, #1
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #1
+   //
+   /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntDivBy2(int) disassembly (after)
+   /// CHECK:                 add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
+-  /// CHECK:                 asr w{{\d+}}, w{{\d+}}, #1
++  /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #1
+   //
+   /// CHECK-START-X86_64: java.lang.Integer DivTest.$noinline$IntDivBy2(int) disassembly (after)
+   /// CHECK-NOT:             cmovnl/geq
+@@ -109,12 +207,12 @@ public class DivTest {
+ 
+   /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntDivByMinus2(int) disassembly (after)
+   /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #31
+-  /// CHECK:                 asr{{s?}} r{{\d+}}, #1
+-  /// CHECK:                 rsb{{s?}} r{{\d+}}, #0
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #1
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
+   //
+   /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntDivByMinus2(int) disassembly (after)
+   /// CHECK:                 add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
+-  /// CHECK:                 neg w{{\d+}}, w{{\d+}}, asr #1
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #1
+   //
+   /// CHECK-START-X86_64: java.lang.Integer DivTest.$noinline$IntDivByMinus2(int) disassembly (after)
+   /// CHECK-NOT:             cmovnl/geq
+@@ -124,16 +222,66 @@ public class DivTest {
+     return r;
+   }
+ 
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntAbsDivBy2(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #1
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntAbsDivBy2(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #1
++  private static Integer $noinline$IntAbsDivBy2(int v) {
++    int r = Math.abs(v) / 2;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntAbsDivByMinus2(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #1
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntAbsDivByMinus2(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #1
++  private static Integer $noinline$IntAbsDivByMinus2(int v) {
++    int r = Math.abs(v) / -2;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntALenDivBy2(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #1
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntALenDivBy2(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #1
++  private static Integer $noinline$IntALenDivBy2(int[] arr) {
++    int r = arr.length / 2;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntALenDivByMinus2(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #1
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntALenDivByMinus2(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #1
++  private static Integer $noinline$IntALenDivByMinus2(int[] arr) {
++    int r = arr.length / -2;
++    return r;
++  }
++
+   /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntDivBy16(int) disassembly (after)
+   /// CHECK:                 asr{{s?}} r{{\d+}}, r{{\d+}}, #31
+-  /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
+-  /// CHECK:                 asr{{s?}} r{{\d+}}, #4
++  /// CHECK-NEXT:            add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #4
+   //
+   /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntDivBy16(int) disassembly (after)
+-  /// CHECK:                add w{{\d+}}, w{{\d+}}, #0xf
+-  /// CHECK:                cmp w{{\d+}}, #0x0
+-  /// CHECK:                csel w{{\d+}}, w{{\d+}}, w{{\d+}}, lt
+-  /// CHECK:                asr w{{\d+}}, w{{\d+}}, #4
++  /// CHECK:                 add w{{\d+}}, w{{\d+}}, #0xf
++  /// CHECK-NEXT:            cmp w{{\d+}}, #0x0
++  /// CHECK-NEXT:            csel w{{\d+}}, w{{\d+}}, w{{\d+}}, lt
++  /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #4
+   private static Integer $noinline$IntDivBy16(int v) {
+     int r = v / 16;
+     return r;
+@@ -141,37 +289,100 @@ public class DivTest {
+ 
+   /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntDivByMinus16(int) disassembly (after)
+   /// CHECK:                 asr{{s?}} r{{\d+}}, r{{\d+}}, #31
+-  /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
+-  /// CHECK:                 asr{{s?}} r{{\d+}}, #4
+-  /// CHECK:                 rsb{{s?}} r{{\d+}}, #0
++  /// CHECK-NEXT:            add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #4
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
+   //
+   /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntDivByMinus16(int) disassembly (after)
+-  /// CHECK:                add w{{\d+}}, w{{\d+}}, #0xf
+-  /// CHECK:                cmp w{{\d+}}, #0x0
+-  /// CHECK:                csel w{{\d+}}, w{{\d+}}, w{{\d+}}, lt
+-  /// CHECK:                neg w{{\d+}}, w{{\d+}}, asr #4
++  /// CHECK:                 add w{{\d+}}, w{{\d+}}, #0xf
++  /// CHECK-NEXT:            cmp w{{\d+}}, #0x0
++  /// CHECK-NEXT:            csel w{{\d+}}, w{{\d+}}, w{{\d+}}, lt
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #4
+   private static Integer $noinline$IntDivByMinus16(int v) {
+     int r = v / -16;
+     return r;
+   }
+ 
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntAbsDivBy16(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #4
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntAbsDivBy16(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #4
++  private static Integer $noinline$IntAbsDivBy16(int v) {
++    int r = Math.abs(v) / 16;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntAbsDivByMinus16(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #4
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntAbsDivByMinus16(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #4
++  private static Integer $noinline$IntAbsDivByMinus16(int v) {
++    int r = Math.abs(v) / -16;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntALenDivBy16(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #4
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntALenDivBy16(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #4
++  private static Integer $noinline$IntALenDivBy16(int[] arr) {
++    int r = arr.length / 16;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntALenDivByMinus16(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #4
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntALenDivByMinus16(int[]) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #4
++  private static Integer $noinline$IntALenDivByMinus16(int[] arr) {
++    int r = arr.length / -16;
++    return r;
++  }
++
+   /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntDivByIntMin(int) disassembly (after)
+   /// CHECK:                 asr{{s?}} r{{\d+}}, r{{\d+}}, #31
+-  /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #1
+-  /// CHECK:                 asr{{s?}} r{{\d+}}, #31
+-  /// CHECK:                 rsb{{s?}} r{{\d+}}, #0
++  /// CHECK-NEXT:            add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #1
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #31
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
+   //
+   /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntDivByIntMin(int) disassembly (after)
+-  /// CHECK:                mov w{{\d+}}, #0x7fffffff
+-  /// CHECK:                add w{{\d+}}, w{{\d+}}, w{{\d+}}
+-  /// CHECK:                cmp w{{\d+}}, #0x0
+-  /// CHECK:                csel w{{\d+}}, w{{\d+}}, w{{\d+}}, lt
+-  /// CHECK:                neg w{{\d+}}, w{{\d+}}, asr #31
++  /// CHECK:                 mov w{{\d+}}, #0x7fffffff
++  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}
++  /// CHECK-NEXT:            cmp w{{\d+}}, #0x0
++  /// CHECK-NEXT:            csel w{{\d+}}, w{{\d+}}, w{{\d+}}, lt
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #31
+   private static Integer $noinline$IntDivByIntMin(int v) {
+     int r = v / Integer.MIN_VALUE;
+     return r;
+   }
+ 
++  /// CHECK-START-ARM:   java.lang.Integer DivTest.$noinline$IntAbsDivByIntMin(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr{{s?}} r{{\d+}}, #31
++  /// CHECK-NEXT:            rsb{{s?}} r{{\d+}}, #0
++  //
++  /// CHECK-START-ARM64: java.lang.Integer DivTest.$noinline$IntAbsDivByIntMin(int) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg w{{\d+}}, w{{\d+}}, asr #31
++  private static Integer $noinline$IntAbsDivByIntMin(int v) {
++    int r = Math.abs(v) / Integer.MIN_VALUE;
++    return r;
++  }
++
+   private static void divLong() {
+     expectEquals(0L, $noinline$LongDivBy2(0L));
+     expectEquals(0L, $noinline$LongDivBy2(1L));
+@@ -209,6 +420,42 @@ public class DivTest {
+     expectEquals(0xc000000000000001L, $noinline$LongDivByMinus2(Long.MAX_VALUE));
+     expectEquals(0x4000000000000000L, $noinline$LongDivByMinus2(Long.MIN_VALUE));
+ 
++    expectEquals(0L, $noinline$LongAbsDivBy2(0L));
++    expectEquals(0L, $noinline$LongAbsDivBy2(1L));
++    expectEquals(0L, $noinline$LongAbsDivBy2(-1L));
++    expectEquals(1L, $noinline$LongAbsDivBy2(2L));
++    expectEquals(1L, $noinline$LongAbsDivBy2(-2L));
++    expectEquals(1L, $noinline$LongAbsDivBy2(3L));
++    expectEquals(1L, $noinline$LongAbsDivBy2(-3L));
++    expectEquals(3L, $noinline$LongAbsDivBy2(7L));
++    expectEquals(3L, $noinline$LongAbsDivBy2(-7L));
++    expectEquals(4L, $noinline$LongAbsDivBy2(8L));
++    expectEquals(4L, $noinline$LongAbsDivBy2(-8L));
++    expectEquals(7L, $noinline$LongAbsDivBy2(0x0fL));
++    expectEquals(0x007fL, $noinline$LongAbsDivBy2(0x00ffL));
++    expectEquals(0x07ffL, $noinline$LongAbsDivBy2(0x0fffL));
++    expectEquals(0x007fffL, $noinline$LongAbsDivBy2(0x00ffffL));
++    expectEquals(0x3fffffffffffffffL, $noinline$LongAbsDivBy2(Long.MAX_VALUE));
++    expectEquals(0xc000000000000000L, $noinline$LongAbsDivBy2(Long.MIN_VALUE));
++
++    expectEquals(0L, $noinline$LongAbsDivByMinus2(0));
++    expectEquals(0L, $noinline$LongAbsDivByMinus2(1L));
++    expectEquals(0L, $noinline$LongAbsDivByMinus2(-1L));
++    expectEquals(-1L, $noinline$LongAbsDivByMinus2(2L));
++    expectEquals(-1L, $noinline$LongAbsDivByMinus2(-2L));
++    expectEquals(-1L, $noinline$LongAbsDivByMinus2(3L));
++    expectEquals(-1L, $noinline$LongAbsDivByMinus2(-3L));
++    expectEquals(-3L, $noinline$LongAbsDivByMinus2(7L));
++    expectEquals(-3L, $noinline$LongAbsDivByMinus2(-7L));
++    expectEquals(-4L, $noinline$LongAbsDivByMinus2(8L));
++    expectEquals(-4L, $noinline$LongAbsDivByMinus2(-8L));
++    expectEquals(-7L, $noinline$LongAbsDivByMinus2(0x0fL));
++    expectEquals(0xffffffffffffff81L, $noinline$LongAbsDivByMinus2(0x00ffL));
++    expectEquals(0xfffffffffffff801L, $noinline$LongAbsDivByMinus2(0x0fffL));
++    expectEquals(0xffffffffffff8001L, $noinline$LongAbsDivByMinus2(0x00ffffL));
++    expectEquals(0xc000000000000001L, $noinline$LongAbsDivByMinus2(Long.MAX_VALUE));
++    expectEquals(0x4000000000000000L, $noinline$LongAbsDivByMinus2(Long.MIN_VALUE));
++
+     expectEquals(0L, $noinline$LongDivBy16(0));
+     expectEquals(1L, $noinline$LongDivBy16(16L));
+     expectEquals(-1L, $noinline$LongDivBy16(-16L));
+@@ -229,16 +476,43 @@ public class DivTest {
+     expectEquals(0xf800000000000001L, $noinline$LongDivByMinus16(Long.MAX_VALUE));
+     expectEquals(0x0800000000000000L, $noinline$LongDivByMinus16(Long.MIN_VALUE));
+ 
++    expectEquals(0L, $noinline$LongAbsDivBy16(0));
++    expectEquals(1L, $noinline$LongAbsDivBy16(16L));
++    expectEquals(1L, $noinline$LongAbsDivBy16(-16L));
++    expectEquals(2L, $noinline$LongAbsDivBy16(33L));
++    expectEquals(0x000fL, $noinline$LongAbsDivBy16(0x00ffL));
++    expectEquals(0x00ffL, $noinline$LongAbsDivBy16(0x0fffL));
++    expectEquals(0x000fffL, $noinline$LongAbsDivBy16(0x00ffffL));
++    expectEquals(0x07ffffffffffffffL, $noinline$LongAbsDivBy16(Long.MAX_VALUE));
++    expectEquals(0xf800000000000000L, $noinline$LongAbsDivBy16(Long.MIN_VALUE));
++
++    expectEquals(0L, $noinline$LongAbsDivByMinus16(0));
++    expectEquals(-1L, $noinline$LongAbsDivByMinus16(16L));
++    expectEquals(-1L, $noinline$LongAbsDivByMinus16(-16L));
++    expectEquals(-2L, $noinline$LongAbsDivByMinus16(33L));
++    expectEquals(0xfffffffffffffff1L, $noinline$LongAbsDivByMinus16(0x00ffL));
++    expectEquals(0xffffffffffffff01L, $noinline$LongAbsDivByMinus16(0x0fffL));
++    expectEquals(0xfffffffffffff001L, $noinline$LongAbsDivByMinus16(0x00ffffL));
++    expectEquals(0xf800000000000001L, $noinline$LongAbsDivByMinus16(Long.MAX_VALUE));
++    expectEquals(0x0800000000000000L, $noinline$LongAbsDivByMinus16(Long.MIN_VALUE));
++
+     expectEquals(0L, $noinline$LongDivByLongMin(0));
+     expectEquals(0L, $noinline$LongDivByLongMin(1));
+     expectEquals(0L, $noinline$LongDivByLongMin(-1));
+     expectEquals(1L, $noinline$LongDivByLongMin(Long.MIN_VALUE));
+     expectEquals(0L, $noinline$LongDivByLongMin(Long.MAX_VALUE));
++
++    expectEquals(0L, $noinline$LongAbsDivByLongMin(0));
++    expectEquals(0L, $noinline$LongAbsDivByLongMin(1));
++    expectEquals(0L, $noinline$LongAbsDivByLongMin(-1));
++    expectEquals(1L, $noinline$LongAbsDivByLongMin(Long.MIN_VALUE));
++    expectEquals(0L, $noinline$LongAbsDivByLongMin(Long.MAX_VALUE));
+   }
+ 
+   /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongDivBy2(long) disassembly (after)
+   /// CHECK:                 add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
+-  /// CHECK:                 asr x{{\d+}}, x{{\d+}}, #1
++  /// CHECK-NEXT:            asr x{{\d+}}, x{{\d+}}, #1
++  //
+   /// CHECK-START-X86_64: java.lang.Long DivTest.$noinline$LongDivBy2(long) disassembly (after)
+   /// CHECK-NOT:             cmovnl/geq
+   /// CHECK:                 addq
+@@ -249,7 +523,8 @@ public class DivTest {
+ 
+   /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongDivByMinus2(long) disassembly (after)
+   /// CHECK:                 add x{{\d+}}, x{{\d+}}, x{{\d+}}, lsr #63
+-  /// CHECK:                 neg x{{\d+}}, x{{\d+}}, asr #1
++  /// CHECK-NEXT:            neg x{{\d+}}, x{{\d+}}, asr #1
++  //
+   /// CHECK-START-X86_64: java.lang.Long DivTest.$noinline$LongDivByMinus2(long) disassembly (after)
+   /// CHECK-NOT:             cmovnl/geq
+   /// CHECK:                 addq
+@@ -258,34 +533,74 @@ public class DivTest {
+     return r;
+   }
+ 
++  /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongAbsDivBy2(long) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr x{{\d+}}, x{{\d+}}, #1
++  private static Long $noinline$LongAbsDivBy2(long v) {
++    long r = Math.abs(v) / 2;
++    return r;
++  }
++
++  /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongAbsDivByMinus2(long) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg x{{\d+}}, x{{\d+}}, asr #1
++  private static Long $noinline$LongAbsDivByMinus2(long v) {
++    long r = Math.abs(v) / -2;
++    return r;
++  }
++
+   /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongDivBy16(long) disassembly (after)
+-  /// CHECK:                add x{{\d+}}, x{{\d+}}, #0xf
+-  /// CHECK:                cmp x{{\d+}}, #0x0
+-  /// CHECK:                csel x{{\d+}}, x{{\d+}}, x{{\d+}}, lt
+-  /// CHECK:                asr x{{\d+}}, x{{\d+}}, #4
++  /// CHECK:                 add x{{\d+}}, x{{\d+}}, #0xf
++  /// CHECK-NEXT:            cmp x{{\d+}}, #0x0
++  /// CHECK-NEXT:            csel x{{\d+}}, x{{\d+}}, x{{\d+}}, lt
++  /// CHECK-NEXT:            asr x{{\d+}}, x{{\d+}}, #4
+   private static Long $noinline$LongDivBy16(long v) {
+     long r = v / 16;
+     return r;
+   }
+ 
+   /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongDivByMinus16(long) disassembly (after)
+-  /// CHECK:                add x{{\d+}}, x{{\d+}}, #0xf
+-  /// CHECK:                cmp x{{\d+}}, #0x0
+-  /// CHECK:                csel x{{\d+}}, x{{\d+}}, x{{\d+}}, lt
+-  /// CHECK:                neg x{{\d+}}, x{{\d+}}, asr #4
++  /// CHECK:                 add x{{\d+}}, x{{\d+}}, #0xf
++  /// CHECK-NEXT:            cmp x{{\d+}}, #0x0
++  /// CHECK-NEXT:            csel x{{\d+}}, x{{\d+}}, x{{\d+}}, lt
++  /// CHECK-NEXT:            neg x{{\d+}}, x{{\d+}}, asr #4
+   private static Long $noinline$LongDivByMinus16(long v) {
+     long r = v / -16;
+     return r;
+   }
+ 
++  /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongAbsDivBy16(long) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            asr x{{\d+}}, x{{\d+}}, #4
++  private static Long $noinline$LongAbsDivBy16(long v) {
++    long r = Math.abs(v) / 16;
++    return r;
++  }
++
++  /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongAbsDivByMinus16(long) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg x{{\d+}}, x{{\d+}}, asr #4
++  private static Long $noinline$LongAbsDivByMinus16(long v) {
++    long r = Math.abs(v) / -16;
++    return r;
++  }
++
+   /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongDivByLongMin(long) disassembly (after)
+-  /// CHECK:                mov x{{\d+}}, #0x7fffffffffffffff
+-  /// CHECK:                add x{{\d+}}, x{{\d+}}, x{{\d+}}
+-  /// CHECK:                cmp x{{\d+}}, #0x0
+-  /// CHECK:                csel x{{\d+}}, x{{\d+}}, x{{\d+}}, lt
+-  /// CHECK:                neg x{{\d+}}, x{{\d+}}, asr #63
++  /// CHECK:                 mov x{{\d+}}, #0x7fffffffffffffff
++  /// CHECK-NEXT:            add x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            cmp x{{\d+}}, #0x0
++  /// CHECK-NEXT:            csel x{{\d+}}, x{{\d+}}, x{{\d+}}, lt
++  /// CHECK-NEXT:            neg x{{\d+}}, x{{\d+}}, asr #63
+   private static Long $noinline$LongDivByLongMin(long v) {
+     long r = v / Long.MIN_VALUE;
+     return r;
+   }
++
++  /// CHECK-START-ARM64: java.lang.Long DivTest.$noinline$LongAbsDivByLongMin(long) disassembly (after)
++  /// CHECK:                 Div
++  /// CHECK-NEXT:            neg x{{\d+}}, x{{\d+}}, asr #63
++  private static Long $noinline$LongAbsDivByLongMin(long v) {
++    long r = Math.abs(v) / Long.MIN_VALUE;
++    return r;
++  }
+ }
+diff --git a/test/411-checker-hdiv-hrem-pow2/src/RemTest.java b/test/411-checker-hdiv-hrem-pow2/src/RemTest.java
+index 1d67c3323d..2d0931736a 100644
+--- a/test/411-checker-hdiv-hrem-pow2/src/RemTest.java
++++ b/test/411-checker-hdiv-hrem-pow2/src/RemTest.java
+@@ -54,6 +54,48 @@ public class RemTest {
+     expectEquals(1, $noinline$IntModMinus2(Integer.MAX_VALUE));
+     expectEquals(0, $noinline$IntModMinus2(Integer.MIN_VALUE));
+ 
++    expectEquals(0, $noinline$IntAbsMod2(0));
++    expectEquals(1, $noinline$IntAbsMod2(1));
++    expectEquals(1, $noinline$IntAbsMod2(-1));
++    expectEquals(0, $noinline$IntAbsMod2(2));
++    expectEquals(0, $noinline$IntAbsMod2(-2));
++    expectEquals(1, $noinline$IntAbsMod2(3));
++    expectEquals(1, $noinline$IntAbsMod2(-3));
++    expectEquals(1, $noinline$IntAbsMod2(0x0f));
++    expectEquals(1, $noinline$IntAbsMod2(0x00ff));
++    expectEquals(1, $noinline$IntAbsMod2(0x00ffff));
++    expectEquals(1, $noinline$IntAbsMod2(Integer.MAX_VALUE));
++    expectEquals(0, $noinline$IntAbsMod2(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntAbsModMinus2(0));
++    expectEquals(1, $noinline$IntAbsModMinus2(1));
++    expectEquals(1, $noinline$IntAbsModMinus2(-1));
++    expectEquals(0, $noinline$IntAbsModMinus2(2));
++    expectEquals(0, $noinline$IntAbsModMinus2(-2));
++    expectEquals(1, $noinline$IntAbsModMinus2(3));
++    expectEquals(1, $noinline$IntAbsModMinus2(-3));
++    expectEquals(1, $noinline$IntAbsModMinus2(0x0f));
++    expectEquals(1, $noinline$IntAbsModMinus2(0x00ff));
++    expectEquals(1, $noinline$IntAbsModMinus2(0x00ffff));
++    expectEquals(1, $noinline$IntAbsModMinus2(Integer.MAX_VALUE));
++    expectEquals(0, $noinline$IntAbsModMinus2(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntALenMod2(new int[0]));
++    expectEquals(1, $noinline$IntALenMod2(new int[1]));
++    expectEquals(0, $noinline$IntALenMod2(new int[2]));
++    expectEquals(1, $noinline$IntALenMod2(new int[3]));
++    expectEquals(1, $noinline$IntALenMod2(new int[0x0f]));
++    expectEquals(1, $noinline$IntALenMod2(new int[0x00ff]));
++    expectEquals(1, $noinline$IntALenMod2(new int[0x00ffff]));
++
++    expectEquals(0, $noinline$IntALenModMinus2(new int[0]));
++    expectEquals(1, $noinline$IntALenModMinus2(new int[1]));
++    expectEquals(0, $noinline$IntALenModMinus2(new int[2]));
++    expectEquals(1, $noinline$IntALenModMinus2(new int[3]));
++    expectEquals(1, $noinline$IntALenModMinus2(new int[0x0f]));
++    expectEquals(1, $noinline$IntALenModMinus2(new int[0x00ff]));
++    expectEquals(1, $noinline$IntALenModMinus2(new int[0x00ffff]));
++
+     expectEquals(0, $noinline$IntMod16(0));
+     expectEquals(1, $noinline$IntMod16(1));
+     expectEquals(1, $noinline$IntMod16(17));
+@@ -78,6 +120,86 @@ public class RemTest {
+     expectEquals(15, $noinline$IntModMinus16(Integer.MAX_VALUE));
+     expectEquals(0, $noinline$IntModMinus16(Integer.MIN_VALUE));
+ 
++    expectEquals(0, $noinline$IntAbsMod16(0));
++    expectEquals(1, $noinline$IntAbsMod16(1));
++    expectEquals(1, $noinline$IntAbsMod16(17));
++    expectEquals(1, $noinline$IntAbsMod16(-1));
++    expectEquals(0, $noinline$IntAbsMod16(32));
++    expectEquals(0, $noinline$IntAbsMod16(-32));
++    expectEquals(0x0f, $noinline$IntAbsMod16(0x0f));
++    expectEquals(0x0f, $noinline$IntAbsMod16(0x00ff));
++    expectEquals(0x0f, $noinline$IntAbsMod16(0x00ffff));
++    expectEquals(15, $noinline$IntAbsMod16(Integer.MAX_VALUE));
++    expectEquals(0, $noinline$IntAbsMod16(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntAbsModMinus16(0));
++    expectEquals(1, $noinline$IntAbsModMinus16(1));
++    expectEquals(1, $noinline$IntAbsModMinus16(17));
++    expectEquals(1, $noinline$IntAbsModMinus16(-1));
++    expectEquals(0, $noinline$IntAbsModMinus16(32));
++    expectEquals(0, $noinline$IntAbsModMinus16(-32));
++    expectEquals(0x0f, $noinline$IntAbsModMinus16(0x0f));
++    expectEquals(0x0f, $noinline$IntAbsModMinus16(0x00ff));
++    expectEquals(0x0f, $noinline$IntAbsModMinus16(0x00ffff));
++    expectEquals(15, $noinline$IntAbsModMinus16(Integer.MAX_VALUE));
++    expectEquals(0, $noinline$IntAbsModMinus16(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntALenMod16(new int[0]));
++    expectEquals(1, $noinline$IntALenMod16(new int[1]));
++    expectEquals(1, $noinline$IntALenMod16(new int[17]));
++    expectEquals(0, $noinline$IntALenMod16(new int[32]));
++    expectEquals(0x0f, $noinline$IntALenMod16(new int[0x0f]));
++    expectEquals(0x0f, $noinline$IntALenMod16(new int[0x00ff]));
++    expectEquals(0x0f, $noinline$IntALenMod16(new int[0x00ffff]));
++
++    expectEquals(0, $noinline$IntALenModMinus16(new int[0]));
++    expectEquals(1, $noinline$IntALenModMinus16(new int[1]));
++    expectEquals(1, $noinline$IntALenModMinus16(new int[17]));
++    expectEquals(0, $noinline$IntALenModMinus16(new int[32]));
++    expectEquals(0x0f, $noinline$IntALenModMinus16(new int[0x0f]));
++    expectEquals(0x0f, $noinline$IntALenModMinus16(new int[0x00ff]));
++    expectEquals(0x0f, $noinline$IntALenModMinus16(new int[0x00ffff]));
++
++    expectEquals(0, $noinline$IntAbsMod1024(0));
++    expectEquals(1, $noinline$IntAbsMod1024(1));
++    expectEquals(1, $noinline$IntAbsMod1024(1025));
++    expectEquals(1, $noinline$IntAbsMod1024(-1));
++    expectEquals(0, $noinline$IntAbsMod1024(2048));
++    expectEquals(0, $noinline$IntAbsMod1024(-2048));
++    expectEquals(0x0f, $noinline$IntAbsMod1024(0x0f));
++    expectEquals(0x0ff, $noinline$IntAbsMod1024(0x00ff));
++    expectEquals(0x03ff, $noinline$IntAbsMod1024(0x00ffff));
++    expectEquals(0x03ff, $noinline$IntAbsMod1024(Integer.MAX_VALUE));
++    expectEquals(0, $noinline$IntAbsMod1024(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntAbsModMinus1024(0));
++    expectEquals(1, $noinline$IntAbsModMinus1024(1));
++    expectEquals(1, $noinline$IntAbsModMinus1024(1025));
++    expectEquals(1, $noinline$IntAbsModMinus1024(-1));
++    expectEquals(0, $noinline$IntAbsModMinus1024(2048));
++    expectEquals(0, $noinline$IntAbsModMinus1024(-2048));
++    expectEquals(0x0f, $noinline$IntAbsModMinus1024(0x0f));
++    expectEquals(0x0ff, $noinline$IntAbsModMinus1024(0x00ff));
++    expectEquals(0x03ff, $noinline$IntAbsModMinus1024(0x00ffff));
++    expectEquals(0x03ff, $noinline$IntAbsModMinus1024(Integer.MAX_VALUE));
++    expectEquals(0, $noinline$IntAbsModMinus1024(Integer.MIN_VALUE));
++
++    expectEquals(0, $noinline$IntALenMod1024(new int[0]));
++    expectEquals(1, $noinline$IntALenMod1024(new int[1]));
++    expectEquals(1, $noinline$IntALenMod1024(new int[1025]));
++    expectEquals(0, $noinline$IntALenMod1024(new int[2048]));
++    expectEquals(0x0f, $noinline$IntALenMod1024(new int[0x0f]));
++    expectEquals(0x0ff, $noinline$IntALenMod1024(new int[0x00ff]));
++    expectEquals(0x03ff, $noinline$IntALenMod1024(new int[0x00ffff]));
++
++    expectEquals(0, $noinline$IntALenModMinus1024(new int[0]));
++    expectEquals(1, $noinline$IntALenModMinus1024(new int[1]));
++    expectEquals(1, $noinline$IntALenModMinus1024(new int[1025]));
++    expectEquals(0, $noinline$IntALenModMinus1024(new int[2048]));
++    expectEquals(0x0f, $noinline$IntALenModMinus1024(new int[0x0f]));
++    expectEquals(0x0ff, $noinline$IntALenModMinus1024(new int[0x00ff]));
++    expectEquals(0x03ff, $noinline$IntALenModMinus1024(new int[0x00ffff]));
++
+     expectEquals(0, $noinline$IntModIntMin(0));
+     expectEquals(1, $noinline$IntModIntMin(1));
+     expectEquals(0, $noinline$IntModIntMin(Integer.MIN_VALUE));
+@@ -86,17 +208,26 @@ public class RemTest {
+     expectEquals(0x00ff, $noinline$IntModIntMin(0x00ff));
+     expectEquals(0x00ffff, $noinline$IntModIntMin(0x00ffff));
+     expectEquals(Integer.MAX_VALUE, $noinline$IntModIntMin(Integer.MAX_VALUE));
++
++    expectEquals(0, $noinline$IntAbsModIntMin(0));
++    expectEquals(1, $noinline$IntAbsModIntMin(1));
++    expectEquals(0, $noinline$IntAbsModIntMin(Integer.MIN_VALUE));
++    expectEquals(1, $noinline$IntAbsModIntMin(-1));
++    expectEquals(0x0f, $noinline$IntAbsModIntMin(0x0f));
++    expectEquals(0x00ff, $noinline$IntAbsModIntMin(0x00ff));
++    expectEquals(0x00ffff, $noinline$IntAbsModIntMin(0x00ffff));
++    expectEquals(Integer.MAX_VALUE, $noinline$IntAbsModIntMin(Integer.MAX_VALUE));
+   }
+ 
+   /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntMod2(int) disassembly (after)
+   /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #31
+-  /// CHECK:                 bfc       r{{\d+}}, #0, #1
+-  /// CHECK:                 sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
++  /// CHECK-NEXT:            bfc       r{{\d+}}, #0, #1
++  /// CHECK-NEXT:            sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
+   //
+   /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntMod2(int) disassembly (after)
+   /// CHECK:                 cmp w{{\d+}}, #0x0
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0x1
+-  /// CHECK:                 cneg w{{\d+}}, w{{\d+}}, lt
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x1
++  /// CHECK-NEXT:            cneg w{{\d+}}, w{{\d+}}, lt
+   //
+   /// CHECK-START-X86_64: java.lang.Integer RemTest.$noinline$IntMod2(int) disassembly (after)
+   /// CHECK:          Rem [{{i\d+}},{{i\d+}}]
+@@ -116,13 +247,13 @@ public class RemTest {
+ 
+   /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntModMinus2(int) disassembly (after)
+   /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #31
+-  /// CHECK:                 bfc       r{{\d+}}, #0, #1
+-  /// CHECK:                 sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
++  /// CHECK-NEXT:            bfc       r{{\d+}}, #0, #1
++  /// CHECK-NEXT:            sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
+   //
+   /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntModMinus2(int) disassembly (after)
+   /// CHECK:                 cmp w{{\d+}}, #0x0
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0x1
+-  /// CHECK:                 cneg w{{\d+}}, w{{\d+}}, lt
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x1
++  /// CHECK-NEXT:            cneg w{{\d+}}, w{{\d+}}, lt
+   //
+   /// CHECK-START-X86_64: java.lang.Integer RemTest.$noinline$IntModMinus2(int) disassembly (after)
+   /// CHECK:          Rem [{{i\d+}},{{i\d+}}]
+@@ -140,17 +271,65 @@ public class RemTest {
+     return r;
+   }
+ 
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntAbsMod2(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0x1
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntAbsMod2(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x1
++  private static Integer $noinline$IntAbsMod2(int v) {
++    int r = Math.abs(v) % 2;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntAbsModMinus2(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0x1
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntAbsModMinus2(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x1
++  private static Integer $noinline$IntAbsModMinus2(int v) {
++    int r = Math.abs(v) % -2;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntALenMod2(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0x1
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntALenMod2(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x1
++  private static Integer $noinline$IntALenMod2(int[] arr) {
++    int r = arr.length % 2;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntALenModMinus2(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0x1
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntALenModMinus2(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x1
++  private static Integer $noinline$IntALenModMinus2(int[] arr) {
++    int r = arr.length % -2;
++    return r;
++  }
++
+   /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntMod16(int) disassembly (after)
+   /// CHECK:                 asr{{s?}} r{{\d+}}, r{{\d+}}, #31
+-  /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
+-  /// CHECK:                 bfc       r{{\d+}}, #0, #4
+-  /// CHECK:                 sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
++  /// CHECK-NEXT:            add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
++  /// CHECK-NEXT:            bfc       r{{\d+}}, #0, #4
++  /// CHECK-NEXT:            sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
+   //
+   /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntMod16(int) disassembly (after)
+   /// CHECK:                 negs w{{\d+}}, w{{\d+}}
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0xf
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0xf
+-  /// CHECK:                 csneg w{{\d+}}, w{{\d+}}, mi
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  /// CHECK-NEXT:            csneg w{{\d+}}, w{{\d+}}, mi
+   //
+   /// CHECK-START-X86_64: java.lang.Integer RemTest.$noinline$IntMod16(int) disassembly (after)
+   /// CHECK:          Rem [{{i\d+}},{{i\d+}}]
+@@ -170,15 +349,15 @@ public class RemTest {
+ 
+   /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntModMinus16(int) disassembly (after)
+   /// CHECK:                 asr{{s?}} r{{\d+}}, r{{\d+}}, #31
+-  /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
+-  /// CHECK:                 bfc       r{{\d+}}, #0, #4
+-  /// CHECK:                 sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
++  /// CHECK-NEXT:            add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #28
++  /// CHECK-NEXT:            bfc       r{{\d+}}, #0, #4
++  /// CHECK-NEXT:            sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
+   //
+   /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntModMinus16(int) disassembly (after)
+   /// CHECK:                 negs w{{\d+}}, w{{\d+}}
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0xf
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0xf
+-  /// CHECK:                 csneg w{{\d+}}, w{{\d+}}, mi
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  /// CHECK-NEXT:            csneg w{{\d+}}, w{{\d+}}, mi
+   //
+   /// CHECK-START-X86_64: java.lang.Integer RemTest.$noinline$IntModMinus16(int) disassembly (after)
+   /// CHECK:          Rem [{{i\d+}},{{i\d+}}]
+@@ -196,17 +375,113 @@ public class RemTest {
+     return r;
+   }
+ 
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntAbsMod16(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0xf
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntAbsMod16(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  private static Integer $noinline$IntAbsMod16(int v) {
++    int r = Math.abs(v) % 16;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntAbsModMinus16(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0xf
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntAbsModMinus16(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  private static Integer $noinline$IntAbsModMinus16(int v) {
++    int r = Math.abs(v) % -16;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntALenMod16(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0xf
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntALenMod16(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  private static Integer $noinline$IntALenMod16(int[] arr) {
++    int r = arr.length % 16;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntALenModMinus16(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and{{s?}} r{{\d+}}, r{{\d+}}, #0xf
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntALenModMinus16(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0xf
++  private static Integer $noinline$IntALenModMinus16(int[] arr) {
++    int r = arr.length % -16;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntAbsMod1024(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            ubfx r{{\d+}}, r{{\d+}}, #0, #10
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntAbsMod1024(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x3ff
++  private static Integer $noinline$IntAbsMod1024(int v) {
++    int r = Math.abs(v) % 1024;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntAbsModMinus1024(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            ubfx r{{\d+}}, r{{\d+}}, #0, #10
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntAbsModMinus1024(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x3ff
++  private static Integer $noinline$IntAbsModMinus1024(int v) {
++    int r = Math.abs(v) % -1024;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntALenMod1024(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            ubfx r{{\d+}}, r{{\d+}}, #0, #10
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntALenMod1024(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x3ff
++  private static Integer $noinline$IntALenMod1024(int[] arr) {
++    int r = arr.length % 1024;
++    return r;
++  }
++
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntALenModMinus1024(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            ubfx r{{\d+}}, r{{\d+}}, #0, #10
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntALenModMinus1024(int[]) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x3ff
++  private static Integer $noinline$IntALenModMinus1024(int[] arr) {
++    int r = arr.length % -1024;
++    return r;
++  }
++
+   /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntModIntMin(int) disassembly (after)
+   /// CHECK:                 asr{{s?}} r{{\d+}}, r{{\d+}}, #31
+-  /// CHECK:                 add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #1
+-  /// CHECK:                 bfc       r{{\d+}}, #0, #31
+-  /// CHECK:                 sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
++  /// CHECK-NEXT:            add       r{{\d+}}, r{{\d+}}, r{{\d+}}, lsr #1
++  /// CHECK-NEXT:            bfc       r{{\d+}}, #0, #31
++  /// CHECK-NEXT:            sub{{s?}} r{{\d+}}, r{{\d+}}, r{{\d+}}
+   //
+   /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntModIntMin(int) disassembly (after)
+   /// CHECK:                 negs w{{\d+}}, w{{\d+}}
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0x7fffffff
+-  /// CHECK:                 and w{{\d+}}, w{{\d+}}, #0x7fffffff
+-  /// CHECK:                 csneg w{{\d+}}, w{{\d+}}, mi
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x7fffffff
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x7fffffff
++  /// CHECK-NEXT:            csneg w{{\d+}}, w{{\d+}}, mi
+   //
+   /// CHECK-START-X86_64: java.lang.Integer RemTest.$noinline$IntModIntMin(int) disassembly (after)
+   /// CHECK:          Rem [{{i\d+}},{{i\d+}}]
+@@ -224,6 +499,18 @@ public class RemTest {
+     return r;
+   }
+ 
++  /// CHECK-START-ARM:   java.lang.Integer RemTest.$noinline$IntAbsModIntMin(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            ubfx r{{\d+}}, r{{\d+}}, #0, #31
++  //
++  /// CHECK-START-ARM64: java.lang.Integer RemTest.$noinline$IntAbsModIntMin(int) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and w{{\d+}}, w{{\d+}}, #0x7fffffff
++  private static Integer $noinline$IntAbsModIntMin(int v) {
++    int r = Math.abs(v) % Integer.MIN_VALUE;
++    return r;
++  }
++
+   private static void remLong() {
+     expectEquals(0L, $noinline$LongMod2(0));
+     expectEquals(1L, $noinline$LongMod2(1));
+@@ -255,6 +542,36 @@ public class RemTest {
+     expectEquals(1L, $noinline$LongModMinus2(Long.MAX_VALUE));
+     expectEquals(0L, $noinline$LongModMinus2(Long.MIN_VALUE));
+ 
++    expectEquals(0L, $noinline$LongAbsMod2(0));
++    expectEquals(1L, $noinline$LongAbsMod2(1));
++    expectEquals(1L, $noinline$LongAbsMod2(-1));
++    expectEquals(0L, $noinline$LongAbsMod2(2));
++    expectEquals(0L, $noinline$LongAbsMod2(-2));
++    expectEquals(1L, $noinline$LongAbsMod2(3));
++    expectEquals(1L, $noinline$LongAbsMod2(-3));
++    expectEquals(1L, $noinline$LongAbsMod2(0x0f));
++    expectEquals(1L, $noinline$LongAbsMod2(0x00ff));
++    expectEquals(1L, $noinline$LongAbsMod2(0x00ffff));
++    expectEquals(1L, $noinline$LongAbsMod2(0x00ffffff));
++    expectEquals(1L, $noinline$LongAbsMod2(0x00ffffffffL));
++    expectEquals(1L, $noinline$LongAbsMod2(Long.MAX_VALUE));
++    expectEquals(0L, $noinline$LongAbsMod2(Long.MIN_VALUE));
++
++    expectEquals(0L, $noinline$LongAbsModMinus2(0));
++    expectEquals(1L, $noinline$LongAbsModMinus2(1));
++    expectEquals(1L, $noinline$LongAbsModMinus2(-1));
++    expectEquals(0L, $noinline$LongAbsModMinus2(2));
++    expectEquals(0L, $noinline$LongAbsModMinus2(-2));
++    expectEquals(1L, $noinline$LongAbsModMinus2(3));
++    expectEquals(1L, $noinline$LongAbsModMinus2(-3));
++    expectEquals(1L, $noinline$LongAbsModMinus2(0x0f));
++    expectEquals(1L, $noinline$LongAbsModMinus2(0x00ff));
++    expectEquals(1L, $noinline$LongAbsModMinus2(0x00ffff));
++    expectEquals(1L, $noinline$LongAbsModMinus2(0x00ffffff));
++    expectEquals(1L, $noinline$LongAbsModMinus2(0x00ffffffffL));
++    expectEquals(1L, $noinline$LongAbsModMinus2(Long.MAX_VALUE));
++    expectEquals(0L, $noinline$LongAbsModMinus2(Long.MIN_VALUE));
++
+     expectEquals(0L, $noinline$LongMod16(0));
+     expectEquals(1L, $noinline$LongMod16(1));
+     expectEquals(1L, $noinline$LongMod16(17));
+@@ -283,6 +600,34 @@ public class RemTest {
+     expectEquals(15L, $noinline$LongModMinus16(Long.MAX_VALUE));
+     expectEquals(0L, $noinline$LongModMinus16(Long.MIN_VALUE));
+ 
++    expectEquals(0L, $noinline$LongAbsMod16(0));
++    expectEquals(1L, $noinline$LongAbsMod16(1));
++    expectEquals(1L, $noinline$LongAbsMod16(17));
++    expectEquals(1L, $noinline$LongAbsMod16(-1));
++    expectEquals(0L, $noinline$LongAbsMod16(32));
++    expectEquals(0L, $noinline$LongAbsMod16(-32));
++    expectEquals(0x0fL, $noinline$LongAbsMod16(0x0f));
++    expectEquals(0x0fL, $noinline$LongAbsMod16(0x00ff));
++    expectEquals(0x0fL, $noinline$LongAbsMod16(0x00ffff));
++    expectEquals(0x0fL, $noinline$LongAbsMod16(0x00ffffff));
++    expectEquals(0x0fL, $noinline$LongAbsMod16(0x00ffffffffL));
++    expectEquals(15L, $noinline$LongAbsMod16(Long.MAX_VALUE));
++    expectEquals(0L, $noinline$LongAbsMod16(Long.MIN_VALUE));
++
++    expectEquals(0L, $noinline$LongAbsModMinus16(0));
++    expectEquals(1L, $noinline$LongAbsModMinus16(1));
++    expectEquals(1L, $noinline$LongAbsModMinus16(17));
++    expectEquals(1L, $noinline$LongAbsModMinus16(-1));
++    expectEquals(0L, $noinline$LongAbsModMinus16(32));
++    expectEquals(0L, $noinline$LongAbsModMinus16(-32));
++    expectEquals(0x0fL, $noinline$LongAbsModMinus16(0x0f));
++    expectEquals(0x0fL, $noinline$LongAbsModMinus16(0x00ff));
++    expectEquals(0x0fL, $noinline$LongAbsModMinus16(0x00ffff));
++    expectEquals(0x0fL, $noinline$LongAbsModMinus16(0x00ffffff));
++    expectEquals(0x0fL, $noinline$LongAbsModMinus16(0x00ffffffffL));
++    expectEquals(15L, $noinline$LongAbsModMinus16(Long.MAX_VALUE));
++    expectEquals(0L, $noinline$LongAbsModMinus16(Long.MIN_VALUE));
++
+     expectEquals(0L, $noinline$LongModLongMin(0));
+     expectEquals(1L, $noinline$LongModLongMin(1));
+     expectEquals(0L, $noinline$LongModLongMin(Long.MIN_VALUE));
+@@ -293,12 +638,24 @@ public class RemTest {
+     expectEquals(0x00ffffffL, $noinline$LongModLongMin(0x00ffffff));
+     expectEquals(0x00ffffffffL, $noinline$LongModLongMin(0x00ffffffffL));
+     expectEquals(Long.MAX_VALUE, $noinline$LongModLongMin(Long.MAX_VALUE));
++
++    expectEquals(0L, $noinline$LongAbsModLongMin(0));
++    expectEquals(1L, $noinline$LongAbsModLongMin(1));
++    expectEquals(0L, $noinline$LongAbsModLongMin(Long.MIN_VALUE));
++    expectEquals(1L, $noinline$LongAbsModLongMin(-1));
++    expectEquals(0x0fL, $noinline$LongAbsModLongMin(0x0f));
++    expectEquals(0x00ffL, $noinline$LongAbsModLongMin(0x00ff));
++    expectEquals(0x00ffffL, $noinline$LongAbsModLongMin(0x00ffff));
++    expectEquals(0x00ffffffL, $noinline$LongAbsModLongMin(0x00ffffff));
++    expectEquals(0x00ffffffffL, $noinline$LongAbsModLongMin(0x00ffffffffL));
++    expectEquals(Long.MAX_VALUE, $noinline$LongAbsModLongMin(Long.MAX_VALUE));
+   }
+ 
+   /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongMod2(long) disassembly (after)
+   /// CHECK:                 cmp x{{\d+}}, #0x0
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0x1
+-  /// CHECK:                 cneg x{{\d+}}, x{{\d+}}, lt
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0x1
++  /// CHECK-NEXT:            cneg x{{\d+}}, x{{\d+}}, lt
++  //
+   /// CHECK-START-X86_64: java.lang.Long RemTest.$noinline$LongMod2(long) disassembly (after)
+   /// CHECK:          Rem [{{j\d+}},{{j\d+}}]
+   /// CHECK-NOT:      imul
+@@ -318,8 +675,9 @@ public class RemTest {
+ 
+   /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongModMinus2(long) disassembly (after)
+   /// CHECK:                 cmp x{{\d+}}, #0x0
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0x1
+-  /// CHECK:                 cneg x{{\d+}}, x{{\d+}}, lt
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0x1
++  /// CHECK-NEXT:            cneg x{{\d+}}, x{{\d+}}, lt
++  //
+   /// CHECK-START-X86_64: java.lang.Long RemTest.$noinline$LongModMinus2(long) disassembly (after)
+   /// CHECK:          Rem [{{j\d+}},{{j\d+}}]
+   /// CHECK-NOT:      imul
+@@ -337,11 +695,27 @@ public class RemTest {
+     return r;
+   }
+ 
++  /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongAbsMod2(long) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0x1
++  private static Long $noinline$LongAbsMod2(long v) {
++    long r = Math.abs(v) % 2;
++    return r;
++  }
++
++  /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongAbsModMinus2(long) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0x1
++  private static Long $noinline$LongAbsModMinus2(long v) {
++    long r = Math.abs(v) % -2;
++    return r;
++  }
++
+   /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongMod16(long) disassembly (after)
+   /// CHECK:                 negs x{{\d+}}, x{{\d+}}
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0xf
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0xf
+-  /// CHECK:                 csneg x{{\d+}}, x{{\d+}}, mi
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0xf
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0xf
++  /// CHECK-NEXT:            csneg x{{\d+}}, x{{\d+}}, mi
+ 
+   /// CHECK-START-X86_64: java.lang.Long RemTest.$noinline$LongMod16(long) disassembly (after)
+   /// CHECK:          Rem [{{j\d+}},{{j\d+}}]
+@@ -362,9 +736,10 @@ public class RemTest {
+ 
+   /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongModMinus16(long) disassembly (after)
+   /// CHECK:                 negs x{{\d+}}, x{{\d+}}
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0xf
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0xf
+-  /// CHECK:                 csneg x{{\d+}}, x{{\d+}}, mi
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0xf
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0xf
++  /// CHECK-NEXT:            csneg x{{\d+}}, x{{\d+}}, mi
++  //
+   /// CHECK-START-X86_64: java.lang.Long RemTest.$noinline$LongModMinus16(long) disassembly (after)
+   /// CHECK:          Rem [{{j\d+}},{{j\d+}}]
+   /// CHECK-NOT:      imul
+@@ -382,11 +757,28 @@ public class RemTest {
+     return r;
+   }
+ 
++  /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongAbsMod16(long) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0xf
++  private static Long $noinline$LongAbsMod16(long v) {
++    long r = Math.abs(v) % 16;
++    return r;
++  }
++
++  /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongAbsModMinus16(long) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0xf
++  private static Long $noinline$LongAbsModMinus16(long v) {
++    long r = Math.abs(v) % -16;
++    return r;
++  }
++
+   /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongModLongMin(long) disassembly (after)
+   /// CHECK:                 negs x{{\d+}}, x{{\d+}}
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0x7fffffffffffffff
+-  /// CHECK:                 and x{{\d+}}, x{{\d+}}, #0x7fffffffffffffff
+-  /// CHECK:                 csneg x{{\d+}}, x{{\d+}}, mi
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0x7fffffffffffffff
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0x7fffffffffffffff
++  /// CHECK-NEXT:            csneg x{{\d+}}, x{{\d+}}, mi
++  //
+   /// CHECK-START-X86_64: java.lang.Long RemTest.$noinline$LongModLongMin(long) disassembly (after)
+   /// CHECK:          Rem [{{j\d+}},{{j\d+}}]
+   /// CHECK-NOT:      imul
+@@ -403,4 +795,12 @@ public class RemTest {
+     long r = v % Long.MIN_VALUE;
+     return r;
+   }
++
++  /// CHECK-START-ARM64: java.lang.Long RemTest.$noinline$LongAbsModLongMin(long) disassembly (after)
++  /// CHECK:                 Rem
++  /// CHECK-NEXT:            and x{{\d+}}, x{{\d+}}, #0x7fffffffffffffff
++  private static Long $noinline$LongAbsModLongMin(long v) {
++    long r = Math.abs(v) % Long.MIN_VALUE;
++    return r;
++  }
+ }
+-- 
+2.31.1
+

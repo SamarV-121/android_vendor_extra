@@ -1,0 +1,255 @@
+From a64529074f1417085600b071686d388b213312bf Mon Sep 17 00:00:00 2001
+From: Evgeny Astigeevich <evgeny.astigeevich@linaro.org>
+Date: Tue, 12 May 2020 12:43:09 +0100
+Subject: [PATCH 07/27] ART: Optimize ADD/SUB+ADD_shift into ADDS/SUBS+CINC for
+ HDiv/HRem
+
+HDiv/HRem having a constant divisor are optimized by using
+multiplication of the dividend by a sort of reciprocal of the divisor.
+The multiplication result might need some corrections to be finalized.
+The last correction is to increment by 1, if the result is negative.
+Currently it is done with 'add result, temp_result, temp_result, lsr #31 or #63'.
+Such ADD usually has latency 2, e.g. on Cortex-A55.
+However if one of the corrections is ADD or SUB, the sign can be detected
+with ADDS/SUBS. They set the N flag if the result is negative.
+This allows to use CINC which has latency 1:
+  adds temp_result, temp_result, dividend
+  cinc out, temp_result, mi
+
+This CL implements this optimization.
+
+Test: test.py --host --optimizing --jit
+Test: test.py --target --optimizing --jit
+Change-Id: Ia6aac6771908e992c86e32fe1694a82bd1b7af0b
+---
+ compiler/optimizing/code_generator_arm64.cc   | 21 ++++++--
+ test/411-checker-hdiv-hrem-const/info.txt     |  2 +-
+ .../src/DivTest.java                          | 52 +++++++++++++++++--
+ .../src/RemTest.java                          | 52 +++++++++++++++++--
+ 4 files changed, 115 insertions(+), 12 deletions(-)
+
+diff --git a/compiler/optimizing/code_generator_arm64.cc b/compiler/optimizing/code_generator_arm64.cc
+index 50c2f0d04c..62bd5d9b7d 100644
+--- a/compiler/optimizing/code_generator_arm64.cc
++++ b/compiler/optimizing/code_generator_arm64.cc
+@@ -3058,11 +3058,22 @@ void InstructionCodeGeneratorARM64::GenerateResultDivRemWithAnyConstant(
+     Register temp_result,
+     Register out,
+     UseScratchRegisterScope* temps_scope) {
++  // The multiplication result might need some corrections to be finalized.
++  // The last correction is to increment by 1, if the result is negative.
++  // Currently it is done with 'add result, temp_result, temp_result, lsr #31 or #63'.
++  // Such ADD usually has latency 2, e.g. on Cortex-A55.
++  // However if one of the corrections is ADD or SUB, the sign can be detected
++  // with ADDS/SUBS. They set the N flag if the result is negative.
++  // This allows to use CINC MI which has latency 1.
++  bool use_cond_inc = false;
++
+   // As magic_number can be modified to fit into 32 bits, check whether the correction is needed.
+   if (NeedToAddDividend(magic_number, divisor)) {
+-    __ Add(temp_result, temp_result, dividend);
++    __ Adds(temp_result, temp_result, dividend);
++    use_cond_inc = true;
+   } else if (NeedToSubDividend(magic_number, divisor)) {
+-    __ Sub(temp_result, temp_result, dividend);
++    __ Subs(temp_result, temp_result, dividend);
++    use_cond_inc = true;
+   }
+ 
+   if (final_right_shift != 0) {
+@@ -3070,7 +3081,11 @@ void InstructionCodeGeneratorARM64::GenerateResultDivRemWithAnyConstant(
+   }
+ 
+   Register& result = (is_rem) ? temp_result : out;
+-  __ Add(result, temp_result, Operand(temp_result, LSR, temp_result.GetSizeInBits() - 1));
++  if (use_cond_inc) {
++    __ Cinc(result, temp_result, mi);
++  } else {
++    __ Add(result, temp_result, Operand(temp_result, LSR, temp_result.GetSizeInBits() - 1));
++  }
+   if (is_rem) {
+     // TODO: Strength reduction for msub.
+     Register temp_imm = temps_scope->AcquireSameSizeAs(out);
+diff --git a/test/411-checker-hdiv-hrem-const/info.txt b/test/411-checker-hdiv-hrem-const/info.txt
+index ff8332f5b1..ce88f44105 100644
+--- a/test/411-checker-hdiv-hrem-const/info.txt
++++ b/test/411-checker-hdiv-hrem-const/info.txt
+@@ -1,2 +1,2 @@
+-Test the optimization of LSR+ASR into one ASR for integer division and remainder instructions when
++Checker test for optimizations of integer division and remainder instructions when
+ the denominator is a constant, not power of 2.
+diff --git a/test/411-checker-hdiv-hrem-const/src/DivTest.java b/test/411-checker-hdiv-hrem-const/src/DivTest.java
+index cb97abdce2..9a1cd474c0 100644
+--- a/test/411-checker-hdiv-hrem-const/src/DivTest.java
++++ b/test/411-checker-hdiv-hrem-const/src/DivTest.java
+@@ -115,11 +115,13 @@ public class DivTest {
+   // must be corrected by the 'add' instruction which is between 'lsr' and 'asr'
+   // instructions. In such a case they cannot be combined into one 'asr'.
+   //
++  // The test case also checks 'add' and 'add_shift' are optimized into 'adds' and 'cinc'.
++  //
+   /// CHECK-START-ARM64: int DivTest.$noinline$IntDivBy7(int) disassembly (after)
+   /// CHECK:                 lsr x{{\d+}}, x{{\d+}}, #32
+-  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}
++  /// CHECK-NEXT:            adds w{{\d+}}, w{{\d+}}, w{{\d+}}
+   /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #2
+-  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK-NEXT:            cinc w{{\d+}}, w{{\d+}}, mi
+   private static int $noinline$IntDivBy7(int v) {
+     int r = v / 7;
+     return r;
+@@ -130,11 +132,13 @@ public class DivTest {
+   // must be corrected. In this case it is a 'sub' instruction which is between 'lsr' and 'asr'
+   // instructions. So they cannot be combined into one 'asr'.
+   //
++  // The test case also checks 'sub' and 'add_shift' are optimized into 'subs' and 'cinc'.
++  //
+   /// CHECK-START-ARM64: int DivTest.$noinline$IntDivByMinus7(int) disassembly (after)
+   /// CHECK:                 lsr x{{\d+}}, x{{\d+}}, #32
+-  /// CHECK-NEXT:            sub w{{\d+}}, w{{\d+}}, w{{\d+}}
++  /// CHECK-NEXT:            subs w{{\d+}}, w{{\d+}}, w{{\d+}}
+   /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #2
+-  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK-NEXT:            cinc w{{\d+}}, w{{\d+}}, mi
+   private static int $noinline$IntDivByMinus7(int v) {
+     int r = v / -7;
+     return r;
+@@ -218,6 +222,22 @@ public class DivTest {
+     expectEquals(1L, $noinline$LongDivByMinus6(-6L));
+     expectEquals(-3L, $noinline$LongDivByMinus6(19L));
+     expectEquals(3L, $noinline$LongDivByMinus6(-19L));
++
++    expectEquals(0L, $noinline$LongDivBy100(0L));
++    expectEquals(0L, $noinline$LongDivBy100(1L));
++    expectEquals(0L, $noinline$LongDivBy100(-1L));
++    expectEquals(1L, $noinline$LongDivBy100(100L));
++    expectEquals(-1L, $noinline$LongDivBy100(-100L));
++    expectEquals(3L, $noinline$LongDivBy100(301L));
++    expectEquals(-3L, $noinline$LongDivBy100(-301L));
++
++    expectEquals(0L, $noinline$LongDivByMinus100(0L));
++    expectEquals(0L, $noinline$LongDivByMinus100(1L));
++    expectEquals(0L, $noinline$LongDivByMinus100(-1L));
++    expectEquals(-1L, $noinline$LongDivByMinus100(100L));
++    expectEquals(1L, $noinline$LongDivByMinus100(-100L));
++    expectEquals(-3L, $noinline$LongDivByMinus100(301L));
++    expectEquals(3L, $noinline$LongDivByMinus100(-301L));
+   }
+ 
+   // Test cases for Int64 HDiv/HRem to check that optimizations implemented for Int32 are not
+@@ -272,4 +292,28 @@ public class DivTest {
+     long r = v / -6L;
+     return r;
+   }
++
++  // A test to check 'add' and 'add_shift' are optimized into 'adds' and 'cinc'.
++  //
++  /// CHECK-START-ARM64: long DivTest.$noinline$LongDivBy100(long) disassembly (after)
++  /// CHECK:                 smulh x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            adds  x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            asr   x{{\d+}}, x{{\d+}}, #6
++  /// CHECK-NEXT:            cinc  x{{\d+}}, x{{\d+}}, mi
++  private static long $noinline$LongDivBy100(long v) {
++    long r = v / 100L;
++    return r;
++  }
++
++  // A test to check 'subs' and 'add_shift' are optimized into 'subs' and 'cinc'.
++  //
++  /// CHECK-START-ARM64: long DivTest.$noinline$LongDivByMinus100(long) disassembly (after)
++  /// CHECK:                 smulh x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            subs  x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            asr   x{{\d+}}, x{{\d+}}, #6
++  /// CHECK-NEXT:            cinc  x{{\d+}}, x{{\d+}}, mi
++  private static long $noinline$LongDivByMinus100(long v) {
++    long r = v / -100L;
++    return r;
++  }
+ }
+diff --git a/test/411-checker-hdiv-hrem-const/src/RemTest.java b/test/411-checker-hdiv-hrem-const/src/RemTest.java
+index bcb183443f..11889c42ac 100644
+--- a/test/411-checker-hdiv-hrem-const/src/RemTest.java
++++ b/test/411-checker-hdiv-hrem-const/src/RemTest.java
+@@ -121,9 +121,9 @@ public class RemTest {
+   //
+   /// CHECK-START-ARM64: int RemTest.$noinline$IntRemBy7(int) disassembly (after)
+   /// CHECK:                 lsr x{{\d+}}, x{{\d+}}, #32
+-  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}
++  /// CHECK-NEXT:            adds w{{\d+}}, w{{\d+}}, w{{\d+}}
+   /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #2
+-  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK-NEXT:            cinc w{{\d+}}, w{{\d+}}, mi
+   /// CHECK-NEXT:            mov w{{\d+}}, #0x7
+   /// CHECK-NEXT:            msub w{{\d+}}, w{{\d+}}, w{{\d+}}, w{{\d+}}
+   private static int $noinline$IntRemBy7(int v) {
+@@ -138,9 +138,9 @@ public class RemTest {
+   //
+   /// CHECK-START-ARM64: int RemTest.$noinline$IntRemByMinus7(int) disassembly (after)
+   /// CHECK:                 lsr x{{\d+}}, x{{\d+}}, #32
+-  /// CHECK-NEXT:            sub w{{\d+}}, w{{\d+}}, w{{\d+}}
++  /// CHECK-NEXT:            subs w{{\d+}}, w{{\d+}}, w{{\d+}}
+   /// CHECK-NEXT:            asr w{{\d+}}, w{{\d+}}, #2
+-  /// CHECK-NEXT:            add w{{\d+}}, w{{\d+}}, w{{\d+}}, lsr #31
++  /// CHECK-NEXT:            cinc w{{\d+}}, w{{\d+}}, mi
+   /// CHECK-NEXT:            mov w{{\d+}}, #0xfffffff9
+   /// CHECK-NEXT:            msub w{{\d+}}, w{{\d+}}, w{{\d+}}, w{{\d+}}
+   private static int $noinline$IntRemByMinus7(int v) {
+@@ -230,6 +230,22 @@ public class RemTest {
+     expectEquals(0L, $noinline$LongRemByMinus6(-6L));
+     expectEquals(1L, $noinline$LongRemByMinus6(19L));
+     expectEquals(-1L, $noinline$LongRemByMinus6(-19L));
++
++    expectEquals(0L, $noinline$LongRemBy100(0L));
++    expectEquals(1L, $noinline$LongRemBy100(1L));
++    expectEquals(-1L, $noinline$LongRemBy100(-1L));
++    expectEquals(0L, $noinline$LongRemBy100(100L));
++    expectEquals(0L, $noinline$LongRemBy100(-100L));
++    expectEquals(1L, $noinline$LongRemBy100(101L));
++    expectEquals(-1L, $noinline$LongRemBy100(-101L));
++
++    expectEquals(0L, $noinline$LongRemByMinus100(0L));
++    expectEquals(1L, $noinline$LongRemByMinus100(1L));
++    expectEquals(-1L, $noinline$LongRemByMinus100(-1L));
++    expectEquals(0L, $noinline$LongRemByMinus100(100L));
++    expectEquals(0L, $noinline$LongRemByMinus100(-100L));
++    expectEquals(1L, $noinline$LongRemByMinus100(101L));
++    expectEquals(-1L, $noinline$LongRemByMinus100(-101L));
+   }
+ 
+   // Test cases for Int64 HDiv/HRem to check that optimizations implemented for Int32 are not
+@@ -296,4 +312,32 @@ public class RemTest {
+     long r = v % -6L;
+     return r;
+   }
++
++  // A test to check 'add' and 'add_shift' are optimized into 'adds' and 'cinc'.
++  //
++  /// CHECK-START-ARM64: long RemTest.$noinline$LongRemBy100(long) disassembly (after)
++  /// CHECK:                 smulh x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            adds  x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            asr   x{{\d+}}, x{{\d+}}, #6
++  /// CHECK-NEXT:            cinc  x{{\d+}}, x{{\d+}}, mi
++  /// CHECK-NEXT:            mov x{{\d+}}, #0x64
++  /// CHECK-NEXT:            msub x{{\d+}}, x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long $noinline$LongRemBy100(long v) {
++    long r = v % 100L;
++    return r;
++  }
++
++  // A test to check 'sub' and 'add_shift' are optimized into 'subs' and 'cinc'.
++  //
++  /// CHECK-START-ARM64: long RemTest.$noinline$LongRemByMinus100(long) disassembly (after)
++  /// CHECK:                 smulh x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            subs  x{{\d+}}, x{{\d+}}, x{{\d+}}
++  /// CHECK-NEXT:            asr   x{{\d+}}, x{{\d+}}, #6
++  /// CHECK-NEXT:            cinc  x{{\d+}}, x{{\d+}}, mi
++  /// CHECK-NEXT:            mov x{{\d+}}, #0xffffffffffffff9c
++  /// CHECK-NEXT:            msub x{{\d+}}, x{{\d+}}, x{{\d+}}, x{{\d+}}
++  private static long $noinline$LongRemByMinus100(long v) {
++    long r = v % -100L;
++    return r;
++  }
+ }
+-- 
+2.31.1
+

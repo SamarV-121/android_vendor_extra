@@ -1,0 +1,33 @@
+From c6defa77b17e8ed0936702cce360f2e7209ae114 Mon Sep 17 00:00:00 2001
+From: Yi Kong <yikong@google.com>
+Date: Mon, 22 Feb 2021 17:44:17 +0800
+Subject: [PATCH 6/8] libgui: Enable PGO
+
+This improved app launch time by 0.90%.
+
+Test: TreeHugger
+Bug: 180985299
+Change-Id: I548766211cc9ba0e2fb69b47acdafc52179661f6
+---
+ libs/gui/Android.bp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/libs/gui/Android.bp b/libs/gui/Android.bp
+index 2cf589d..9e22fcc 100644
+--- a/libs/gui/Android.bp
++++ b/libs/gui/Android.bp
+@@ -124,6 +124,11 @@ cc_defaults {
+     lto: {
+         thin: true,
+     },
++
++    pgo: {
++        sampling: true,
++        profile_file: "libgui/libgui.profdata",
++    },
+ }
+ 
+ // Used by media codec services exclusively as a static lib for
+-- 
+2.31.1
+

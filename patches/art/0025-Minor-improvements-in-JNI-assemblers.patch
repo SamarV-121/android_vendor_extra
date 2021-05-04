@@ -1,0 +1,382 @@
+From bf9b587e671251accf3e0b15dd64bdcc7a2d2351 Mon Sep 17 00:00:00 2001
+From: Vladimir Marko <vmarko@google.com>
+Date: Fri, 28 Feb 2020 16:43:06 +0000
+Subject: [PATCH 25/27] Minor improvements in JNI assemblers.
+
+Address issues identified in
+    https://android-review.googlesource.com/1246286
+and clean up a few other things.
+
+Test: m test-art-host-gtest
+Test: testrunner.py --host --optimizing
+Test: aosp_taimen-userdebug boots.
+Test: run-gtests.sh
+Test: testrunner.py --target --optimizing
+Bug: 12189621
+Change-Id: I9ee1a9c113ef756d7aa3bd4d3f17ef1aaa4306f5
+---
+ .../quick/x86_64/calling_convention_x86_64.cc |  6 +--
+ .../utils/arm/jni_macro_assembler_arm_vixl.cc | 21 +++------
+ .../utils/arm64/jni_macro_assembler_arm64.cc  | 43 +++++++------------
+ .../assembler_thumb_test_expected.cc.inc      |  8 ++--
+ compiler/utils/x86/jni_macro_assembler_x86.cc | 10 ++---
+ .../x86_64/jni_macro_assembler_x86_64.cc      | 21 +++------
+ runtime/arch/x86_64/jni_entrypoints_x86_64.S  | 14 +++---
+ .../arch/x86_64/quick_entrypoints_x86_64.S    |  9 ++--
+ 8 files changed, 52 insertions(+), 80 deletions(-)
+
+diff --git a/compiler/jni/quick/x86_64/calling_convention_x86_64.cc b/compiler/jni/quick/x86_64/calling_convention_x86_64.cc
+index 579347f915..e97cab8280 100644
+--- a/compiler/jni/quick/x86_64/calling_convention_x86_64.cc
++++ b/compiler/jni/quick/x86_64/calling_convention_x86_64.cc
+@@ -304,13 +304,13 @@ FrameOffset X86_64JniCallingConvention::CurrentParamStackOffset() {
+ 
+ ManagedRegister X86_64JniCallingConvention::HiddenArgumentRegister() const {
+   CHECK(IsCriticalNative());
+-  // R11 is neither managed callee-save, nor argument register, nor scratch register.
++  // RAX is neither managed callee-save, nor argument register, nor scratch register.
+   DCHECK(std::none_of(kCalleeSaveRegisters,
+                       kCalleeSaveRegisters + std::size(kCalleeSaveRegisters),
+                       [](ManagedRegister callee_save) constexpr {
+-                        return callee_save.Equals(X86_64ManagedRegister::FromCpuRegister(R11));
++                        return callee_save.Equals(X86_64ManagedRegister::FromCpuRegister(RAX));
+                       }));
+-  return X86_64ManagedRegister::FromCpuRegister(R11);
++  return X86_64ManagedRegister::FromCpuRegister(RAX);
+ }
+ 
+ // Whether to use tail call (used only for @CriticalNative).
+diff --git a/compiler/utils/arm/jni_macro_assembler_arm_vixl.cc b/compiler/utils/arm/jni_macro_assembler_arm_vixl.cc
+index 82a11f9f43..85b253c4c5 100644
+--- a/compiler/utils/arm/jni_macro_assembler_arm_vixl.cc
++++ b/compiler/utils/arm/jni_macro_assembler_arm_vixl.cc
+@@ -892,20 +892,16 @@ void ArmVIXLJNIMacroAssembler::Jump(ManagedRegister mbase, Offset offset) {
+ 
+ void ArmVIXLJNIMacroAssembler::Call(ManagedRegister mbase, Offset offset) {
+   vixl::aarch32::Register base = AsVIXLRegister(mbase.AsArm());
+-  UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+-  vixl32::Register scratch = temps.Acquire();
+-  asm_.LoadFromOffset(kLoadWord, scratch, base, offset.Int32Value());
+-  ___ Blx(scratch);
++  asm_.LoadFromOffset(kLoadWord, lr, base, offset.Int32Value());
++  ___ Blx(lr);
+   // TODO: place reference map on call.
+ }
+ 
+ void ArmVIXLJNIMacroAssembler::Call(FrameOffset base, Offset offset) {
+-  UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+-  vixl32::Register scratch = temps.Acquire();
+   // Call *(*(SP + base) + offset)
+-  asm_.LoadFromOffset(kLoadWord, scratch, sp, base.Int32Value());
+-  asm_.LoadFromOffset(kLoadWord, scratch, scratch, offset.Int32Value());
+-  ___ Blx(scratch);
++  asm_.LoadFromOffset(kLoadWord, lr, sp, base.Int32Value());
++  asm_.LoadFromOffset(kLoadWord, lr, lr, offset.Int32Value());
++  ___ Blx(lr);
+   // TODO: place reference map on call
+ }
+ 
+@@ -987,13 +983,10 @@ void ArmVIXLJNIMacroAssembler::EmitExceptionPoll(
+   // Pass exception object as argument.
+   // Don't care about preserving r0 as this won't return.
+   ___ Mov(r0, scratch);
+-  temps.Include(scratch);
+-  // TODO: check that exception->scratch_ is dead by this point.
+-  vixl32::Register temp = temps.Acquire();
+-  ___ Ldr(temp,
++  ___ Ldr(lr,
+           MemOperand(tr,
+               QUICK_ENTRYPOINT_OFFSET(kArmPointerSize, pDeliverException).Int32Value()));
+-  ___ Blx(temp);
++  ___ Blx(lr);
+ }
+ 
+ void ArmVIXLJNIMacroAssembler::MemoryBarrier(ManagedRegister scratch ATTRIBUTE_UNUSED) {
+diff --git a/compiler/utils/arm64/jni_macro_assembler_arm64.cc b/compiler/utils/arm64/jni_macro_assembler_arm64.cc
+index b985c87202..bb93a96ebe 100644
+--- a/compiler/utils/arm64/jni_macro_assembler_arm64.cc
++++ b/compiler/utils/arm64/jni_macro_assembler_arm64.cc
+@@ -165,7 +165,7 @@ void Arm64JNIMacroAssembler::StoreRawPtr(FrameOffset offs, ManagedRegister m_src
+ void Arm64JNIMacroAssembler::StoreImmediateToFrame(FrameOffset offs, uint32_t imm) {
+   UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+   Register scratch = temps.AcquireW();
+-  ___ Mov(scratch.X(), imm);  // TODO: Use W register.
++  ___ Mov(scratch, imm);
+   ___ Str(scratch, MEM_OP(reg_x(SP), offs.Int32Value()));
+ }
+ 
+@@ -490,13 +490,7 @@ void Arm64JNIMacroAssembler::Copy(FrameOffset dest, FrameOffset src, size_t size
+   DCHECK(size == 4 || size == 8) << size;
+   UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+   Register scratch = (size == 8) ? temps.AcquireX() : temps.AcquireW();
+-  if (size < 8u || IsAligned<8u>(src.Int32Value()) || src.Int32Value() < 0x100) {
+-    ___ Ldr(scratch, MEM_OP(reg_x(SP), src.Int32Value()));
+-  } else {
+-    // TODO: Let the macro assembler deal with this case as well (uses another scratch register).
+-    ___ Mov(scratch.X(), src.Int32Value());
+-    ___ Ldr(scratch, MEM_OP(reg_x(SP), scratch.X()));
+-  }
++  ___ Ldr(scratch, MEM_OP(reg_x(SP), src.Int32Value()));
+   ___ Str(scratch, MEM_OP(reg_x(SP), dest.Int32Value()));
+ }
+ 
+@@ -641,19 +635,15 @@ void Arm64JNIMacroAssembler::Jump(ManagedRegister m_base, Offset offs) {
+ void Arm64JNIMacroAssembler::Call(ManagedRegister m_base, Offset offs) {
+   Arm64ManagedRegister base = m_base.AsArm64();
+   CHECK(base.IsXRegister()) << base;
+-  UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+-  Register scratch = temps.AcquireX();
+-  ___ Ldr(scratch, MEM_OP(reg_x(base.AsXRegister()), offs.Int32Value()));
+-  ___ Blr(scratch);
++  ___ Ldr(lr, MEM_OP(reg_x(base.AsXRegister()), offs.Int32Value()));
++  ___ Blr(lr);
+ }
+ 
+ void Arm64JNIMacroAssembler::Call(FrameOffset base, Offset offs) {
+-  UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+-  Register scratch = temps.AcquireX();
+   // Call *(*(SP + base) + offset)
+-  ___ Ldr(scratch, MEM_OP(reg_x(SP), base.Int32Value()));
+-  ___ Ldr(scratch, MEM_OP(scratch, offs.Int32Value()));
+-  ___ Blr(scratch);
++  ___ Ldr(lr, MEM_OP(reg_x(SP), base.Int32Value()));
++  ___ Ldr(lr, MEM_OP(lr, offs.Int32Value()));
++  ___ Blr(lr);
+ }
+ 
+ void Arm64JNIMacroAssembler::CallFromThread(ThreadOffset64 offset ATTRIBUTE_UNUSED) {
+@@ -694,15 +684,14 @@ void Arm64JNIMacroAssembler::CreateHandleScopeEntry(FrameOffset out_off,
+   UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+   Register scratch = temps.AcquireX();
+   if (null_allowed) {
+-    // TODO: Clean this up; load to temp2 (W register), use xzr for CSEL, reorder ADD earlier.
+     Register scratch2 = temps.AcquireW();
+-    ___ Ldr(scratch.W(), MEM_OP(reg_x(SP), handle_scope_offset.Int32Value()));
++    ___ Ldr(scratch2, MEM_OP(reg_x(SP), handle_scope_offset.Int32Value()));
++    ___ Add(scratch, reg_x(SP), handle_scope_offset.Int32Value());
+     // Null values get a handle scope entry value of 0.  Otherwise, the handle scope entry is
+     // the address in the handle scope holding the reference.
+     // e.g. scratch = (scratch == 0) ? 0 : (SP+handle_scope_offset)
+-    ___ Cmp(scratch.W(), 0);
+-    ___ Add(scratch2.X(), reg_x(SP), handle_scope_offset.Int32Value());
+-    ___ Csel(scratch, scratch2.X(), scratch, ne);
++    ___ Cmp(scratch2, 0);
++    ___ Csel(scratch, scratch, xzr, ne);
+   } else {
+     ___ Add(scratch, reg_x(SP), handle_scope_offset.Int32Value());
+   }
+@@ -751,12 +740,11 @@ void Arm64JNIMacroAssembler::TestGcMarking(JNIMacroLabel* label, JNIMacroUnaryCo
+   Register scratch = temps.AcquireW();
+   ___ Ldr(scratch, MEM_OP(reg_x(TR), Thread::IsGcMarkingOffset<kArm64PointerSize>().Int32Value()));
+   switch (cond) {
+-    // TODO: Use `scratch` instead of `scratch.X()`.
+     case JNIMacroUnaryCondition::kZero:
+-      ___ Cbz(scratch.X(), Arm64JNIMacroLabel::Cast(label)->AsArm64());
++      ___ Cbz(scratch, Arm64JNIMacroLabel::Cast(label)->AsArm64());
+       break;
+     case JNIMacroUnaryCondition::kNotZero:
+-      ___ Cbnz(scratch.X(), Arm64JNIMacroLabel::Cast(label)->AsArm64());
++      ___ Cbnz(scratch, Arm64JNIMacroLabel::Cast(label)->AsArm64());
+       break;
+     default:
+       LOG(FATAL) << "Not implemented unary condition: " << static_cast<int>(cond);
+@@ -772,7 +760,6 @@ void Arm64JNIMacroAssembler::Bind(JNIMacroLabel* label) {
+ void Arm64JNIMacroAssembler::EmitExceptionPoll(Arm64Exception* exception) {
+   UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+   temps.Exclude(exception->scratch_);
+-  Register scratch = temps.AcquireX();
+ 
+   // Bind exception poll entry.
+   ___ Bind(exception->Entry());
+@@ -782,11 +769,11 @@ void Arm64JNIMacroAssembler::EmitExceptionPoll(Arm64Exception* exception) {
+   // Pass exception object as argument.
+   // Don't care about preserving X0 as this won't return.
+   ___ Mov(reg_x(X0), exception->scratch_);
+-  ___ Ldr(scratch,
++  ___ Ldr(lr,
+           MEM_OP(reg_x(TR),
+                  QUICK_ENTRYPOINT_OFFSET(kArm64PointerSize, pDeliverException).Int32Value()));
+ 
+-  ___ Blr(scratch);
++  ___ Blr(lr);
+   // Call should never return.
+   ___ Brk();
+ }
+diff --git a/compiler/utils/assembler_thumb_test_expected.cc.inc b/compiler/utils/assembler_thumb_test_expected.cc.inc
+index d6b1c50f5f..b7a6058b41 100644
+--- a/compiler/utils/assembler_thumb_test_expected.cc.inc
++++ b/compiler/utils/assembler_thumb_test_expected.cc.inc
+@@ -41,8 +41,8 @@ const char* const VixlJniHelpersResults[] = {
+   "  7e:	f50d 5c80 	add.w	ip, sp, #4096	; 0x1000\n",
+   "  82:	f8c9 c200 	str.w	ip, [r9, #512]	; 0x200\n",
+   "  86:	f8c9 d200 	str.w	sp, [r9, #512]	; 0x200\n",
+-  "  8a:	f8d0 c030 	ldr.w	ip, [r0, #48]	; 0x30\n",
+-  "  8e:	47e0      	blx	ip\n",
++  "  8a:	f8d0 e030 	ldr.w	lr, [r0, #48]	; 0x30\n",
++  "  8e:	47f0      	blx	lr\n",
+   "  90:	f8dd c02c 	ldr.w	ip, [sp, #44]	; 0x2c\n",
+   "  94:	f8cd c030 	str.w	ip, [sp, #48]	; 0x30\n",
+   "  98:	f8d9 c200 	ldr.w	ip, [r9, #512]	; 0x200\n",
+@@ -153,8 +153,8 @@ const char* const VixlJniHelpersResults[] = {
+   " 21c:	f8d9 8034 	ldr.w	r8, [r9, #52]	; 0x34\n",
+   " 220:	4770      	bx	lr\n",
+   " 222:	4660      	mov	r0, ip\n",
+-  " 224:	f8d9 c2e8 	ldr.w	ip, [r9, #744]	; 0x2e8\n",
+-  " 228:	47e0      	blx	ip\n",
++  " 224:	f8d9 e2e8 	ldr.w	lr, [r9, #744]	; 0x2e8\n",
++  " 228:	47f0      	blx	lr\n",
+   nullptr
+ };
+ 
+diff --git a/compiler/utils/x86/jni_macro_assembler_x86.cc b/compiler/utils/x86/jni_macro_assembler_x86.cc
+index 4469efe3ca..67ec93d7c6 100644
+--- a/compiler/utils/x86/jni_macro_assembler_x86.cc
++++ b/compiler/utils/x86/jni_macro_assembler_x86.cc
+@@ -587,14 +587,10 @@ void X86JNIMacroAssembler::TestGcMarking(JNIMacroLabel* label, JNIMacroUnaryCond
+       UNREACHABLE();
+   }
+ 
+-  // TODO: Compare the memory location with immediate 0.
+-  Register scratch = GetScratchRegister();
+-  DCHECK_EQ(Thread::IsGcMarkingSize(), 4u);
+-  __ fs()->movl(scratch, Address::Absolute(Thread::IsGcMarkingOffset<kX86PointerSize>()));
+-
+-  // TEST reg, reg
++  // CMP self->tls32_.is_gc_marking, 0
+   // Jcc <Offset>
+-  __ testl(scratch, scratch);
++  DCHECK_EQ(Thread::IsGcMarkingSize(), 4u);
++  __ fs()->cmpl(Address::Absolute(Thread::IsGcMarkingOffset<kX86PointerSize>()), Immediate(0));
+   __ j(x86_cond, X86JNIMacroLabel::Cast(label)->AsX86());
+ }
+ 
+diff --git a/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc b/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc
+index 384e0eb2de..2649084b38 100644
+--- a/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc
++++ b/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc
+@@ -37,8 +37,7 @@ static constexpr size_t kNativeStackAlignment = 16;
+ static_assert(kNativeStackAlignment == kStackAlignment);
+ 
+ static inline CpuRegister GetScratchRegister() {
+-  // TODO: Use R11 in line with Optimizing.
+-  return CpuRegister(RAX);
++  return CpuRegister(R11);
+ }
+ 
+ #define __ asm_.
+@@ -473,11 +472,8 @@ void X86_64JNIMacroAssembler::Copy(FrameOffset dest, FrameOffset src, size_t siz
+   DCHECK(size == 4 || size == 8) << size;
+   CpuRegister scratch = GetScratchRegister();
+   if (size == 8) {
+-    // TODO: Use MOVQ.
+-    __ movl(scratch, Address(CpuRegister(RSP), src));
+-    __ movl(Address(CpuRegister(RSP), dest), scratch);
+-    __ movl(scratch, Address(CpuRegister(RSP), FrameOffset(src.Int32Value() + 4)));
+-    __ movl(Address(CpuRegister(RSP), FrameOffset(dest.Int32Value() + 4)), scratch);
++    __ movq(scratch, Address(CpuRegister(RSP), src));
++    __ movq(Address(CpuRegister(RSP), dest), scratch);
+   } else {
+     __ movl(scratch, Address(CpuRegister(RSP), src));
+     __ movl(Address(CpuRegister(RSP), dest), scratch);
+@@ -692,14 +688,11 @@ void X86_64JNIMacroAssembler::TestGcMarking(JNIMacroLabel* label, JNIMacroUnaryC
+       UNREACHABLE();
+   }
+ 
+-  // TODO: Compare the memory location with immediate 0.
+-  CpuRegister scratch = GetScratchRegister();
+-  DCHECK_EQ(Thread::IsGcMarkingSize(), 4u);
+-  __ gs()->movl(scratch, Address::Absolute(Thread::IsGcMarkingOffset<kX86_64PointerSize>(), true));
+-
+-  // TEST reg, reg
++  // CMP self->tls32_.is_gc_marking, 0
+   // Jcc <Offset>
+-  __ testq(scratch, scratch);
++  DCHECK_EQ(Thread::IsGcMarkingSize(), 4u);
++  __ gs()->cmpl(Address::Absolute(Thread::IsGcMarkingOffset<kX86_64PointerSize>(), true),
++                Immediate(0));
+   __ j(x86_64_cond, X86_64JNIMacroLabel::Cast(label)->AsX86_64());
+ }
+ 
+diff --git a/runtime/arch/x86_64/jni_entrypoints_x86_64.S b/runtime/arch/x86_64/jni_entrypoints_x86_64.S
+index e1b8e5294c..5c805894a1 100644
+--- a/runtime/arch/x86_64/jni_entrypoints_x86_64.S
++++ b/runtime/arch/x86_64/jni_entrypoints_x86_64.S
+@@ -79,9 +79,9 @@ DEFINE_FUNCTION art_jni_dlsym_lookup_stub
+ END_FUNCTION art_jni_dlsym_lookup_stub
+ 
+ DEFINE_FUNCTION art_jni_dlsym_lookup_critical_stub
+-    // The hidden arg holding the tagged method (bit 0 set means GenericJNI) is r11.
++    // The hidden arg holding the tagged method (bit 0 set means GenericJNI) is RAX.
+     // For Generic JNI we already have a managed frame, so we reuse the art_jni_dlsym_lookup_stub.
+-    testq LITERAL(1), %r11
++    testq LITERAL(1), %rax
+     jnz art_jni_dlsym_lookup_stub
+ 
+     // We need to create a GenericJNI managed frame above the stack args.
+@@ -121,10 +121,10 @@ DEFINE_FUNCTION art_jni_dlsym_lookup_critical_stub
+     subq MACRO_LITERAL(__SIZEOF_POINTER__), %rsp
+     CFI_ADJUST_CFA_OFFSET(__SIZEOF_POINTER__)
+     // Save hidden arg.
+-    PUSH_ARG r11
++    PUSH_ARG rax
+ 
+     // Call artCriticalNativeOutArgsSize(method).
+-    movq %r11, %rdi  // Pass the method from hidden arg.
++    movq %rax, %rdi  // Pass the method from hidden arg.
+     call SYMBOL(artCriticalNativeOutArgsSize)
+ 
+     // Calculate the address of the end of the move destination and redefine CFI to take
+@@ -148,7 +148,7 @@ DEFINE_FUNCTION art_jni_dlsym_lookup_critical_stub
+     movq %rax, (%rdi)
+ 
+     // Pop the hidden arg and alignment padding.
+-    popq %r11    // No `.cfi_adjust_cfa_offset`, CFA register is currently R10, not RSP.
++    popq %rax    // No `.cfi_adjust_cfa_offset`, CFA register is currently R10, not RSP.
+     addq MACRO_LITERAL(__SIZEOF_POINTER__), %rsp  // ditto
+ 
+     // Fill the SaveRefsAndArgs frame above the args, without actual args. Note that
+@@ -175,7 +175,7 @@ DEFINE_FUNCTION art_jni_dlsym_lookup_critical_stub
+     movq %xmm14, 96(%r10)
+     movq %xmm15, 104(%r10)
+     // Save the hidden arg as method pointer at the bottom of the stack.
+-    movq %r11, (%r10)
++    movq %rax, (%r10)
+ 
+     // Move the frame register to a callee-save register.
+     movq %r10, %rbp
+@@ -255,7 +255,7 @@ DEFINE_FUNCTION art_jni_dlsym_lookup_critical_stub
+     CFI_RESTORE_STATE_AND_DEF_CFA(%rbp, FRAME_SIZE_SAVE_REFS_AND_ARGS)
+ 
+ 2:
+-    // Drop the args from the stack (the r11 and padding was already removed).
++    // Drop the args from the stack (the RAX and padding was already removed).
+     addq LITERAL(14 * __SIZEOF_POINTER__), %rsp
+ 
+     DELIVER_PENDING_EXCEPTION_FRAME_READY
+diff --git a/runtime/arch/x86_64/quick_entrypoints_x86_64.S b/runtime/arch/x86_64/quick_entrypoints_x86_64.S
+index abc3a8a9d4..6a19bbb4de 100644
+--- a/runtime/arch/x86_64/quick_entrypoints_x86_64.S
++++ b/runtime/arch/x86_64/quick_entrypoints_x86_64.S
+@@ -1676,13 +1676,16 @@ DEFINE_FUNCTION art_quick_generic_jni_trampoline
+     movq 48(%rsp), %xmm6
+     movq 56(%rsp), %xmm7
+ 
+-    // Load hidden arg (r11) for @CriticalNative.
+-    movq 64(%rsp), %r11
++    // Save call target in scratch register.
++    movq %rax, %r11
++
++    // Load hidden arg (rax) for @CriticalNative.
++    movq 64(%rsp), %rax
+     // Load SP for out args, releasing unneeded reserved area.
+     movq 72(%rsp), %rsp
+ 
+     // native call
+-    call *%rax
++    call *%r11
+ 
+     // result sign extension is handled in C code
+     // prepare for artQuickGenericJniEndTrampoline call
+-- 
+2.31.1
+

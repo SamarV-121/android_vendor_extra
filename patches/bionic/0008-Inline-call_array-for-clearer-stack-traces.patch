@@ -1,0 +1,49 @@
+From b179fcf051330d92b267ac8363b8432d85c53714 Mon Sep 17 00:00:00 2001
+From: Elliott Hughes <enh@google.com>
+Date: Tue, 19 Jan 2021 09:41:23 -0800
+Subject: [PATCH 08/11] Inline call_array for clearer stack traces.
+
+No-one seems to understand that a crash in a random .so from call_array()
+in the linker isn't a linker bug. They _seem_ to understand (or at least
+claim to) when we explain that this is just the linker calling their ELF
+constructors --- despite the fact that the caller of call_array() is
+call_constructors().
+
+One experiment we can try though is to inline call_array() to elide that
+frame from the crash dumps. I do also wonder whether renaming
+call_constructors() to call_elf_constructors() would help/hinder/make no
+difference. For now I'm leaning toward "hinder" because I suspect most
+people don't understand "ELF constructor" and C++ folks at least will
+probably be influenced in a not wholly incorrect direction when they
+hear "constructor" (whereas "ELF constructor" might mislead them back in
+the direction of "strange linker magic, not my fault" again)...
+
+(The reformatting is clang-format's decision, not mine.)
+
+Test: treehugger
+Change-Id: I65ab95ceb2e988fd053c48c66f51afba17ccfa61
+---
+ linker/linker_soinfo.cpp | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/linker/linker_soinfo.cpp b/linker/linker_soinfo.cpp
+index 4f67003b8..45c7d015e 100644
+--- a/linker/linker_soinfo.cpp
++++ b/linker/linker_soinfo.cpp
+@@ -485,11 +485,8 @@ static void call_function(const char* function_name __unused,
+ }
+ 
+ template <typename F>
+-static void call_array(const char* array_name __unused,
+-                       F* functions,
+-                       size_t count,
+-                       bool reverse,
+-                       const char* realpath) {
++static inline void call_array(const char* array_name __unused, F* functions, size_t count,
++                              bool reverse, const char* realpath) {
+   if (functions == nullptr) {
+     return;
+   }
+-- 
+2.31.1
+

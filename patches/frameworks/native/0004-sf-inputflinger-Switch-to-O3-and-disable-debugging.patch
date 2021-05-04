@@ -1,0 +1,41 @@
+From 80d97cf76937d7f162a07678838d4676a84a84a1 Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Wed, 31 Mar 2021 12:10:24 +0530
+Subject: [PATCH 4/8] sf/inputflinger: Switch to -O3 and disable debugging
+
+Change-Id: I59021fd41dcea891de0dc7c9e1183be3985ed9fa
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ services/inputflinger/Android.bp   | 2 ++
+ services/surfaceflinger/Android.bp | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/services/inputflinger/Android.bp b/services/inputflinger/Android.bp
+index 9678bab..b332c42 100644
+--- a/services/inputflinger/Android.bp
++++ b/services/inputflinger/Android.bp
+@@ -21,6 +21,8 @@ cc_defaults {
+         "-Werror",
+         "-Wno-unused-parameter",
+         "-Wthread-safety",
++        "-O3",
++        "-g0"
+     ],
+ }
+ 
+diff --git a/services/surfaceflinger/Android.bp b/services/surfaceflinger/Android.bp
+index 14eb7cf..4b56f8f 100644
+--- a/services/surfaceflinger/Android.bp
++++ b/services/surfaceflinger/Android.bp
+@@ -8,6 +8,8 @@ cc_defaults {
+         "-Wunused",
+         "-Wunreachable-code",
+         "-Wconversion",
++        "-O3",
++        "-g0"
+     ],
+ }
+ 
+-- 
+2.31.1
+

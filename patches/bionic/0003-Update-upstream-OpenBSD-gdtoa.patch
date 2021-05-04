@@ -1,0 +1,285 @@
+From 8e39a61217ac6c61900e2dfc8b4261daefaaad23 Mon Sep 17 00:00:00 2001
+From: Elliott Hughes <enh@google.com>
+Date: Fri, 5 Jun 2020 16:56:53 -0700
+Subject: [PATCH 03/11] Update upstream OpenBSD gdtoa.
+
+Also add a test for the bug that this fixes.
+
+Bug: http://b/152588929
+Test: treehugger
+Change-Id: I58055b3ebaef457721bb4f5d8a8710025122b2e7
+---
+ .../android/include/openbsd-compat.h          |  2 ++
+ libc/upstream-openbsd/lib/libc/gdtoa/gdtoa.h  | 14 +++++++++-
+ .../lib/libc/gdtoa/gdtoaimp.h                 |  6 ++--
+ libc/upstream-openbsd/lib/libc/gdtoa/gethex.c |  7 ++---
+ libc/upstream-openbsd/lib/libc/gdtoa/hdtoa.c  | 26 +++++++++--------
+ libc/upstream-openbsd/lib/libc/gdtoa/misc.c   |  4 +++
+ libc/upstream-openbsd/lib/libc/gdtoa/strtod.c |  5 +---
+ .../upstream-openbsd/lib/libc/gdtoa/strtodg.c |  5 +---
+ tests/stdio_test.cpp                          | 28 +++++++++++++++++++
+ 9 files changed, 67 insertions(+), 30 deletions(-)
+
+diff --git a/libc/upstream-openbsd/android/include/openbsd-compat.h b/libc/upstream-openbsd/android/include/openbsd-compat.h
+index 878f71cec..820626956 100644
+--- a/libc/upstream-openbsd/android/include/openbsd-compat.h
++++ b/libc/upstream-openbsd/android/include/openbsd-compat.h
+@@ -38,6 +38,8 @@ extern const char* __progname;
+ /* Ignore all __warn_references in OpenBSD. */
+ #define __warn_references(sym,msg)
+ 
++#define PROTO_NORMAL(x)
++
+ /* OpenBSD's <ctype.h> uses these names, which conflicted with stlport.
+  * Additionally, we changed the numeric/digit type from N to D for libcxx.
+  */
+diff --git a/libc/upstream-openbsd/lib/libc/gdtoa/gdtoa.h b/libc/upstream-openbsd/lib/libc/gdtoa/gdtoa.h
+index 9e1cea07c..8d621b06b 100644
+--- a/libc/upstream-openbsd/lib/libc/gdtoa/gdtoa.h
++++ b/libc/upstream-openbsd/lib/libc/gdtoa/gdtoa.h
+@@ -112,7 +112,18 @@ extern void __freedtoa ANSI((char*));
+ extern float  strtof ANSI((CONST char *, char **));
+ extern double strtod ANSI((CONST char *, char **));
+ extern int __strtodg ANSI((CONST char*, char**, FPI*, Long*, ULong*));
+-
++char	*__hdtoa(double, const char *, int, int *, int *, char **);
++char	*__hldtoa(long double, const char *, int, int *, int *, char **);
++char	*__ldtoa(long double *, int, int, int *, int *, char **);
++
++PROTO_NORMAL(__dtoa);
++PROTO_NORMAL(__gdtoa);
++PROTO_NORMAL(__freedtoa);
++PROTO_NORMAL(__hdtoa);
++PROTO_NORMAL(__hldtoa);
++PROTO_NORMAL(__ldtoa);
++
++__BEGIN_HIDDEN_DECLS
+ extern char*	__g_ddfmt  ANSI((char*, double*, int, size_t));
+ extern char*	__g_dfmt   ANSI((char*, double*, int, size_t));
+ extern char*	__g_ffmt   ANSI((char*, float*,  int, size_t));
+@@ -148,6 +159,7 @@ extern int	__strtopxL ANSI((CONST char*, char**, void*));
+ #define __strtopx(s,se,x) strtorx(s,se,1,x)
+ #define __strtopxL(s,se,x) strtorxL(s,se,1,x)
+ #endif
++__END_HIDDEN_DECLS
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/libc/upstream-openbsd/lib/libc/gdtoa/gdtoaimp.h b/libc/upstream-openbsd/lib/libc/gdtoa/gdtoaimp.h
+index 0f3de1285..823f2a9b1 100644
+--- a/libc/upstream-openbsd/lib/libc/gdtoa/gdtoaimp.h
++++ b/libc/upstream-openbsd/lib/libc/gdtoa/gdtoaimp.h
+@@ -463,7 +463,6 @@ extern double rnd_prod(double, double), rnd_quot(double, double);
+ #define FREE_DTOA_LOCK(n)	/*nothing*/
+ #else
+ #include "thread_private.h"
+-extern void *__dtoa_locks[];
+ #define ACQUIRE_DTOA_LOCK(n)	_MUTEX_LOCK(&__dtoa_locks[n])
+ #define FREE_DTOA_LOCK(n)	_MUTEX_UNLOCK(&__dtoa_locks[n])
+ #endif
+@@ -567,6 +566,7 @@ extern void memcpy_D2A ANSI((void*, const void*, size_t));
+ #define trailz __trailz_D2A
+ #define ulp __ulp_D2A
+ 
++__BEGIN_HIDDEN_DECLS
+  extern char *dtoa_result;
+  extern CONST double bigtens[], tens[], tinytens[];
+  extern unsigned char hexdig[];
+@@ -586,8 +586,6 @@ extern void memcpy_D2A ANSI((void*, const void*, size_t));
+  extern Bigint *d2b ANSI((double, int*, int*));
+  extern void decrement ANSI((Bigint*));
+  extern Bigint *diff ANSI((Bigint*, Bigint*));
+- extern char *dtoa ANSI((double d, int mode, int ndigits,
+-			int *decpt, int *sign, char **rve));
+  extern char *g__fmt ANSI((char*, char*, char*, int, ULong, size_t));
+  extern int gethex ANSI((CONST char**, FPI*, Long*, Bigint**, int));
+  extern void __hexdig_init_D2A(Void);
+@@ -610,10 +608,10 @@ extern void memcpy_D2A ANSI((void*, const void*, size_t));
+  extern Bigint *set_ones ANSI((Bigint*, int));
+  extern char *strcp ANSI((char*, const char*));
+  extern int strtoIg ANSI((CONST char*, char**, FPI*, Long*, Bigint**, int*));
+- extern double strtod ANSI((const char *s00, char **se));
+  extern Bigint *sum ANSI((Bigint*, Bigint*));
+  extern int trailz ANSI((Bigint*));
+  extern double ulp ANSI((U*));
++__END_HIDDEN_DECLS
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/libc/upstream-openbsd/lib/libc/gdtoa/gethex.c b/libc/upstream-openbsd/lib/libc/gdtoa/gethex.c
+index f521f15c6..d48c9ed03 100644
+--- a/libc/upstream-openbsd/lib/libc/gdtoa/gethex.c
++++ b/libc/upstream-openbsd/lib/libc/gdtoa/gethex.c
+@@ -57,11 +57,8 @@ gethex( CONST char **sp, FPI *fpi, Long *exp, Bigint **bp, int sign)
+ 	static unsigned char *decimalpoint_cache;
+ 	if (!(s0 = decimalpoint_cache)) {
+ 		s0 = (unsigned char*)localeconv()->decimal_point;
+-		if ((decimalpoint_cache = (char*)MALLOC(strlen(s0) + 1))) {
+-			strlcpy(decimalpoint_cache, s0, strlen(s0) + 1);
+-			s0 = decimalpoint_cache;
+-			}
+-		}
++		decimalpoint_cache = strdup(s0);
++	}
+ 	decimalpoint = s0;
+ #endif
+ #endif
+diff --git a/libc/upstream-openbsd/lib/libc/gdtoa/hdtoa.c b/libc/upstream-openbsd/lib/libc/gdtoa/hdtoa.c
+index 45caef40a..4a7f798e2 100644
+--- a/libc/upstream-openbsd/lib/libc/gdtoa/hdtoa.c
++++ b/libc/upstream-openbsd/lib/libc/gdtoa/hdtoa.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: hdtoa.c,v 1.3 2015/09/14 12:49:33 guenther Exp $	*/
++/*	$OpenBSD: hdtoa.c,v 1.5 2020/05/31 12:27:19 mortimer Exp $	*/
+ /*-
+  * Copyright (c) 2004, 2005 David Schultz <das@FreeBSD.ORG>
+  * All rights reserved.
+@@ -112,7 +112,7 @@ dorounding(char *s0, int ndigits, int sign, int *decpt)
+  *
+  * Note that the C99 standard does not specify what the leading digit
+  * should be for non-zero numbers.  For instance, 0x1.3p3 is the same
+- * as 0x2.6p2 is the same as 0x4.cp3.  This implementation chooses the
++ * as 0x2.6p2 is the same as 0x4.cp1.  This implementation chooses the
+  * first digit so that subsequent digits are aligned on nibble
+  * boundaries (before rounding).
+  *
+@@ -225,6 +225,7 @@ __hldtoa(long double e, const char *xdigs, int ndigits, int *decpt, int *sign,
+ 	struct ieee_ext *p = (struct ieee_ext *)&e;
+ 	char *s, *s0;
+ 	int bufsize;
++	int fbits = 0;
+ 
+ 	*sign = p->ext_sign;
+ 
+@@ -273,23 +274,24 @@ __hldtoa(long double e, const char *xdigs, int ndigits, int *decpt, int *sign,
+ 	 */
+ 	for (s = s0 + bufsize - 1; s > s0 + sigfigs - 1; s--)
+ 		*s = 0;
+-	for (; s > s0 + sigfigs - (EXT_FRACLBITS / 4) - 1 && s > s0; s--) {
++
++	for (fbits = EXT_FRACLBITS / 4; fbits > 0 && s > s0; s--, fbits--) {
+ 		*s = p->ext_fracl & 0xf;
+ 		p->ext_fracl >>= 4;
+ 	}
+-#ifdef EXT_FRACHMBITS
+-	for (; s > s0; s--) {
+-		*s = p->ext_frachm & 0xf;
+-		p->ext_frachm >>= 4;
+-	}
+-#endif
+ #ifdef EXT_FRACLMBITS
+-	for (; s > s0; s--) {
++	for (fbits = EXT_FRACLMBITS / 4; fbits > 0 && s > s0; s--, fbits--) {
+ 		*s = p->ext_fraclm & 0xf;
+ 		p->ext_fraclm >>= 4;
+ 	}
+ #endif
+-	for (; s > s0; s--) {
++#ifdef EXT_FRACHMBITS
++	for (fbits = EXT_FRACHMBITS / 4; fbits > 0 && s > s0; s--, fbits--) {
++		*s = p->ext_frachm & 0xf;
++		p->ext_frachm >>= 4;
++	}
++#endif
++	for (fbits = EXT_FRACHBITS / 4; fbits > 0 && s > s0; s--, fbits--) {
+ 		*s = p->ext_frach & 0xf;
+ 		p->ext_frach >>= 4;
+ 	}
+@@ -300,7 +302,7 @@ __hldtoa(long double e, const char *xdigs, int ndigits, int *decpt, int *sign,
+ 	 * (partial) nibble, which is dealt with by the next
+ 	 * statement.  We also tack on the implicit normalization bit.
+ 	 */
+-	*s = p->ext_frach | (1U << ((LDBL_MANT_DIG - 1) % 4));
++	*s = (p->ext_frach | (1U << ((LDBL_MANT_DIG - 1) % 4))) & 0xf;
+ 
+ 	/* If ndigits < 0, we are expected to auto-size the precision. */
+ 	if (ndigits < 0) {
+diff --git a/libc/upstream-openbsd/lib/libc/gdtoa/misc.c b/libc/upstream-openbsd/lib/libc/gdtoa/misc.c
+index b149f07f0..79a310495 100644
+--- a/libc/upstream-openbsd/lib/libc/gdtoa/misc.c
++++ b/libc/upstream-openbsd/lib/libc/gdtoa/misc.c
+@@ -38,6 +38,10 @@ THIS SOFTWARE.
+ #endif
+ #define PRIVATE_mem ((PRIVATE_MEM+sizeof(double)-1)/sizeof(double))
+ static double private_mem[PRIVATE_mem], *pmem_next = private_mem;
++#endif
++
++#ifdef MULTIPLE_THREADS
++extern void *__dtoa_locks[];
+ #endif
+ 
+  Bigint *
+diff --git a/libc/upstream-openbsd/lib/libc/gdtoa/strtod.c b/libc/upstream-openbsd/lib/libc/gdtoa/strtod.c
+index ac2283c62..0fb37fded 100644
+--- a/libc/upstream-openbsd/lib/libc/gdtoa/strtod.c
++++ b/libc/upstream-openbsd/lib/libc/gdtoa/strtod.c
+@@ -114,10 +114,7 @@ strtod
+ 	static int dplen;
+ 	if (!(s0 = decimalpoint_cache)) {
+ 		s0 = localeconv()->decimal_point;
+-		if ((decimalpoint_cache = (char*)MALLOC(strlen(s0) + 1))) {
+-			strlcpy(decimalpoint_cache, s0, strlen(s0) + 1);
+-			s0 = decimalpoint_cache;
+-			}
++		decimalpoint_cache = strdup(s0);
+ 		dplen = strlen(s0);
+ 		}
+ 	decimalpoint = (char*)s0;
+diff --git a/libc/upstream-openbsd/lib/libc/gdtoa/strtodg.c b/libc/upstream-openbsd/lib/libc/gdtoa/strtodg.c
+index 753f6bf0e..defb4740e 100644
+--- a/libc/upstream-openbsd/lib/libc/gdtoa/strtodg.c
++++ b/libc/upstream-openbsd/lib/libc/gdtoa/strtodg.c
+@@ -363,10 +363,7 @@ strtodg
+ 	static int dplen;
+ 	if (!(s0 = decimalpoint_cache)) {
+ 		s0 = localeconv()->decimal_point;
+-		if ((decimalpoint_cache = (char*)MALLOC(strlen(s0) + 1))) {
+-			strlcpy(decimalpoint_cache, s0, strlen(s0) + 1);
+-			s0 = decimalpoint_cache;
+-			}
++		decimalpoint_cache = strdup(s0);
+ 		dplen = strlen(s0);
+ 		}
+ 	decimalpoint = (char*)s0;
+diff --git a/tests/stdio_test.cpp b/tests/stdio_test.cpp
+index 75abbd235..f6eca05f4 100644
+--- a/tests/stdio_test.cpp
++++ b/tests/stdio_test.cpp
+@@ -294,6 +294,34 @@ TEST(STDIO_TEST, snprintf_a) {
+   EXPECT_STREQ("<0x1.3831e147ae148p+13>", buf);
+ }
+ 
++// http://b/152588929
++TEST(STDIO_TEST, snprintf_La) {
++#if defined(__LP64__)
++  char buf[BUFSIZ];
++  union {
++    uint64_t a[2];
++    long double v;
++  } u;
++
++  u.a[0] = UINT64_C(0x9b9b9b9b9b9b9b9b);
++  u.a[1] = UINT64_C(0xdfdfdfdfdfdfdfdf);
++  EXPECT_EQ(41, snprintf(buf, sizeof(buf), "<%La>", u.v));
++  EXPECT_STREQ("<-0x1.dfdfdfdfdfdf9b9b9b9b9b9b9b9bp+8160>", buf);
++
++  u.a[0] = UINT64_C(0xffffffffffffffff);
++  u.a[1] = UINT64_C(0x7ffeffffffffffff);
++  EXPECT_EQ(41, snprintf(buf, sizeof(buf), "<%La>", u.v));
++  EXPECT_STREQ("<0x1.ffffffffffffffffffffffffffffp+16383>", buf);
++
++  u.a[0] = UINT64_C(0x0000000000000000);
++  u.a[1] = UINT64_C(0x0000000000000000);
++  EXPECT_EQ(8, snprintf(buf, sizeof(buf), "<%La>", u.v));
++  EXPECT_STREQ("<0x0p+0>", buf);
++#else
++  GTEST_SKIP() << "no ld128";
++#endif
++}
++
+ TEST(STDIO_TEST, snprintf_lc) {
+   char buf[BUFSIZ];
+   wint_t wc = L'a';
+-- 
+2.31.1
+

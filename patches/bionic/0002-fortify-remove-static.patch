@@ -1,0 +1,46 @@
+From 789792416d8f138b8fe0d1904fca70c3e6949cf9 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Tue, 9 Jun 2020 10:42:19 -0700
+Subject: [PATCH 02/11] fortify: remove `static`
+
+When glancing at libc.so, I noticed we had five copies of
+`__fortify_fatal` sitting around. LLVM can't inline variadic functions;
+allowing everything to reference the same one seems best to me. This
+saves us a few hundred bytes. Whoopee.
+
+Bug: None
+Test: TreeHugger
+Change-Id: I99188d49cd46d792e3167cb961f13b3c1b65bd61
+---
+ libc/private/bionic_fortify.h | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/libc/private/bionic_fortify.h b/libc/private/bionic_fortify.h
+index 3c3292e58..df83360be 100644
+--- a/libc/private/bionic_fortify.h
++++ b/libc/private/bionic_fortify.h
+@@ -35,7 +35,11 @@
+ 
+ #include <async_safe/log.h>
+ 
+-static inline __noreturn void __fortify_fatal(const char* fmt, ...) {
++//
++// LLVM can't inline variadic functions, and we don't want one definition of
++// this per #include in libc.so, so no `static`.
++//
++inline __noreturn __printflike(1, 2) void __fortify_fatal(const char* fmt, ...) {
+   va_list args;
+   va_start(args, fmt);
+   async_safe_fatal_va_list("FORTIFY", fmt, args);
+@@ -52,7 +56,7 @@ static inline void __check_fd_set(const char* fn, int fd, size_t set_size) {
+     __fortify_fatal("%s: file descriptor %d < 0", fn, fd);
+   }
+   if (__predict_false(fd >= FD_SETSIZE)) {
+-    __fortify_fatal("%s: file descriptor %d >= FD_SETSIZE %zu", fn, fd, FD_SETSIZE);
++    __fortify_fatal("%s: file descriptor %d >= FD_SETSIZE %d", fn, fd, FD_SETSIZE);
+   }
+   if (__predict_false(set_size < sizeof(fd_set))) {
+     __fortify_fatal("%s: set size %zu is too small to be an fd_set", fn, set_size);
+-- 
+2.31.1
+

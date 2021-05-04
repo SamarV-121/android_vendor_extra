@@ -1,0 +1,206 @@
+From 06048ed62e87dc671cd71427177aa822b29a6239 Mon Sep 17 00:00:00 2001
+From: Evgeny Astigeevich <evgeny.astigeevich@linaro.org>
+Date: Tue, 5 May 2020 16:30:24 +0100
+Subject: [PATCH 05/27] ART: Refactor
+ InstructionCodeGeneratorARM64::GenerateDivRemWithAnyConstant
+
+InstructionCodeGeneratorARM64::GenerateDivRemWithAnyConstant handles
+both Int32 and Int64 cases. However Int32 cases can have additional
+optimizations. Having them in GenerateDivRemWithAnyConstant makes code
+difficult to read.
+
+This CL splits the code of GenerateDivRemWithAnyConstant to:
+* GenerateInt32DivRemWithAnyConstant
+* GenerateInt64DivRemWithAnyConstant
+* GenerateResultDivRemWithAnyConstant
+
+Test: test.py --host --optimizing --jit
+Test: test.py --target --optimizing --jit
+Change-Id: I267331c026e87d6a233b593586f1b74759382896
+---
+ compiler/optimizing/code_generator_arm64.cc | 119 +++++++++++++++-----
+ compiler/optimizing/code_generator_arm64.h  |  18 +++
+ 2 files changed, 110 insertions(+), 27 deletions(-)
+
+diff --git a/compiler/optimizing/code_generator_arm64.cc b/compiler/optimizing/code_generator_arm64.cc
+index 7d1b0ea6dd..5c6f8fd6eb 100644
+--- a/compiler/optimizing/code_generator_arm64.cc
++++ b/compiler/optimizing/code_generator_arm64.cc
+@@ -3032,8 +3032,50 @@ void InstructionCodeGeneratorARM64::GenerateIntDivForPower2Denom(HDiv* instructi
+   }
+ }
+ 
+-void InstructionCodeGeneratorARM64::GenerateDivRemWithAnyConstant(HBinaryOperation* instruction) {
++// Return true if the magic number was modified by subtracting 2^32. So dividend needs to be added.
++static inline bool NeedToAddDividend(int64_t magic_number, int64_t divisor) {
++  return divisor > 0 && magic_number < 0;
++}
++
++// Return true if the magic number was modified by adding 2^32. So dividend needs to be subtracted.
++static inline bool NeedToSubDividend(int64_t magic_number, int64_t divisor) {
++  return divisor < 0 && magic_number > 0;
++}
++
++void InstructionCodeGeneratorARM64::GenerateResultDivRemWithAnyConstant(
++    bool is_rem,
++    int final_right_shift,
++    int64_t magic_number,
++    int64_t divisor,
++    Register dividend,
++    Register temp_result,
++    Register out,
++    UseScratchRegisterScope* temps_scope) {
++  // As magic_number can be modified to fit into 32 bits, check whether the correction is needed.
++  if (NeedToAddDividend(magic_number, divisor)) {
++    __ Add(temp_result, temp_result, dividend);
++  } else if (NeedToSubDividend(magic_number, divisor)) {
++    __ Sub(temp_result, temp_result, dividend);
++  }
++
++  if (final_right_shift != 0) {
++    __ Asr(temp_result, temp_result, final_right_shift);
++  }
++
++  Register& result = (is_rem) ? temp_result : out;
++  __ Add(result, temp_result, Operand(temp_result, LSR, temp_result.GetSizeInBits() - 1));
++  if (is_rem) {
++    // TODO: Strength reduction for msub.
++    Register temp_imm = temps_scope->AcquireSameSizeAs(out);
++    __ Mov(temp_imm, divisor);
++    __ Msub(out, temp_result, temp_imm, dividend);
++  }
++}
++
++void InstructionCodeGeneratorARM64::GenerateInt64DivRemWithAnyConstant(
++    HBinaryOperation* instruction) {
+   DCHECK(instruction->IsDiv() || instruction->IsRem());
++  DCHECK(instruction->GetResultType() == DataType::Type::kInt64);
+ 
+   LocationSummary* locations = instruction->GetLocations();
+   Location second = locations->InAt(1);
+@@ -3043,44 +3085,67 @@ void InstructionCodeGeneratorARM64::GenerateDivRemWithAnyConstant(HBinaryOperati
+   Register dividend = InputRegisterAt(instruction, 0);
+   int64_t imm = Int64FromConstant(second.GetConstant());
+ 
+-  DataType::Type type = instruction->GetResultType();
+-  DCHECK(type == DataType::Type::kInt32 || type == DataType::Type::kInt64);
+-
+   int64_t magic;
+   int shift;
+-  CalculateMagicAndShiftForDivRem(
+-      imm, /* is_long= */ type == DataType::Type::kInt64, &magic, &shift);
++  CalculateMagicAndShiftForDivRem(imm, /* is_long= */ true, &magic, &shift);
+ 
+   UseScratchRegisterScope temps(GetVIXLAssembler());
+   Register temp = temps.AcquireSameSizeAs(out);
+ 
+   // temp = get_high(dividend * magic)
+   __ Mov(temp, magic);
+-  if (type == DataType::Type::kInt64) {
+-    __ Smulh(temp, dividend, temp);
+-  } else {
+-    __ Smull(temp.X(), dividend, temp);
+-    __ Lsr(temp.X(), temp.X(), 32);
+-  }
++  __ Smulh(temp, dividend, temp);
+ 
+-  if (imm > 0 && magic < 0) {
+-    __ Add(temp, temp, dividend);
+-  } else if (imm < 0 && magic > 0) {
+-    __ Sub(temp, temp, dividend);
+-  }
++  GenerateResultDivRemWithAnyConstant(/* is_rem= */ instruction->IsRem(),
++                                      /* final_right_shift= */ shift,
++                                      magic,
++                                      imm,
++                                      dividend,
++                                      temp,
++                                      out,
++                                      &temps);
++}
+ 
+-  if (shift != 0) {
+-    __ Asr(temp, temp, shift);
+-  }
++void InstructionCodeGeneratorARM64::GenerateInt32DivRemWithAnyConstant(
++    HBinaryOperation* instruction) {
++  DCHECK(instruction->IsDiv() || instruction->IsRem());
++  DCHECK(instruction->GetResultType() == DataType::Type::kInt32);
+ 
+-  if (instruction->IsDiv()) {
+-    __ Sub(out, temp, Operand(temp, ASR, type == DataType::Type::kInt64 ? 63 : 31));
++  LocationSummary* locations = instruction->GetLocations();
++  Location second = locations->InAt(1);
++  DCHECK(second.IsConstant());
++
++  Register out = OutputRegister(instruction);
++  Register dividend = InputRegisterAt(instruction, 0);
++  int64_t imm = Int64FromConstant(second.GetConstant());
++
++  int64_t magic;
++  int shift;
++  CalculateMagicAndShiftForDivRem(imm, /* is_long= */ false, &magic, &shift);
++  UseScratchRegisterScope temps(GetVIXLAssembler());
++  Register temp = temps.AcquireSameSizeAs(out);
++
++  // temp = get_high(dividend * magic)
++  __ Mov(temp, magic);
++  __ Smull(temp.X(), dividend, temp);
++  __ Lsr(temp.X(), temp.X(), 32);
++
++  GenerateResultDivRemWithAnyConstant(/* is_rem= */ instruction->IsRem(),
++                                      /* final_right_shift= */ shift,
++                                      magic,
++                                      imm,
++                                      dividend,
++                                      temp,
++                                      out,
++                                      &temps);
++}
++
++void InstructionCodeGeneratorARM64::GenerateDivRemWithAnyConstant(HBinaryOperation* instruction) {
++  DCHECK(instruction->IsDiv() || instruction->IsRem());
++  if (instruction->GetResultType() == DataType::Type::kInt64) {
++    GenerateInt64DivRemWithAnyConstant(instruction);
+   } else {
+-    __ Sub(temp, temp, Operand(temp, ASR, type == DataType::Type::kInt64 ? 63 : 31));
+-    // TODO: Strength reduction for msub.
+-    Register temp_imm = temps.AcquireSameSizeAs(out);
+-    __ Mov(temp_imm, imm);
+-    __ Msub(out, temp, temp_imm, dividend);
++    GenerateInt32DivRemWithAnyConstant(instruction);
+   }
+ }
+ 
+diff --git a/compiler/optimizing/code_generator_arm64.h b/compiler/optimizing/code_generator_arm64.h
+index 6b2c80529b..7cfa87f509 100644
+--- a/compiler/optimizing/code_generator_arm64.h
++++ b/compiler/optimizing/code_generator_arm64.h
+@@ -331,6 +331,24 @@ class InstructionCodeGeneratorARM64 : public InstructionCodeGenerator {
+                              vixl::aarch64::Label* false_target);
+   void DivRemOneOrMinusOne(HBinaryOperation* instruction);
+   void DivRemByPowerOfTwo(HBinaryOperation* instruction);
++
++  // Helper to generate code producing the final result of HDiv/HRem with a constant divisor.
++  // 'temp_result' holds the result of multiplication of the dividend by a sort of reciprocal
++  // of the divisor (magic_number). Based on magic_number and divisor, temp_result might need
++  // to be corrected before applying final_right_shift.
++  // If the code is generated for HRem the final temp_result is used for producing the
++  // remainder.
++  void GenerateResultDivRemWithAnyConstant(bool is_rem,
++                                           int final_right_shift,
++                                           int64_t magic_number,
++                                           int64_t divisor,
++                                           vixl::aarch64::Register dividend,
++                                           vixl::aarch64::Register temp_result,
++                                           vixl::aarch64::Register out,
++                                           // This function may acquire a scratch register.
++                                           vixl::aarch64::UseScratchRegisterScope* temps_scope);
++  void GenerateInt64DivRemWithAnyConstant(HBinaryOperation* instruction);
++  void GenerateInt32DivRemWithAnyConstant(HBinaryOperation* instruction);
+   void GenerateDivRemWithAnyConstant(HBinaryOperation* instruction);
+   void GenerateIntDiv(HDiv* instruction);
+   void GenerateIntDivForConstDenom(HDiv *instruction);
+-- 
+2.31.1
+

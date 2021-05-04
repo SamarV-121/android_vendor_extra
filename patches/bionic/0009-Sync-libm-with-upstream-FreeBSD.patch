@@ -1,0 +1,2124 @@
+From 0162de7cafb68ad44c05f28af79a3d06575780b1 Mon Sep 17 00:00:00 2001
+From: Elliott Hughes <enh@google.com>
+Date: Tue, 26 Jan 2021 14:17:20 -0800
+Subject: [PATCH 09/11] Sync libm with upstream FreeBSD.
+
+Upstream SHA 78599c32efed3247d165302a1fbe8d9203e38974.
+
+Test: treehugger
+Change-Id: Ib103d211315e320df89a6f0bcb30cd8ba67dd603
+---
+ libc/NOTICE                                   | 66 -------------------
+ libm/upstream-freebsd/lib/msun/bsdsrc/b_exp.c | 10 +--
+ libm/upstream-freebsd/lib/msun/bsdsrc/b_log.c | 10 +--
+ .../lib/msun/bsdsrc/b_tgamma.c                | 10 +--
+ .../lib/msun/bsdsrc/mathimpl.h                |  2 +-
+ libm/upstream-freebsd/lib/msun/ld128/e_powl.c |  2 +-
+ .../lib/msun/ld128/e_rem_pio2l.h              |  2 +-
+ .../upstream-freebsd/lib/msun/ld128/invtrig.c |  2 +-
+ .../upstream-freebsd/lib/msun/ld128/invtrig.h |  2 +-
+ libm/upstream-freebsd/lib/msun/ld128/k_expl.h | 16 +++--
+ .../upstream-freebsd/lib/msun/ld128/s_exp2l.c |  2 +-
+ libm/upstream-freebsd/lib/msun/ld128/s_expl.c |  7 +-
+ libm/upstream-freebsd/lib/msun/ld128/s_logl.c | 23 +++----
+ libm/upstream-freebsd/lib/msun/ld128/s_nanl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/catrig.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/catrigf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/catrigl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_asin.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_atan2.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_atan2f.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_atan2l.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_coshl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_exp.c    |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_expf.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_fmod.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_fmodf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_fmodl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_hypot.c  |  8 +--
+ libm/upstream-freebsd/lib/msun/src/e_hypotf.c |  4 +-
+ libm/upstream-freebsd/lib/msun/src/e_hypotl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_j0.c     |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_j0f.c    |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_j1.c     |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_j1f.c    |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_jn.c     |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_jnf.c    |  2 +-
+ .../lib/msun/src/e_lgammaf_r.c                |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_pow.c    |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_powf.c   |  2 +-
+ .../lib/msun/src/e_rem_pio2.c                 |  2 +-
+ .../lib/msun/src/e_rem_pio2f.c                |  2 +-
+ .../lib/msun/src/e_remainder.c                |  2 +-
+ .../lib/msun/src/e_remainderf.c               |  2 +-
+ .../lib/msun/src/e_remainderl.c               |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_sinhl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/e_sqrtl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/k_exp.c    |  9 +--
+ libm/upstream-freebsd/lib/msun/src/k_expf.c   |  9 +--
+ .../lib/msun/src/k_rem_pio2.c                 |  2 +-
+ libm/upstream-freebsd/lib/msun/src/k_sincos.h |  2 +-
+ .../upstream-freebsd/lib/msun/src/k_sincosf.h |  2 +-
+ .../upstream-freebsd/lib/msun/src/k_sincosl.h |  6 +-
+ .../lib/msun/src/math_private.h               |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_carg.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cargf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cargl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cbrt.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_ccosh.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_ccoshf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cexp.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cexpf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cimag.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cimagf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cimagl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_clog.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_clogf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_clogl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_conj.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_conjf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_conjl.c  |  2 +-
+ .../lib/msun/src/s_copysignl.c                |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cosl.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cpow.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cpowf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cpowl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cproj.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cprojf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_cprojl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_creal.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_crealf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_creall.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_csinh.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_csinhf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_csqrt.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_csqrtf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_csqrtl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_ctanh.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_ctanhf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_erf.c    |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_exp2.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_exp2f.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_expm1.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_expm1f.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fabsl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fdim.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fma.c    |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fmaf.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fmal.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fmax.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fmaxf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fmaxl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fmin.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fminf.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_fminl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_frexpl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_logbl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_lrint.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_lround.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_modfl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_nan.c    | 11 ++--
+ .../lib/msun/src/s_nearbyint.c                |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_remquo.c |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_remquof.c |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_remquol.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_rintl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_round.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_roundf.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_roundl.c |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_scalbln.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_scalbn.c |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_scalbnf.c |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_scalbnl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_sincos.c |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_sincosf.c |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_sincosl.c |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_sinl.c   |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_tanhl.c  |  2 +-
+ libm/upstream-freebsd/lib/msun/src/s_tanl.c   |  2 +-
+ .../upstream-freebsd/lib/msun/src/s_tgammaf.c |  2 +-
+ 129 files changed, 175 insertions(+), 246 deletions(-)
+
+diff --git a/libc/NOTICE b/libc/NOTICE
+index 0dd7f80fe..9e7922f0c 100644
+--- a/libc/NOTICE
++++ b/libc/NOTICE
+@@ -1534,39 +1534,6 @@ SUCH DAMAGE.
+ 
+ -------------------------------------------------------------------
+ 
+-Copyright (c) 1985, 1993
+-   The Regents of the University of California.  All rights reserved.
+-
+-Redistribution and use in source and binary forms, with or without
+-modification, are permitted provided that the following conditions
+-are met:
+-1. Redistributions of source code must retain the above copyright
+-   notice, this list of conditions and the following disclaimer.
+-2. Redistributions in binary form must reproduce the above copyright
+-   notice, this list of conditions and the following disclaimer in the
+-   documentation and/or other materials provided with the distribution.
+-3. All advertising materials mentioning features or use of this software
+-   must display the following acknowledgement:
+-   This product includes software developed by the University of
+-   California, Berkeley and its contributors.
+-4. Neither the name of the University nor the names of its contributors
+-   may be used to endorse or promote products derived from this software
+-   without specific prior written permission.
+-
+-THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+-ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+-OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+-OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+-SUCH DAMAGE.
+-
+--------------------------------------------------------------------
+-
+ Copyright (c) 1985, 1993
+    The Regents of the University of California.  All rights reserved.
+ 
+@@ -2630,39 +2597,6 @@ SUCH DAMAGE.
+ 
+ -------------------------------------------------------------------
+ 
+-Copyright (c) 1992, 1993
+-   The Regents of the University of California.  All rights reserved.
+-
+-Redistribution and use in source and binary forms, with or without
+-modification, are permitted provided that the following conditions
+-are met:
+-1. Redistributions of source code must retain the above copyright
+-   notice, this list of conditions and the following disclaimer.
+-2. Redistributions in binary form must reproduce the above copyright
+-   notice, this list of conditions and the following disclaimer in the
+-   documentation and/or other materials provided with the distribution.
+-3. All advertising materials mentioning features or use of this software
+-   must display the following acknowledgement:
+-   This product includes software developed by the University of
+-   California, Berkeley and its contributors.
+-4. Neither the name of the University nor the names of its contributors
+-   may be used to endorse or promote products derived from this software
+-   without specific prior written permission.
+-
+-THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+-ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+-OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+-OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+-SUCH DAMAGE.
+-
+--------------------------------------------------------------------
+-
+ Copyright (c) 1992, 1993
+    The Regents of the University of California.  All rights reserved.
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/bsdsrc/b_exp.c b/libm/upstream-freebsd/lib/msun/bsdsrc/b_exp.c
+index febc1adb5..89a290529 100644
+--- a/libm/upstream-freebsd/lib/msun/bsdsrc/b_exp.c
++++ b/libm/upstream-freebsd/lib/msun/bsdsrc/b_exp.c
+@@ -1,5 +1,5 @@
+ /*-
+- * SPDX-License-Identifier: BSD-4-Clause
++ * SPDX-License-Identifier: BSD-3-Clause
+  *
+  * Copyright (c) 1985, 1993
+  *	The Regents of the University of California.  All rights reserved.
+@@ -12,11 +12,7 @@
+  * 2. Redistributions in binary form must reproduce the above copyright
+  *    notice, this list of conditions and the following disclaimer in the
+  *    documentation and/or other materials provided with the distribution.
+- * 3. All advertising materials mentioning features or use of this software
+- *    must display the following acknowledgement:
+- *	This product includes software developed by the University of
+- *	California, Berkeley and its contributors.
+- * 4. Neither the name of the University nor the names of its contributors
++ * 3. Neither the name of the University nor the names of its contributors
+  *    may be used to endorse or promote products derived from this software
+  *    without specific prior written permission.
+  *
+@@ -35,7 +31,7 @@
+ 
+ /* @(#)exp.c	8.1 (Berkeley) 6/4/93 */
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/bsdsrc/b_exp.c 325966 2017-11-18 14:26:50Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ 
+ /* EXP(X)
+diff --git a/libm/upstream-freebsd/lib/msun/bsdsrc/b_log.c b/libm/upstream-freebsd/lib/msun/bsdsrc/b_log.c
+index 810222602..c164dfa50 100644
+--- a/libm/upstream-freebsd/lib/msun/bsdsrc/b_log.c
++++ b/libm/upstream-freebsd/lib/msun/bsdsrc/b_log.c
+@@ -1,5 +1,5 @@
+ /*-
+- * SPDX-License-Identifier: BSD-4-Clause
++ * SPDX-License-Identifier: BSD-3-Clause
+  *
+  * Copyright (c) 1992, 1993
+  *	The Regents of the University of California.  All rights reserved.
+@@ -12,11 +12,7 @@
+  * 2. Redistributions in binary form must reproduce the above copyright
+  *    notice, this list of conditions and the following disclaimer in the
+  *    documentation and/or other materials provided with the distribution.
+- * 3. All advertising materials mentioning features or use of this software
+- *    must display the following acknowledgement:
+- *	This product includes software developed by the University of
+- *	California, Berkeley and its contributors.
+- * 4. Neither the name of the University nor the names of its contributors
++ * 3. Neither the name of the University nor the names of its contributors
+  *    may be used to endorse or promote products derived from this software
+  *    without specific prior written permission.
+  *
+@@ -35,7 +31,7 @@
+ 
+ /* @(#)log.c	8.2 (Berkeley) 11/30/93 */
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/bsdsrc/b_log.c 326670 2017-12-07 20:41:23Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/bsdsrc/b_tgamma.c b/libm/upstream-freebsd/lib/msun/bsdsrc/b_tgamma.c
+index e53064993..5cb1f93f2 100644
+--- a/libm/upstream-freebsd/lib/msun/bsdsrc/b_tgamma.c
++++ b/libm/upstream-freebsd/lib/msun/bsdsrc/b_tgamma.c
+@@ -1,5 +1,5 @@
+ /*-
+- * SPDX-License-Identifier: BSD-4-Clause
++ * SPDX-License-Identifier: BSD-3-Clause
+  *
+  * Copyright (c) 1992, 1993
+  *	The Regents of the University of California.  All rights reserved.
+@@ -12,11 +12,7 @@
+  * 2. Redistributions in binary form must reproduce the above copyright
+  *    notice, this list of conditions and the following disclaimer in the
+  *    documentation and/or other materials provided with the distribution.
+- * 3. All advertising materials mentioning features or use of this software
+- *    must display the following acknowledgement:
+- *	This product includes software developed by the University of
+- *	California, Berkeley and its contributors.
+- * 4. Neither the name of the University nor the names of its contributors
++ * 3. Neither the name of the University nor the names of its contributors
+  *    may be used to endorse or promote products derived from this software
+  *    without specific prior written permission.
+  *
+@@ -35,7 +31,7 @@
+ 
+ /* @(#)gamma.c	8.1 (Berkeley) 6/4/93 */
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/bsdsrc/b_tgamma.c 325966 2017-11-18 14:26:50Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * This code by P. McIlroy, Oct 1992;
+diff --git a/libm/upstream-freebsd/lib/msun/bsdsrc/mathimpl.h b/libm/upstream-freebsd/lib/msun/bsdsrc/mathimpl.h
+index e38ea4fe1..abf299658 100644
+--- a/libm/upstream-freebsd/lib/msun/bsdsrc/mathimpl.h
++++ b/libm/upstream-freebsd/lib/msun/bsdsrc/mathimpl.h
+@@ -33,7 +33,7 @@
+  * SUCH DAMAGE.
+  *
+  *	@(#)mathimpl.h	8.1 (Berkeley) 6/4/93
+- * $FreeBSD: head/lib/msun/bsdsrc/mathimpl.h 325966 2017-11-18 14:26:50Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #ifndef _MATHIMPL_H_
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/e_powl.c b/libm/upstream-freebsd/lib/msun/ld128/e_powl.c
+index 2f3ee554c..12b92a1a9 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/e_powl.c
++++ b/libm/upstream-freebsd/lib/msun/ld128/e_powl.c
+@@ -60,7 +60,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/ld128/e_powl.c 342651 2018-12-31 15:43:06Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/e_rem_pio2l.h b/libm/upstream-freebsd/lib/msun/ld128/e_rem_pio2l.h
+index 1ed79ae4e..fcef399a8 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/e_rem_pio2l.h
++++ b/libm/upstream-freebsd/lib/msun/ld128/e_rem_pio2l.h
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/ld128/e_rem_pio2l.h 336545 2018-07-20 12:42:24Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* ld128 version of __ieee754_rem_pio2l(x,y)
+  * 
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/invtrig.c b/libm/upstream-freebsd/lib/msun/ld128/invtrig.c
+index e89a2262d..ab93732c8 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/invtrig.c
++++ b/libm/upstream-freebsd/lib/msun/ld128/invtrig.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/ld128/invtrig.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "invtrig.h"
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/invtrig.h b/libm/upstream-freebsd/lib/msun/ld128/invtrig.h
+index fd1302a93..423b56847 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/invtrig.h
++++ b/libm/upstream-freebsd/lib/msun/ld128/invtrig.h
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/ld128/invtrig.h 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/k_expl.h b/libm/upstream-freebsd/lib/msun/ld128/k_expl.h
+index b80d00ebf..159338fe3 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/k_expl.h
++++ b/libm/upstream-freebsd/lib/msun/ld128/k_expl.h
+@@ -31,7 +31,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/ld128/k_expl.h 336545 2018-07-20 12:42:24Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * ld128 version of k_expl.h.  See ../ld80/s_expl.c for most comments.
+@@ -265,7 +265,8 @@ __k_expl(long double x, long double *hip, long double *lop, int *kp)
+ /*
+  * XXX: the rest of the functions are identical for ld80 and ld128.
+  * However, we should use scalbnl() for ld128, since long double
+- * multiplication is very slow on the only supported ld128 arch (sparc64).
++ * multiplication was very slow on sparc64 and no new evaluation has
++ * been made for aarch64 and/or riscv.
+  */
+ 
+ static inline void
+@@ -299,7 +300,7 @@ hexpl(long double x)
+ static inline long double complex
+ __ldexp_cexpl(long double complex z, int expt)
+ {
+-	long double exp_x, hi, lo;
++	long double c, exp_x, hi, lo, s;
+ 	long double x, y, scale1, scale2;
+ 	int half_expt, k;
+ 
+@@ -307,16 +308,17 @@ __ldexp_cexpl(long double complex z, int expt)
+ 	y = cimagl(z);
+ 	__k_expl(x, &hi, &lo, &k);
+ 
+-	exp_x = (lo + hi) * 0x1p16382;
++	exp_x = (lo + hi) * 0x1p16382L;
+ 	expt += k - 16382;
+ 
+ 	scale1 = 1;
+ 	half_expt = expt / 2;
+ 	SET_LDBL_EXPSIGN(scale1, BIAS + half_expt);
+ 	scale2 = 1;
+-	SET_LDBL_EXPSIGN(scale1, BIAS + expt - half_expt);
++	SET_LDBL_EXPSIGN(scale2, BIAS + expt - half_expt);
+ 
+-	return (CMPLXL(cos(y) * exp_x * scale1 * scale2,
+-	    sinl(y) * exp_x * scale1 * scale2));
++	sincosl(y, &s, &c);
++	return (CMPLXL(c * exp_x * scale1 * scale2,
++	    s * exp_x * scale1 * scale2));
+ }
+ #endif /* _COMPLEX_H */
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/s_exp2l.c b/libm/upstream-freebsd/lib/msun/ld128/s_exp2l.c
+index effeb78ca..ee3d2c782 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/s_exp2l.c
++++ b/libm/upstream-freebsd/lib/msun/ld128/s_exp2l.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/ld128/s_exp2l.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <stdint.h>
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/s_expl.c b/libm/upstream-freebsd/lib/msun/ld128/s_expl.c
+index f4c18be60..5b786af49 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/s_expl.c
++++ b/libm/upstream-freebsd/lib/msun/ld128/s_expl.c
+@@ -29,7 +29,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/ld128/s_expl.c 336545 2018-07-20 12:42:24Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * ld128 version of s_expl.c.  See ../ld80/s_expl.c for most comments.
+@@ -92,7 +92,10 @@ expl(long double x)
+ 	t = SUM2P(hi, lo);
+ 
+ 	/* Scale by 2**k. */
+-	/* XXX sparc64 multiplication is so slow that scalbnl() is faster. */
++	/*
++	 * XXX sparc64 multiplication was so slow that scalbnl() is faster,
++	 * but performance on aarch64 and riscv hasn't yet been quantified.
++	 */
+ 	if (k >= LDBL_MIN_EXP) {
+ 		if (k == LDBL_MAX_EXP)
+ 			RETURNI(t * 2 * 0x1p16383L);
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/s_logl.c b/libm/upstream-freebsd/lib/msun/ld128/s_logl.c
+index 6c9981b4b..93a2a7c35 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/s_logl.c
++++ b/libm/upstream-freebsd/lib/msun/ld128/s_logl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/ld128/s_logl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ /**
+  * Implementation of the natural logarithm of x for 128-bit format.
+@@ -535,16 +535,17 @@ logl(long double x)
+ 	 * efficiency than is gained.
+ 	 */
+ 	/*
+-	 * Use double precision operations wherever possible, since long
+-	 * double operations are emulated and are very slow on the only
+-	 * known machines that support ld128 (sparc64).  Also, don't try
+-	 * to improve parallelism by increasing the number of operations,
+-	 * since any parallelism on such machines is needed for the
+-	 * emulation.  Horner's method is good for this, and is also good
+-	 * for accuracy.  Horner's method doesn't handle the `lo' term
+-	 * well, either for efficiency or accuracy.  However, for accuracy
+-	 * we evaluate d * d * P2 separately to take advantage of
+-	 * by P2 being exact, and this gives a good place to sum the 'lo'
++	 * Use double precision operations wherever possible, since
++	 * long double operations are emulated and were very slow on
++	 * the old sparc64 and unknown on the newer aarch64 and riscv
++	 * machines.  Also, don't try to improve parallelism by
++	 * increasing the number of operations, since any parallelism
++	 * on such machines is needed for the emulation.  Horner's
++	 * method is good for this, and is also good for accuracy.
++	 * Horner's method doesn't handle the `lo' term well, either
++	 * for efficiency or accuracy.  However, for accuracy we
++	 * evaluate d * d * P2 separately to take advantage of by P2
++	 * being exact, and this gives a good place to sum the 'lo'
+ 	 * term too.
+ 	 */
+ 	dd = (double)d;
+diff --git a/libm/upstream-freebsd/lib/msun/ld128/s_nanl.c b/libm/upstream-freebsd/lib/msun/ld128/s_nanl.c
+index 1b8196f4c..45d10e5a8 100644
+--- a/libm/upstream-freebsd/lib/msun/ld128/s_nanl.c
++++ b/libm/upstream-freebsd/lib/msun/ld128/s_nanl.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/ld128/s_nanl.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/catrig.c b/libm/upstream-freebsd/lib/msun/src/catrig.c
+index 4a2d0769a..431d8e674 100644
+--- a/libm/upstream-freebsd/lib/msun/src/catrig.c
++++ b/libm/upstream-freebsd/lib/msun/src/catrig.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/catrig.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/catrigf.c b/libm/upstream-freebsd/lib/msun/src/catrigf.c
+index e25187109..62bcd3995 100644
+--- a/libm/upstream-freebsd/lib/msun/src/catrigf.c
++++ b/libm/upstream-freebsd/lib/msun/src/catrigf.c
+@@ -41,7 +41,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/catrigf.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/catrigl.c b/libm/upstream-freebsd/lib/msun/src/catrigl.c
+index 63b068a62..e66f87a24 100644
+--- a/libm/upstream-freebsd/lib/msun/src/catrigl.c
++++ b/libm/upstream-freebsd/lib/msun/src/catrigl.c
+@@ -40,7 +40,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/catrigl.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_asin.c b/libm/upstream-freebsd/lib/msun/src/e_asin.c
+index d750658e8..931b27049 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_asin.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_asin.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_asin.c 317349 2017-04-23 22:31:12Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_asin(x)
+  * Method :                  
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_atan2.c b/libm/upstream-freebsd/lib/msun/src/e_atan2.c
+index bef9df86f..231a1611e 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_atan2.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_atan2.c
+@@ -13,7 +13,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_atan2.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_atan2(y,x)
+  * Method :
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_atan2f.c b/libm/upstream-freebsd/lib/msun/src/e_atan2f.c
+index 0ce9bc068..346d76746 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_atan2f.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_atan2f.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_atan2f.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_atan2l.c b/libm/upstream-freebsd/lib/msun/src/e_atan2l.c
+index 8f80acc9f..94ebdec54 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_atan2l.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_atan2l.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_atan2l.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * See comments in e_atan2.c.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_coshl.c b/libm/upstream-freebsd/lib/msun/src/e_coshl.c
+index 0002bb56e..4e3b28311 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_coshl.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_coshl.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_coshl.c 306527 2016-09-30 20:20:07Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * See e_cosh.c for complete comments.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_exp.c b/libm/upstream-freebsd/lib/msun/src/e_exp.c
+index dd88d3e91..dd04d8e83 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_exp.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_exp.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_exp.c 352710 2019-09-25 18:50:57Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_exp(x)
+  * Returns the exponential of x.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_expf.c b/libm/upstream-freebsd/lib/msun/src/e_expf.c
+index aaf6d5f6c..4903d55c5 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_expf.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_expf.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_expf.c 352710 2019-09-25 18:50:57Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_fmod.c b/libm/upstream-freebsd/lib/msun/src/e_fmod.c
+index fbb2d932c..3a28dc4ff 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_fmod.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_fmod.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_fmod.c 336663 2018-07-24 10:10:16Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* 
+  * __ieee754_fmod(x,y)
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_fmodf.c b/libm/upstream-freebsd/lib/msun/src/e_fmodf.c
+index 3783a880c..1b6bf36f9 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_fmodf.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_fmodf.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_fmodf.c 336663 2018-07-24 10:10:16Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * __ieee754_fmodf(x,y)
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_fmodl.c b/libm/upstream-freebsd/lib/msun/src/e_fmodl.c
+index 77d1642c3..ad3bcc34c 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_fmodl.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_fmodl.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_fmodl.c 336663 2018-07-24 10:10:16Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <stdint.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_hypot.c b/libm/upstream-freebsd/lib/msun/src/e_hypot.c
+index 0c1676776..7c455bb66 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_hypot.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_hypot.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_hypot.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_hypot(x,y)
+  *
+@@ -118,10 +118,8 @@ __ieee754_hypot(double x, double y)
+ 	    w  = sqrt(t1*y1-(w*(-w)-(t1*y2+t2*b)));
+ 	}
+ 	if(k!=0) {
+-	    u_int32_t high;
+-	    t1 = 1.0;
+-	    GET_HIGH_WORD(high,t1);
+-	    SET_HIGH_WORD(t1,high+(k<<20));
++	    t1 = 0.0;
++	    SET_HIGH_WORD(t1,(1023+k)<<20);
+ 	    return t1*w;
+ 	} else return w;
+ }
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_hypotf.c b/libm/upstream-freebsd/lib/msun/src/e_hypotf.c
+index 79e46979e..00610268f 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_hypotf.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_hypotf.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_hypotf.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+@@ -77,7 +77,7 @@ __ieee754_hypotf(float x, float y)
+ 	    w  = __ieee754_sqrtf(t1*y1-(w*(-w)-(t1*y2+t2*b)));
+ 	}
+ 	if(k!=0) {
+-	    SET_FLOAT_WORD(t1,0x3f800000+(k<<23));
++	    SET_FLOAT_WORD(t1,(127+k)<<23);
+ 	    return t1*w;
+ 	} else return w;
+ }
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_hypotl.c b/libm/upstream-freebsd/lib/msun/src/e_hypotl.c
+index 5603b6e23..9189b1fab 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_hypotl.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_hypotl.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_hypotl.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* long double version of hypot().  See e_hypot.c for most comments. */
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_j0.c b/libm/upstream-freebsd/lib/msun/src/e_j0.c
+index a008b42c0..5d862b6f8 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_j0.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_j0.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_j0.c 343953 2019-02-10 08:46:07Z peterj $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_j0(x), __ieee754_y0(x)
+  * Bessel function of the first and second kinds of order zero.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_j0f.c b/libm/upstream-freebsd/lib/msun/src/e_j0f.c
+index 495a5e54b..1c5ef4da1 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_j0f.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_j0f.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_j0f.c 343953 2019-02-10 08:46:07Z peterj $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * See e_j0.c for complete comments.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_j1.c b/libm/upstream-freebsd/lib/msun/src/e_j1.c
+index 6d1c41c5b..fb4462738 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_j1.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_j1.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_j1.c 343953 2019-02-10 08:46:07Z peterj $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_j1(x), __ieee754_y1(x)
+  * Bessel function of the first and second kinds of order zero.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_j1f.c b/libm/upstream-freebsd/lib/msun/src/e_j1f.c
+index 31fc28a5d..c6c45c107 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_j1f.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_j1f.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_j1f.c 343953 2019-02-10 08:46:07Z peterj $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * See e_j1.c for complete comments.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_jn.c b/libm/upstream-freebsd/lib/msun/src/e_jn.c
+index c039cf234..c7ba7da65 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_jn.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_jn.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_jn.c 343953 2019-02-10 08:46:07Z peterj $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * __ieee754_jn(n, x), __ieee754_yn(n, x)
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_jnf.c b/libm/upstream-freebsd/lib/msun/src/e_jnf.c
+index c82d5cf95..965feeb66 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_jnf.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_jnf.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_jnf.c 279856 2015-03-10 17:10:54Z kargl $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * See e_jn.c for complete comments.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_lgammaf_r.c b/libm/upstream-freebsd/lib/msun/src/e_lgammaf_r.c
+index 46bdd6f8c..48346c336 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_lgammaf_r.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_lgammaf_r.c
+@@ -15,7 +15,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_lgammaf_r.c 306709 2016-10-05 17:04:58Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_pow.c b/libm/upstream-freebsd/lib/msun/src/e_pow.c
+index b4f6a5a33..52b2f5ceb 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_pow.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_pow.c
+@@ -10,7 +10,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_pow.c 342851 2019-01-07 17:35:09Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_pow(x,y) return x**y
+  *
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_powf.c b/libm/upstream-freebsd/lib/msun/src/e_powf.c
+index 13dd4eb6d..53f1d37d6 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_powf.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_powf.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_powf.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_rem_pio2.c b/libm/upstream-freebsd/lib/msun/src/e_rem_pio2.c
+index 3e62c2bdb..47b651351 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_rem_pio2.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_rem_pio2.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_rem_pio2.c 336545 2018-07-20 12:42:24Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_rem_pio2(x,y)
+  * 
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_rem_pio2f.c b/libm/upstream-freebsd/lib/msun/src/e_rem_pio2f.c
+index 2a89d27fd..597f6139f 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_rem_pio2f.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_rem_pio2f.c
+@@ -15,7 +15,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_rem_pio2f.c 336545 2018-07-20 12:42:24Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_rem_pio2f(x,y)
+  *
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_remainder.c b/libm/upstream-freebsd/lib/msun/src/e_remainder.c
+index 334d2825c..a4ae0b780 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_remainder.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_remainder.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_remainder.c 336663 2018-07-24 10:10:16Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ /* __ieee754_remainder(x,p)
+  * Return :                  
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_remainderf.c b/libm/upstream-freebsd/lib/msun/src/e_remainderf.c
+index ba3e07a13..8004493de 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_remainderf.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_remainderf.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_remainderf.c 336663 2018-07-24 10:10:16Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_remainderl.c b/libm/upstream-freebsd/lib/msun/src/e_remainderl.c
+index 6e4a4dad0..4a6786309 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_remainderl.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_remainderl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_remainderl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_sinhl.c b/libm/upstream-freebsd/lib/msun/src/e_sinhl.c
+index 21dd8b2df..38d3df195 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_sinhl.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_sinhl.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_sinhl.c 306527 2016-09-30 20:20:07Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * See e_sinh.c for complete comments.
+diff --git a/libm/upstream-freebsd/lib/msun/src/e_sqrtl.c b/libm/upstream-freebsd/lib/msun/src/e_sqrtl.c
+index fbb3a10c2..565d96396 100644
+--- a/libm/upstream-freebsd/lib/msun/src/e_sqrtl.c
++++ b/libm/upstream-freebsd/lib/msun/src/e_sqrtl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/e_sqrtl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <fenv.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/k_exp.c b/libm/upstream-freebsd/lib/msun/src/k_exp.c
+index 7cc083ff8..dd15ff4cb 100644
+--- a/libm/upstream-freebsd/lib/msun/src/k_exp.c
++++ b/libm/upstream-freebsd/lib/msun/src/k_exp.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/k_exp.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ 
+@@ -88,7 +88,7 @@ __ldexp_exp(double x, int expt)
+ double complex
+ __ldexp_cexp(double complex z, int expt)
+ {
+-	double x, y, exp_x, scale1, scale2;
++	double c, exp_x, s, scale1, scale2, x, y;
+ 	int ex_expt, half_expt;
+ 
+ 	x = creal(z);
+@@ -105,6 +105,7 @@ __ldexp_cexp(double complex z, int expt)
+ 	half_expt = expt - half_expt;
+ 	INSERT_WORDS(scale2, (0x3ff + half_expt) << 20, 0);
+ 
+-	return (CMPLX(cos(y) * exp_x * scale1 * scale2,
+-	    sin(y) * exp_x * scale1 * scale2));
++	sincos(y, &s, &c);
++	return (CMPLX(c * exp_x * scale1 * scale2,
++	    s * exp_x * scale1 * scale2));
+ }
+diff --git a/libm/upstream-freebsd/lib/msun/src/k_expf.c b/libm/upstream-freebsd/lib/msun/src/k_expf.c
+index 5aa5c76b8..80e629b0f 100644
+--- a/libm/upstream-freebsd/lib/msun/src/k_expf.c
++++ b/libm/upstream-freebsd/lib/msun/src/k_expf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/k_expf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ 
+@@ -71,7 +71,7 @@ __ldexp_expf(float x, int expt)
+ float complex
+ __ldexp_cexpf(float complex z, int expt)
+ {
+-	float x, y, exp_x, scale1, scale2;
++	float c, exp_x, s, scale1, scale2, x, y;
+ 	int ex_expt, half_expt;
+ 
+ 	x = crealf(z);
+@@ -84,6 +84,7 @@ __ldexp_cexpf(float complex z, int expt)
+ 	half_expt = expt - half_expt;
+ 	SET_FLOAT_WORD(scale2, (0x7f + half_expt) << 23);
+ 
+-	return (CMPLXF(cosf(y) * exp_x * scale1 * scale2,
+-	    sinf(y) * exp_x * scale1 * scale2));
++	sincosf(y, &s, &c);
++	return (CMPLXF(c * exp_x * scale1 * scale2,
++	    s * exp_x * scale1 * scale2));
+ }
+diff --git a/libm/upstream-freebsd/lib/msun/src/k_rem_pio2.c b/libm/upstream-freebsd/lib/msun/src/k_rem_pio2.c
+index 0869e0386..0a717f768 100644
+--- a/libm/upstream-freebsd/lib/msun/src/k_rem_pio2.c
++++ b/libm/upstream-freebsd/lib/msun/src/k_rem_pio2.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/k_rem_pio2.c 342651 2018-12-31 15:43:06Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * __kernel_rem_pio2(x,y,e0,nx,prec)
+diff --git a/libm/upstream-freebsd/lib/msun/src/k_sincos.h b/libm/upstream-freebsd/lib/msun/src/k_sincos.h
+index b83e6909a..6f03be297 100644
+--- a/libm/upstream-freebsd/lib/msun/src/k_sincos.h
++++ b/libm/upstream-freebsd/lib/msun/src/k_sincos.h
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/k_sincos.h 319047 2017-05-28 06:13:38Z mmel $");
++__FBSDID("$FreeBSD$");
+ 
+ static const double
+ S1  = -1.66666666666666324348e-01, /* 0xBFC55555, 0x55555549 */
+diff --git a/libm/upstream-freebsd/lib/msun/src/k_sincosf.h b/libm/upstream-freebsd/lib/msun/src/k_sincosf.h
+index ad51e8389..073986db8 100644
+--- a/libm/upstream-freebsd/lib/msun/src/k_sincosf.h
++++ b/libm/upstream-freebsd/lib/msun/src/k_sincosf.h
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/k_sincosf.h 319047 2017-05-28 06:13:38Z mmel $");
++__FBSDID("$FreeBSD$");
+ 
+ /* |sin(x)/x - s(x)| < 2**-37.5 (~[-4.89e-12, 4.824e-12]). */
+ static const double
+diff --git a/libm/upstream-freebsd/lib/msun/src/k_sincosl.h b/libm/upstream-freebsd/lib/msun/src/k_sincosl.h
+index 423948ed2..4d4dc69f7 100644
+--- a/libm/upstream-freebsd/lib/msun/src/k_sincosl.h
++++ b/libm/upstream-freebsd/lib/msun/src/k_sincosl.h
+@@ -13,7 +13,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/k_sincosl.h 319047 2017-05-28 06:13:38Z mmel $");
++__FBSDID("$FreeBSD$");
+ 
+ #if LDBL_MANT_DIG == 64		/* ld80 version of k_sincosl.c. */
+ 
+@@ -28,8 +28,8 @@ S1lo = -9.2563760475949941e-18;		/* -0x15580000000000.0p-109 */
+ #define	C1	((long double)C1hi + C1lo)
+ #else
+ static const long double
+-C1 =  0.0416666666666666666136L;	/*  0xaaaaaaaaaaaaaa9b.0p-68 */
+-S1 = -0.166666666666666666671L,		/* -0xaaaaaaaaaaaaaaab.0p-66 */
++C1 =  0.0416666666666666666136L,	/*  0xaaaaaaaaaaaaaa9b.0p-68 */
++S1 = -0.166666666666666666671L;		/* -0xaaaaaaaaaaaaaaab.0p-66 */
+ #endif
+ 
+ static const double
+diff --git a/libm/upstream-freebsd/lib/msun/src/math_private.h b/libm/upstream-freebsd/lib/msun/src/math_private.h
+index bc3d516c9..b91b54cea 100644
+--- a/libm/upstream-freebsd/lib/msun/src/math_private.h
++++ b/libm/upstream-freebsd/lib/msun/src/math_private.h
+@@ -11,7 +11,7 @@
+ 
+ /*
+  * from: @(#)fdlibm.h 5.1 93/09/24
+- * $FreeBSD: head/lib/msun/src/math_private.h 336663 2018-07-24 10:10:16Z bde $
++ * $FreeBSD$
+  */
+ 
+ #ifndef _MATH_PRIVATE_H_
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_carg.c b/libm/upstream-freebsd/lib/msun/src/s_carg.c
+index d0f9ced0e..1611b9de3 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_carg.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_carg.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_carg.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cargf.c b/libm/upstream-freebsd/lib/msun/src/s_cargf.c
+index e4a76f476..71c705daa 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cargf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cargf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cargf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cargl.c b/libm/upstream-freebsd/lib/msun/src/s_cargl.c
+index 9885d60ac..96c3336bd 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cargl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cargl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cargl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cbrt.c b/libm/upstream-freebsd/lib/msun/src/s_cbrt.c
+index 268425e01..0e609e110 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cbrt.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cbrt.c
+@@ -13,7 +13,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cbrt.c 342563 2018-12-28 01:34:08Z jhibbits $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include "math.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_ccosh.c b/libm/upstream-freebsd/lib/msun/src/s_ccosh.c
+index da568f4d3..7652b3c49 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_ccosh.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_ccosh.c
+@@ -39,7 +39,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_ccosh.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_ccoshf.c b/libm/upstream-freebsd/lib/msun/src/s_ccoshf.c
+index 4aeea6367..5d7a09ba5 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_ccoshf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_ccoshf.c
+@@ -31,7 +31,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_ccoshf.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cexp.c b/libm/upstream-freebsd/lib/msun/src/s_cexp.c
+index a2b91545a..2ef8ba197 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cexp.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cexp.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cexp.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cexpf.c b/libm/upstream-freebsd/lib/msun/src/s_cexpf.c
+index ee7512b3d..b815c99af 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cexpf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cexpf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cexpf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cimag.c b/libm/upstream-freebsd/lib/msun/src/s_cimag.c
+index e89ee12a0..1f383cb2a 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cimag.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cimag.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_cimag.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cimagf.c b/libm/upstream-freebsd/lib/msun/src/s_cimagf.c
+index 2bfce1075..86a43c116 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cimagf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cimagf.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_cimagf.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cimagl.c b/libm/upstream-freebsd/lib/msun/src/s_cimagl.c
+index fafeaff10..6d8795058 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cimagl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cimagl.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_cimagl.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_clog.c b/libm/upstream-freebsd/lib/msun/src/s_clog.c
+index 2c310954b..8150fa7f8 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_clog.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_clog.c
+@@ -25,7 +25,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_clog.c 333577 2018-05-13 09:54:34Z kib $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_clogf.c b/libm/upstream-freebsd/lib/msun/src/s_clogf.c
+index d94977ddf..19a94453e 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_clogf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_clogf.c
+@@ -25,7 +25,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_clogf.c 333577 2018-05-13 09:54:34Z kib $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_clogl.c b/libm/upstream-freebsd/lib/msun/src/s_clogl.c
+index 9f56ca357..e59a1377a 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_clogl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_clogl.c
+@@ -25,7 +25,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_clogl.c 333577 2018-05-13 09:54:34Z kib $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_conj.c b/libm/upstream-freebsd/lib/msun/src/s_conj.c
+index 8e4d3fc99..dc56f48b2 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_conj.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_conj.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_conj.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_conjf.c b/libm/upstream-freebsd/lib/msun/src/s_conjf.c
+index f69189408..3fd8b8f02 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_conjf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_conjf.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_conjf.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_conjl.c b/libm/upstream-freebsd/lib/msun/src/s_conjl.c
+index 00f315adf..d2f8d0fd3 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_conjl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_conjl.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_conjl.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_copysignl.c b/libm/upstream-freebsd/lib/msun/src/s_copysignl.c
+index cef101ef9..bd6744705 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_copysignl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_copysignl.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_copysignl.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cosl.c b/libm/upstream-freebsd/lib/msun/src/s_cosl.c
+index 72c2dd31f..46a2e8620 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cosl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cosl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cosl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * Limited testing on pseudorandom numbers drawn within [-2e8:4e8] shows
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cpow.c b/libm/upstream-freebsd/lib/msun/src/s_cpow.c
+index 1cb99aaa7..cdc57bd46 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cpow.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cpow.c
+@@ -44,7 +44,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cpow.c 336563 2018-07-20 18:27:30Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cpowf.c b/libm/upstream-freebsd/lib/msun/src/s_cpowf.c
+index a2ef52541..aeb773b02 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cpowf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cpowf.c
+@@ -44,7 +44,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cpowf.c 336563 2018-07-20 18:27:30Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cpowl.c b/libm/upstream-freebsd/lib/msun/src/s_cpowl.c
+index f9c637349..5d43b55a7 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cpowl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cpowl.c
+@@ -44,7 +44,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cpowl.c 336563 2018-07-20 18:27:30Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cproj.c b/libm/upstream-freebsd/lib/msun/src/s_cproj.c
+index 7677b5fbd..38e774723 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cproj.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cproj.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cproj.c 342563 2018-12-28 01:34:08Z jhibbits $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cprojf.c b/libm/upstream-freebsd/lib/msun/src/s_cprojf.c
+index f29f8d7ad..af4c3a80c 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cprojf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cprojf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cprojf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_cprojl.c b/libm/upstream-freebsd/lib/msun/src/s_cprojl.c
+index c9242cbbd..16df514f3 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_cprojl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_cprojl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_cprojl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_creal.c b/libm/upstream-freebsd/lib/msun/src/s_creal.c
+index a30c7f694..69a10f279 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_creal.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_creal.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_creal.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_crealf.c b/libm/upstream-freebsd/lib/msun/src/s_crealf.c
+index 95469d858..83e4d4632 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_crealf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_crealf.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_crealf.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_creall.c b/libm/upstream-freebsd/lib/msun/src/s_creall.c
+index e34f761b7..538b7d53d 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_creall.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_creall.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_creall.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <complex.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_csinh.c b/libm/upstream-freebsd/lib/msun/src/s_csinh.c
+index 7408b1334..09b2dcbec 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_csinh.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_csinh.c
+@@ -39,7 +39,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_csinh.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_csinhf.c b/libm/upstream-freebsd/lib/msun/src/s_csinhf.c
+index 6e29f1951..ba1a79497 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_csinhf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_csinhf.c
+@@ -31,7 +31,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_csinhf.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_csqrt.c b/libm/upstream-freebsd/lib/msun/src/s_csqrt.c
+index 215b7d704..d172efc75 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_csqrt.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_csqrt.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_csqrt.c 336488 2018-07-19 15:04:10Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_csqrtf.c b/libm/upstream-freebsd/lib/msun/src/s_csqrtf.c
+index 16d32663d..6836a3903 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_csqrtf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_csqrtf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_csqrtf.c 336412 2018-07-17 12:01:59Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_csqrtl.c b/libm/upstream-freebsd/lib/msun/src/s_csqrtl.c
+index e58e4aea8..40bc59df4 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_csqrtl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_csqrtl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_csqrtl.c 336488 2018-07-19 15:04:10Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_ctanh.c b/libm/upstream-freebsd/lib/msun/src/s_ctanh.c
+index d005baf40..88afeb50e 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_ctanh.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_ctanh.c
+@@ -66,7 +66,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_ctanh.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_ctanhf.c b/libm/upstream-freebsd/lib/msun/src/s_ctanhf.c
+index 06825a396..d2bd0b678 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_ctanhf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_ctanhf.c
+@@ -31,7 +31,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_ctanhf.c 336362 2018-07-17 07:42:14Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <complex.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_erf.c b/libm/upstream-freebsd/lib/msun/src/s_erf.c
+index 3e39d8038..5f228474f 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_erf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_erf.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_erf.c 342563 2018-12-28 01:34:08Z jhibbits $");
++__FBSDID("$FreeBSD$");
+ 
+ /* double erf(double x)
+  * double erfc(double x)
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_exp2.c b/libm/upstream-freebsd/lib/msun/src/s_exp2.c
+index dc3fb0220..bc36e5564 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_exp2.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_exp2.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_exp2.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_exp2f.c b/libm/upstream-freebsd/lib/msun/src/s_exp2f.c
+index e587b0696..c082924af 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_exp2f.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_exp2f.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_exp2f.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_expm1.c b/libm/upstream-freebsd/lib/msun/src/s_expm1.c
+index 21256ce5a..844f10360 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_expm1.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_expm1.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_expm1.c 352710 2019-09-25 18:50:57Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ /* expm1(x)
+  * Returns exp(x)-1, the exponential of x minus 1.
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_expm1f.c b/libm/upstream-freebsd/lib/msun/src/s_expm1f.c
+index 4d9ab36b7..b47daac2e 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_expm1f.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_expm1f.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_expm1f.c 352710 2019-09-25 18:50:57Z dim $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fabsl.c b/libm/upstream-freebsd/lib/msun/src/s_fabsl.c
+index 0eef5b739..5076d8a9b 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fabsl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fabsl.c
+@@ -27,7 +27,7 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_fabsl.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fdim.c b/libm/upstream-freebsd/lib/msun/src/s_fdim.c
+index bb22474be..c40c3e9d3 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fdim.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fdim.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fdim.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fma.c b/libm/upstream-freebsd/lib/msun/src/s_fma.c
+index 447253704..41a6424fd 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fma.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fma.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fma.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <fenv.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fmaf.c b/libm/upstream-freebsd/lib/msun/src/s_fmaf.c
+index 88a86f236..389cf1b11 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fmaf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fmaf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fmaf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <fenv.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fmal.c b/libm/upstream-freebsd/lib/msun/src/s_fmal.c
+index 3c1910aed..a379346c1 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fmal.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fmal.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fmal.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <fenv.h>
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fmax.c b/libm/upstream-freebsd/lib/msun/src/s_fmax.c
+index ba0bf6b4b..0c234bcc5 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fmax.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fmax.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fmax.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fmaxf.c b/libm/upstream-freebsd/lib/msun/src/s_fmaxf.c
+index 6a3f06b6f..8e9d1baf3 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fmaxf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fmaxf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fmaxf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fmaxl.c b/libm/upstream-freebsd/lib/msun/src/s_fmaxl.c
+index 4f0ee311c..c0d7c8832 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fmaxl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fmaxl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fmaxl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fmin.c b/libm/upstream-freebsd/lib/msun/src/s_fmin.c
+index d49bedb31..d7f24c121 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fmin.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fmin.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fmin.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fminf.c b/libm/upstream-freebsd/lib/msun/src/s_fminf.c
+index 3c8822824..258316725 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fminf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fminf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fminf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_fminl.c b/libm/upstream-freebsd/lib/msun/src/s_fminl.c
+index aa6cc9f58..97604b38b 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_fminl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_fminl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_fminl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_frexpl.c b/libm/upstream-freebsd/lib/msun/src/s_frexpl.c
+index 310f2e317..66e284fdd 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_frexpl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_frexpl.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_frexpl.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_logbl.c b/libm/upstream-freebsd/lib/msun/src/s_logbl.c
+index ae71302c3..ee1a91fd8 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_logbl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_logbl.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_logbl.c 306409 2016-09-28 14:48:34Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <limits.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_lrint.c b/libm/upstream-freebsd/lib/msun/src/s_lrint.c
+index 0e159996a..ad9b978fa 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_lrint.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_lrint.c
+@@ -31,7 +31,7 @@
+ #include <math.h>
+ 
+ #ifndef type
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_lrint.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ #define type		double
+ #define	roundit		rint
+ #define dtype		long
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_lround.c b/libm/upstream-freebsd/lib/msun/src/s_lround.c
+index ce2aee779..66d9183a7 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_lround.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_lround.c
+@@ -32,7 +32,7 @@
+ #include <math.h>
+ 
+ #ifndef type
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_lround.c 353329 2019-10-08 21:39:51Z brooks $");
++__FBSDID("$FreeBSD$");
+ #define type		double
+ #define	roundit		round
+ #define dtype		long
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_modfl.c b/libm/upstream-freebsd/lib/msun/src/s_modfl.c
+index 2f884d207..2d83bbe33 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_modfl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_modfl.c
+@@ -35,7 +35,7 @@
+  * is preserved.
+  * ====================================================
+  *
+- * $FreeBSD: head/lib/msun/src/s_modfl.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <float.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_nan.c b/libm/upstream-freebsd/lib/msun/src/s_nan.c
+index 4a25df087..17692445a 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_nan.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_nan.c
+@@ -25,7 +25,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  *
+- * $FreeBSD: head/lib/msun/src/s_nan.c 326219 2017-11-26 02:00:33Z pfg $
++ * $FreeBSD$
+  */
+ 
+ #include <sys/endian.h>
+@@ -66,14 +66,15 @@ _scan_nan(uint32_t *words, int num_words, const char *s)
+ 		;
+ 
+ 	/* Scan backwards, filling in the bits in words[] as we go. */
+-#if _BYTE_ORDER == _LITTLE_ENDIAN
+ 	for (bitpos = 0; bitpos < 32 * num_words; bitpos += 4) {
+-#else
+-	for (bitpos = 32 * num_words - 4; bitpos >= 0; bitpos -= 4) {
+-#endif
+ 		if (--si < 0)
+ 			break;
++#if _BYTE_ORDER == _LITTLE_ENDIAN
+ 		words[bitpos / 32] |= digittoint(s[si]) << (bitpos % 32);
++#else
++		words[num_words - 1 - bitpos / 32] |=
++		    digittoint(s[si]) << (bitpos % 32);
++#endif
+ 	}
+ }
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_nearbyint.c b/libm/upstream-freebsd/lib/msun/src/s_nearbyint.c
+index 0ea6ce711..796dbaf98 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_nearbyint.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_nearbyint.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_nearbyint.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <fenv.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_remquo.c b/libm/upstream-freebsd/lib/msun/src/s_remquo.c
+index be6a2e847..6a111dfc6 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_remquo.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_remquo.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_remquo.c 336663 2018-07-24 10:10:16Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_remquof.c b/libm/upstream-freebsd/lib/msun/src/s_remquof.c
+index 775672f5e..f4c101620 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_remquof.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_remquof.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_remquof.c 336663 2018-07-24 10:10:16Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_remquol.c b/libm/upstream-freebsd/lib/msun/src/s_remquol.c
+index 5ac13e462..a9f5813d0 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_remquol.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_remquol.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_remquol.c 336665 2018-07-24 11:50:05Z bde $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <stdint.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_rintl.c b/libm/upstream-freebsd/lib/msun/src/s_rintl.c
+index a05f4c490..1e9824d83 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_rintl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_rintl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_rintl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #include <math.h>
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_round.c b/libm/upstream-freebsd/lib/msun/src/s_round.c
+index cdf6b9721..ca25f8efd 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_round.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_round.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_round.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_roundf.c b/libm/upstream-freebsd/lib/msun/src/s_roundf.c
+index 37be766ca..5bbf6b33b 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_roundf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_roundf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_roundf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_roundl.c b/libm/upstream-freebsd/lib/msun/src/s_roundl.c
+index 22f956ccb..8d1c02a7f 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_roundl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_roundl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_roundl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #ifdef __i386__
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_scalbln.c b/libm/upstream-freebsd/lib/msun/src/s_scalbln.c
+index 52e3d7883..c27420c92 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_scalbln.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_scalbln.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_scalbln.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_scalbn.c b/libm/upstream-freebsd/lib/msun/src/s_scalbn.c
+index 52b0d2783..b048b0596 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_scalbn.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_scalbn.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_scalbn.c 306409 2016-09-28 14:48:34Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * scalbn (double x, int n)
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_scalbnf.c b/libm/upstream-freebsd/lib/msun/src/s_scalbnf.c
+index d78fe245a..21d001c1f 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_scalbnf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_scalbnf.c
+@@ -14,7 +14,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_scalbnf.c 306409 2016-09-28 14:48:34Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ #include "math.h"
+ #include "math_private.h"
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_scalbnl.c b/libm/upstream-freebsd/lib/msun/src/s_scalbnl.c
+index a7822e228..28b0cf9b7 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_scalbnl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_scalbnl.c
+@@ -11,7 +11,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_scalbnl.c 306409 2016-09-28 14:48:34Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * scalbnl (long double x, int n)
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_sincos.c b/libm/upstream-freebsd/lib/msun/src/s_sincos.c
+index 72b2d64da..85e8d7408 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_sincos.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_sincos.c
+@@ -13,7 +13,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_sincos.c 319047 2017-05-28 06:13:38Z mmel $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_sincosf.c b/libm/upstream-freebsd/lib/msun/src/s_sincosf.c
+index 4aaa780cb..755ff05d4 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_sincosf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_sincosf.c
+@@ -16,7 +16,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_sincosf.c 319047 2017-05-28 06:13:38Z mmel $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ 
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_sincosl.c b/libm/upstream-freebsd/lib/msun/src/s_sincosl.c
+index 75cf24d81..aef36c232 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_sincosl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_sincosl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_sincosl.c 319047 2017-05-28 06:13:38Z mmel $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #ifdef __i386__
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_sinl.c b/libm/upstream-freebsd/lib/msun/src/s_sinl.c
+index 1bdbbc554..f1ef84c8c 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_sinl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_sinl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_sinl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <float.h>
+ #ifdef __i386__
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_tanhl.c b/libm/upstream-freebsd/lib/msun/src/s_tanhl.c
+index 696039f62..b7531866d 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_tanhl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_tanhl.c
+@@ -13,7 +13,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_tanhl.c 306527 2016-09-30 20:20:07Z emaste $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * See s_tanh.c for complete comments.
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_tanl.c b/libm/upstream-freebsd/lib/msun/src/s_tanl.c
+index 192817600..0c5228ec8 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_tanl.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_tanl.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_tanl.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ /*
+  * Limited testing on pseudorandom numbers drawn within [0:4e8] shows
+diff --git a/libm/upstream-freebsd/lib/msun/src/s_tgammaf.c b/libm/upstream-freebsd/lib/msun/src/s_tgammaf.c
+index 8527e16ba..1fd46e809 100644
+--- a/libm/upstream-freebsd/lib/msun/src/s_tgammaf.c
++++ b/libm/upstream-freebsd/lib/msun/src/s_tgammaf.c
+@@ -27,7 +27,7 @@
+  */
+ 
+ #include <sys/cdefs.h>
+-__FBSDID("$FreeBSD: head/lib/msun/src/s_tgammaf.c 326219 2017-11-26 02:00:33Z pfg $");
++__FBSDID("$FreeBSD$");
+ 
+ #include <math.h>
+ 
+-- 
+2.31.1
+

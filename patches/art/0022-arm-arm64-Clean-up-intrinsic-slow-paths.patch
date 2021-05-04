@@ -1,0 +1,361 @@
+From 321855b6f2690c0214052a50b004429571669f12 Mon Sep 17 00:00:00 2001
+From: Vladimir Marko <vmarko@google.com>
+Date: Mon, 8 Jun 2020 15:05:15 +0100
+Subject: [PATCH 22/27] arm/arm64: Clean up intrinsic slow paths.
+
+Generalize and use the slow path template IntrinsicSlowPath
+from intrinsics_utils.h.
+
+Test: m test-art-host-gtest
+Test: testrunner.py --host --optimizing
+Test: aosp_taimen-userdebug boot image is unchanged.
+Change-Id: Ia8fa4e1b31c1f190fc5f02671336caec15e4cf4d
+---
+ compiler/optimizing/code_generator_arm64.cc | 19 +++++
+ compiler/optimizing/code_generator_arm64.h  |  5 +-
+ compiler/optimizing/intrinsics_arm64.cc     | 85 ++-------------------
+ compiler/optimizing/intrinsics_arm_vixl.cc  | 60 ++-------------
+ compiler/optimizing/intrinsics_utils.h      | 19 +++--
+ compiler/utils/arm/assembler_arm_vixl.h     | 11 ++-
+ compiler/utils/arm64/assembler_arm64.h      | 11 ++-
+ 7 files changed, 59 insertions(+), 151 deletions(-)
+
+diff --git a/compiler/optimizing/code_generator_arm64.cc b/compiler/optimizing/code_generator_arm64.cc
+index 30c1ece238..0a392fd5d3 100644
+--- a/compiler/optimizing/code_generator_arm64.cc
++++ b/compiler/optimizing/code_generator_arm64.cc
+@@ -4492,6 +4492,25 @@ void CodeGeneratorARM64::GenerateVirtualCall(
+   }
+ }
+ 
++void CodeGeneratorARM64::MoveFromReturnRegister(Location trg, DataType::Type type) {
++  if (!trg.IsValid()) {
++    DCHECK(type == DataType::Type::kVoid);
++    return;
++  }
++
++  DCHECK_NE(type, DataType::Type::kVoid);
++
++  if (DataType::IsIntegralType(type) || type == DataType::Type::kReference) {
++    Register trg_reg = RegisterFrom(trg, type);
++    Register res_reg = RegisterFrom(ARM64ReturnLocation(type), type);
++    __ Mov(trg_reg, res_reg, kDiscardForSameWReg);
++  } else {
++    VRegister trg_reg = FPRegisterFrom(trg, type);
++    VRegister res_reg = FPRegisterFrom(ARM64ReturnLocation(type), type);
++    __ Fmov(trg_reg, res_reg);
++  }
++}
++
+ void LocationsBuilderARM64::VisitInvokePolymorphic(HInvokePolymorphic* invoke) {
+   HandleInvoke(invoke);
+ }
+diff --git a/compiler/optimizing/code_generator_arm64.h b/compiler/optimizing/code_generator_arm64.h
+index 8349732f76..487d0912ad 100644
+--- a/compiler/optimizing/code_generator_arm64.h
++++ b/compiler/optimizing/code_generator_arm64.h
+@@ -668,10 +668,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
+   void GenerateVirtualCall(
+       HInvokeVirtual* invoke, Location temp, SlowPathCode* slow_path = nullptr) override;
+ 
+-  void MoveFromReturnRegister(Location trg ATTRIBUTE_UNUSED,
+-                              DataType::Type type ATTRIBUTE_UNUSED) override {
+-    UNIMPLEMENTED(FATAL);
+-  }
++  void MoveFromReturnRegister(Location trg, DataType::Type type) override;
+ 
+   // Add a new boot image intrinsic patch for an instruction and return the label
+   // to be bound before the instruction. The instruction will be either the
+diff --git a/compiler/optimizing/intrinsics_arm64.cc b/compiler/optimizing/intrinsics_arm64.cc
+index d88e034810..93a99b1bfc 100644
+--- a/compiler/optimizing/intrinsics_arm64.cc
++++ b/compiler/optimizing/intrinsics_arm64.cc
+@@ -23,6 +23,7 @@
+ #include "entrypoints/quick/quick_entrypoints.h"
+ #include "heap_poisoning.h"
+ #include "intrinsics.h"
++#include "intrinsics_utils.h"
+ #include "lock_word.h"
+ #include "mirror/array-inl.h"
+ #include "mirror/object_array-inl.h"
+@@ -46,7 +47,6 @@ namespace art {
+ namespace arm64 {
+ 
+ using helpers::DRegisterFrom;
+-using helpers::FPRegisterFrom;
+ using helpers::HeapOperand;
+ using helpers::LocationFrom;
+ using helpers::OperandFrom;
+@@ -74,86 +74,11 @@ ArenaAllocator* IntrinsicCodeGeneratorARM64::GetAllocator() {
+   return codegen_->GetGraph()->GetAllocator();
+ }
+ 
+-#define __ codegen->GetVIXLAssembler()->
+-
+-static void MoveFromReturnRegister(Location trg,
+-                                   DataType::Type type,
+-                                   CodeGeneratorARM64* codegen) {
+-  if (!trg.IsValid()) {
+-    DCHECK(type == DataType::Type::kVoid);
+-    return;
+-  }
+-
+-  DCHECK_NE(type, DataType::Type::kVoid);
+-
+-  if (DataType::IsIntegralType(type) || type == DataType::Type::kReference) {
+-    Register trg_reg = RegisterFrom(trg, type);
+-    Register res_reg = RegisterFrom(ARM64ReturnLocation(type), type);
+-    __ Mov(trg_reg, res_reg, kDiscardForSameWReg);
+-  } else {
+-    VRegister trg_reg = FPRegisterFrom(trg, type);
+-    VRegister res_reg = FPRegisterFrom(ARM64ReturnLocation(type), type);
+-    __ Fmov(trg_reg, res_reg);
+-  }
+-}
+-
+-static void MoveArguments(HInvoke* invoke, CodeGeneratorARM64* codegen) {
+-  InvokeDexCallingConventionVisitorARM64 calling_convention_visitor;
+-  IntrinsicVisitor::MoveArguments(invoke, codegen, &calling_convention_visitor);
+-}
+-
+-// Slow-path for fallback (calling the managed code to handle the intrinsic) in an intrinsified
+-// call. This will copy the arguments into the positions for a regular call.
+-//
+-// Note: The actual parameters are required to be in the locations given by the invoke's location
+-//       summary. If an intrinsic modifies those locations before a slowpath call, they must be
+-//       restored!
+-class IntrinsicSlowPathARM64 : public SlowPathCodeARM64 {
+- public:
+-  explicit IntrinsicSlowPathARM64(HInvoke* invoke)
+-      : SlowPathCodeARM64(invoke), invoke_(invoke) { }
+-
+-  void EmitNativeCode(CodeGenerator* codegen_in) override {
+-    CodeGeneratorARM64* codegen = down_cast<CodeGeneratorARM64*>(codegen_in);
+-    __ Bind(GetEntryLabel());
+-
+-    SaveLiveRegisters(codegen, invoke_->GetLocations());
+-
+-    MoveArguments(invoke_, codegen);
+-
+-    {
+-      // Ensure that between the BLR (emitted by Generate*Call) and RecordPcInfo there
+-      // are no pools emitted.
+-      vixl::EmissionCheckScope guard(codegen->GetVIXLAssembler(), kInvokeCodeMarginSizeInBytes);
+-      if (invoke_->IsInvokeStaticOrDirect()) {
+-        codegen->GenerateStaticOrDirectCall(
+-            invoke_->AsInvokeStaticOrDirect(), LocationFrom(kArtMethodRegister), this);
+-      } else {
+-        codegen->GenerateVirtualCall(
+-            invoke_->AsInvokeVirtual(), LocationFrom(kArtMethodRegister), this);
+-      }
+-    }
+-
+-    // Copy the result back to the expected output.
+-    Location out = invoke_->GetLocations()->Out();
+-    if (out.IsValid()) {
+-      DCHECK(out.IsRegister());  // TODO: Replace this when we support output in memory.
+-      DCHECK(!invoke_->GetLocations()->GetLiveRegisters()->ContainsCoreRegister(out.reg()));
+-      MoveFromReturnRegister(out, invoke_->GetType(), codegen);
+-    }
++using IntrinsicSlowPathARM64 = IntrinsicSlowPath<InvokeDexCallingConventionVisitorARM64,
++                                                 SlowPathCodeARM64,
++                                                 Arm64Assembler>;
+ 
+-    RestoreLiveRegisters(codegen, invoke_->GetLocations());
+-    __ B(GetExitLabel());
+-  }
+-
+-  const char* GetDescription() const override { return "IntrinsicSlowPathARM64"; }
+-
+- private:
+-  // The instruction where this slow path is happening.
+-  HInvoke* const invoke_;
+-
+-  DISALLOW_COPY_AND_ASSIGN(IntrinsicSlowPathARM64);
+-};
++#define __ codegen->GetVIXLAssembler()->
+ 
+ // Slow path implementing the SystemArrayCopy intrinsic copy loop with read barriers.
+ class ReadBarrierSystemArrayCopySlowPathARM64 : public SlowPathCodeARM64 {
+diff --git a/compiler/optimizing/intrinsics_arm_vixl.cc b/compiler/optimizing/intrinsics_arm_vixl.cc
+index 89e5203461..450af5513b 100644
+--- a/compiler/optimizing/intrinsics_arm_vixl.cc
++++ b/compiler/optimizing/intrinsics_arm_vixl.cc
+@@ -21,6 +21,8 @@
+ #include "code_generator_arm_vixl.h"
+ #include "common_arm.h"
+ #include "heap_poisoning.h"
++#include "intrinsics.h"
++#include "intrinsics_utils.h"
+ #include "lock_word.h"
+ #include "mirror/array-inl.h"
+ #include "mirror/object_array-inl.h"
+@@ -64,61 +66,9 @@ ArenaAllocator* IntrinsicCodeGeneratorARMVIXL::GetAllocator() {
+   return codegen_->GetGraph()->GetAllocator();
+ }
+ 
+-// Default slow-path for fallback (calling the managed code to handle the intrinsic) in an
+-// intrinsified call. This will copy the arguments into the positions for a regular call.
+-//
+-// Note: The actual parameters are required to be in the locations given by the invoke's location
+-//       summary. If an intrinsic modifies those locations before a slowpath call, they must be
+-//       restored!
+-//
+-// Note: If an invoke wasn't sharpened, we will put down an invoke-virtual here. That's potentially
+-//       sub-optimal (compared to a direct pointer call), but this is a slow-path.
+-
+-class IntrinsicSlowPathARMVIXL : public SlowPathCodeARMVIXL {
+- public:
+-  explicit IntrinsicSlowPathARMVIXL(HInvoke* invoke)
+-      : SlowPathCodeARMVIXL(invoke), invoke_(invoke) {}
+-
+-  Location MoveArguments(CodeGenerator* codegen) {
+-    InvokeDexCallingConventionVisitorARMVIXL calling_convention_visitor;
+-    IntrinsicVisitor::MoveArguments(invoke_, codegen, &calling_convention_visitor);
+-    return calling_convention_visitor.GetMethodLocation();
+-  }
+-
+-  void EmitNativeCode(CodeGenerator* codegen) override {
+-    ArmVIXLAssembler* assembler = down_cast<ArmVIXLAssembler*>(codegen->GetAssembler());
+-    __ Bind(GetEntryLabel());
+-
+-    SaveLiveRegisters(codegen, invoke_->GetLocations());
+-
+-    Location method_loc = MoveArguments(codegen);
+-
+-    if (invoke_->IsInvokeStaticOrDirect()) {
+-      codegen->GenerateStaticOrDirectCall(invoke_->AsInvokeStaticOrDirect(), method_loc, this);
+-    } else {
+-      codegen->GenerateVirtualCall(invoke_->AsInvokeVirtual(), method_loc, this);
+-    }
+-
+-    // Copy the result back to the expected output.
+-    Location out = invoke_->GetLocations()->Out();
+-    if (out.IsValid()) {
+-      DCHECK(out.IsRegister());  // TODO: Replace this when we support output in memory.
+-      DCHECK(!invoke_->GetLocations()->GetLiveRegisters()->ContainsCoreRegister(out.reg()));
+-      codegen->MoveFromReturnRegister(out, invoke_->GetType());
+-    }
+-
+-    RestoreLiveRegisters(codegen, invoke_->GetLocations());
+-    __ B(GetExitLabel());
+-  }
+-
+-  const char* GetDescription() const override { return "IntrinsicSlowPath"; }
+-
+- private:
+-  // The instruction where this slow path is happening.
+-  HInvoke* const invoke_;
+-
+-  DISALLOW_COPY_AND_ASSIGN(IntrinsicSlowPathARMVIXL);
+-};
++using IntrinsicSlowPathARMVIXL = IntrinsicSlowPath<InvokeDexCallingConventionVisitorARMVIXL,
++                                                   SlowPathCodeARMVIXL,
++                                                   ArmVIXLAssembler>;
+ 
+ // Compute base address for the System.arraycopy intrinsic in `base`.
+ static void GenSystemArrayCopyBaseAddress(ArmVIXLAssembler* assembler,
+diff --git a/compiler/optimizing/intrinsics_utils.h b/compiler/optimizing/intrinsics_utils.h
+index 41947f1ccd..e24d541c96 100644
+--- a/compiler/optimizing/intrinsics_utils.h
++++ b/compiler/optimizing/intrinsics_utils.h
+@@ -17,6 +17,7 @@
+ #ifndef ART_COMPILER_OPTIMIZING_INTRINSICS_UTILS_H_
+ #define ART_COMPILER_OPTIMIZING_INTRINSICS_UTILS_H_
+ 
++#include "base/casts.h"
+ #include "base/macros.h"
+ #include "code_generator.h"
+ #include "locations.h"
+@@ -36,10 +37,12 @@ namespace art {
+ // Note: If an invoke wasn't sharpened, we will put down an invoke-virtual here. That's potentially
+ //       sub-optimal (compared to a direct pointer call), but this is a slow-path.
+ 
+-template <typename TDexCallingConvention>
+-class IntrinsicSlowPath : public SlowPathCode {
++template <typename TDexCallingConvention,
++          typename TSlowPathCode = SlowPathCode,
++          typename TAssembler = Assembler>
++class IntrinsicSlowPath : public TSlowPathCode {
+  public:
+-  explicit IntrinsicSlowPath(HInvoke* invoke) : SlowPathCode(invoke), invoke_(invoke) { }
++  explicit IntrinsicSlowPath(HInvoke* invoke) : TSlowPathCode(invoke), invoke_(invoke) { }
+ 
+   Location MoveArguments(CodeGenerator* codegen) {
+     TDexCallingConvention calling_convention_visitor;
+@@ -48,10 +51,10 @@ class IntrinsicSlowPath : public SlowPathCode {
+   }
+ 
+   void EmitNativeCode(CodeGenerator* codegen) override {
+-    Assembler* assembler = codegen->GetAssembler();
+-    assembler->Bind(GetEntryLabel());
++    TAssembler* assembler = down_cast<TAssembler*>(codegen->GetAssembler());
++    assembler->Bind(this->GetEntryLabel());
+ 
+-    SaveLiveRegisters(codegen, invoke_->GetLocations());
++    this->SaveLiveRegisters(codegen, invoke_->GetLocations());
+ 
+     Location method_loc = MoveArguments(codegen);
+ 
+@@ -69,8 +72,8 @@ class IntrinsicSlowPath : public SlowPathCode {
+       codegen->MoveFromReturnRegister(out, invoke_->GetType());
+     }
+ 
+-    RestoreLiveRegisters(codegen, invoke_->GetLocations());
+-    assembler->Jump(GetExitLabel());
++    this->RestoreLiveRegisters(codegen, invoke_->GetLocations());
++    assembler->Jump(this->GetExitLabel());
+   }
+ 
+   const char* GetDescription() const override { return "IntrinsicSlowPath"; }
+diff --git a/compiler/utils/arm/assembler_arm_vixl.h b/compiler/utils/arm/assembler_arm_vixl.h
+index 59d7eddc63..5bc8a70280 100644
+--- a/compiler/utils/arm/assembler_arm_vixl.h
++++ b/compiler/utils/arm/assembler_arm_vixl.h
+@@ -180,10 +180,17 @@ class ArmVIXLAssembler final : public Assembler {
+   void FinalizeInstructions(const MemoryRegion& region) override;
+ 
+   void Bind(Label* label ATTRIBUTE_UNUSED) override {
+-    UNIMPLEMENTED(FATAL) << "Do not use Bind for ARM";
++    UNIMPLEMENTED(FATAL) << "Do not use Bind(Label*) for ARM";
+   }
+   void Jump(Label* label ATTRIBUTE_UNUSED) override {
+-    UNIMPLEMENTED(FATAL) << "Do not use Jump for ARM";
++    UNIMPLEMENTED(FATAL) << "Do not use Jump(Label*) for ARM";
++  }
++
++  void Bind(vixl::aarch32::Label* label) {
++    vixl_masm_.Bind(label);
++  }
++  void Jump(vixl::aarch32::Label* label) {
++    vixl_masm_.B(label);
+   }
+ 
+   //
+diff --git a/compiler/utils/arm64/assembler_arm64.h b/compiler/utils/arm64/assembler_arm64.h
+index fe2f1766c2..232efd4917 100644
+--- a/compiler/utils/arm64/assembler_arm64.h
++++ b/compiler/utils/arm64/assembler_arm64.h
+@@ -124,10 +124,17 @@ class Arm64Assembler final : public Assembler {
+   void GenerateMarkingRegisterCheck(vixl::aarch64::Register temp, int code = 0);
+ 
+   void Bind(Label* label ATTRIBUTE_UNUSED) override {
+-    UNIMPLEMENTED(FATAL) << "Do not use Bind for ARM64";
++    UNIMPLEMENTED(FATAL) << "Do not use Bind(Label*) for ARM64";
+   }
+   void Jump(Label* label ATTRIBUTE_UNUSED) override {
+-    UNIMPLEMENTED(FATAL) << "Do not use Jump for ARM64";
++    UNIMPLEMENTED(FATAL) << "Do not use Jump(Label*) for ARM64";
++  }
++
++  void Bind(vixl::aarch64::Label* label) {
++    vixl_masm_.Bind(label);
++  }
++  void Jump(vixl::aarch64::Label* label) {
++    vixl_masm_.B(label);
+   }
+ 
+   static vixl::aarch64::Register reg_x(int code) {
+-- 
+2.31.1
+

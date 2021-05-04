@@ -1,0 +1,109 @@
+From 6627b11858a67928278a2500caa91ca0eef540f9 Mon Sep 17 00:00:00 2001
+From: Elliott Hughes <enh@google.com>
+Date: Thu, 16 Apr 2020 16:12:03 -0700
+Subject: [PATCH 01/11] tmpfile(3): use O_TMPFILE where available.
+
+This also removes the ScopedSignalBlocker, which doesn't seem to have
+made any sense since threads were invented.
+
+Test: treehugger
+Change-Id: I9a323ab4a0b43f14fd5d1f0df1f80184aef63770
+---
+ libc/bionic/tmpfile.cpp | 63 +++++++++++++++++++++--------------------
+ 1 file changed, 32 insertions(+), 31 deletions(-)
+
+diff --git a/libc/bionic/tmpfile.cpp b/libc/bionic/tmpfile.cpp
+index 4378e84ab..d7ce897e1 100644
+--- a/libc/bionic/tmpfile.cpp
++++ b/libc/bionic/tmpfile.cpp
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <errno.h>
++#include <fcntl.h>
+ #include <signal.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -39,48 +40,48 @@
+ #include <unistd.h>
+ 
+ #include "private/ErrnoRestorer.h"
+-#include "private/ScopedSignalBlocker.h"
+ 
+-static FILE* __tmpfile_dir(const char* tmp_dir) {
++static FILE* __fd_to_fp(int fd) {
++  FILE* fp = fdopen(fd, "w+");
++  if (fp != nullptr) return fp;
++
++  ErrnoRestorer errno_restorer;
++  close(fd);
++  return nullptr;
++}
++
++static FILE* __tmpfile_dir_legacy(const char* tmp_dir) {
+   char* path = nullptr;
+   if (asprintf(&path, "%s/tmp.XXXXXXXXXX", tmp_dir) == -1) {
+     return nullptr;
+   }
+ 
+-  int fd;
+-  {
+-    ScopedSignalBlocker ssb;
+-    fd = mkstemp(path);
+-    if (fd == -1) {
+-      free(path);
+-      return nullptr;
+-    }
+-
+-    // Unlink the file now so that it's removed when closed.
+-    unlink(path);
++  int fd = mkstemp(path);
++  if (fd == -1) {
+     free(path);
+-
+-    // Can we still use the file now it's unlinked?
+-    // File systems without hard link support won't have the usual Unix semantics.
+-    struct stat sb;
+-    int rc = fstat(fd, &sb);
+-    if (rc == -1) {
+-      ErrnoRestorer errno_restorer;
+-      close(fd);
+-      return nullptr;
+-    }
++    return nullptr;
+   }
+ 
+-  // Turn the file descriptor into a FILE*.
+-  FILE* fp = fdopen(fd, "w+");
+-  if (fp != nullptr) {
+-    return fp;
++  // Unlink the file now so that it's removed when closed.
++  unlink(path);
++  free(path);
++
++  // Can we still use the file now it's unlinked?
++  // File systems without hard link support won't have the usual Unix semantics.
++  struct stat sb;
++  if (fstat(fd, &sb) == -1) {
++    ErrnoRestorer errno_restorer;
++    close(fd);
++    return nullptr;
+   }
+ 
+-  // Failure. Clean up. We already unlinked, so we just need to close.
+-  ErrnoRestorer errno_restorer;
+-  close(fd);
+-  return nullptr;
++  return __fd_to_fp(fd);
++}
++
++static FILE* __tmpfile_dir(const char* tmp_dir) {
++  int fd = open(tmp_dir, O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
++  if (fd == -1) return __tmpfile_dir_legacy(tmp_dir);
++  return __fd_to_fp(fd);
+ }
+ 
+ FILE* tmpfile() {
+-- 
+2.31.1
+

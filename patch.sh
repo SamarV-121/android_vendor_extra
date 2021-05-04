@@ -21,7 +21,8 @@ find vendor/extra/patches -mindepth 1 -type d -printf '%P\n' | while IFS= read -
 
 	case $1 in
 	-am)
-		git log -n 1 --pretty=format:"%H" >"$LAST_COMMIT_HASH"
+		git rev-parse --short HEAD >"$LAST_COMMIT_HASH"
+		git am --abort 2>/dev/null
 		git am --keep-cr "$PATCHES"/*
 		;;
 	-ap)

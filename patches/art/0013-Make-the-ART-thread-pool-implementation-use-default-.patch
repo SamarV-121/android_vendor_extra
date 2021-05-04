@@ -1,0 +1,83 @@
+From 5530bf61d9211e6f3eaa3e979a8c4cb1abd75794 Mon Sep 17 00:00:00 2001
+From: Daniel Colascione <dancol@google.com>
+Date: Wed, 18 Mar 2020 19:06:11 -0700
+Subject: [PATCH 13/27] Make the ART thread pool implementation use
+ default-sized stacks on Bionic
+
+Bionic's pthreads implementation already gives us threads configured
+the way that ART's thread pool wants them to be configured. This
+change lets Bionic use cached stacks for ART thread pool workers,
+reducing app startup time.
+
+Bug: http://b/158856274
+Test: normal ART tests
+Change-Id: Ia13a4d4d1bd40191097ab8f4e83473d93e3ca589
+Signed-off-by: Jake Weinstein <jake@aospa.co>
+---
+ runtime/thread_pool.cc | 42 +++++++++++++++++++++++++++---------------
+ 1 file changed, 27 insertions(+), 15 deletions(-)
+
+diff --git a/runtime/thread_pool.cc b/runtime/thread_pool.cc
+index 2bca5a9f43..0dc3a8fed7 100644
+--- a/runtime/thread_pool.cc
++++ b/runtime/thread_pool.cc
+@@ -40,29 +40,41 @@ using android::base::StringPrintf;
+ 
+ static constexpr bool kMeasureWaitTime = false;
+ 
++#if defined(__BIONIC__)
++static constexpr bool kUseCustomThreadPoolStack = false;
++#else
++static constexpr bool kUseCustomThreadPoolStack = true;
++#endif
++
+ ThreadPoolWorker::ThreadPoolWorker(ThreadPool* thread_pool, const std::string& name,
+                                    size_t stack_size)
+     : thread_pool_(thread_pool),
+       name_(name) {
+-  // Add an inaccessible page to catch stack overflow.
+-  stack_size += kPageSize;
+   std::string error_msg;
+-  stack_ = MemMap::MapAnonymous(name.c_str(),
+-                                stack_size,
+-                                PROT_READ | PROT_WRITE,
+-                                /*low_4gb=*/ false,
+-                                &error_msg);
+-  CHECK(stack_.IsValid()) << error_msg;
+-  CHECK_ALIGNED(stack_.Begin(), kPageSize);
+-  CheckedCall(mprotect,
+-              "mprotect bottom page of thread pool worker stack",
+-              stack_.Begin(),
+-              kPageSize,
+-              PROT_NONE);
++  // On Bionic, we know pthreads will give us a big-enough stack with
++  // a guard page, so don't do anything special on Bionic libc.
++  if (kUseCustomThreadPoolStack) {
++    // Add an inaccessible page to catch stack overflow.
++    stack_size += kPageSize;
++    stack_ = MemMap::MapAnonymous(name.c_str(),
++                                  stack_size,
++                                  PROT_READ | PROT_WRITE,
++                                  /*low_4gb=*/ false,
++                                  &error_msg);
++    CHECK(stack_.IsValid()) << error_msg;
++    CHECK_ALIGNED(stack_.Begin(), kPageSize);
++    CheckedCall(mprotect,
++                "mprotect bottom page of thread pool worker stack",
++                stack_.Begin(),
++                kPageSize,
++                PROT_NONE);
++  }
+   const char* reason = "new thread pool worker thread";
+   pthread_attr_t attr;
+   CHECK_PTHREAD_CALL(pthread_attr_init, (&attr), reason);
+-  CHECK_PTHREAD_CALL(pthread_attr_setstack, (&attr, stack_.Begin(), stack_.Size()), reason);
++  if (kUseCustomThreadPoolStack) {
++    CHECK_PTHREAD_CALL(pthread_attr_setstack, (&attr, stack_.Begin(), stack_.Size()), reason);
++  }
+   CHECK_PTHREAD_CALL(pthread_create, (&pthread_, &attr, &Callback, this), reason);
+   CHECK_PTHREAD_CALL(pthread_attr_destroy, (&attr), reason);
+ }
+-- 
+2.31.1
+

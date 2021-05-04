@@ -1,0 +1,1418 @@
+From 30d33e18a3b0554e4ecf998d99fa8f38662bffa3 Mon Sep 17 00:00:00 2001
+From: Elliott Hughes <enh@google.com>
+Date: Fri, 31 Jul 2020 11:00:10 -0700
+Subject: [PATCH 05/11] Sync with upstream OpenBSD.
+
+Test: treehugger
+Change-Id: I1fc649ba5d79a3d95242c6b2240dbb05c85d30e9
+---
+ libc/Android.bp                               |   1 +
+ libc/NOTICE                                   |  22 +-
+ .../android/include/openbsd-compat.h          |   4 +
+ libc/upstream-openbsd/lib/libc/gen/fnmatch.c  | 695 +++++++++---------
+ .../upstream-openbsd/lib/libc/locale/mbtowc.c |  15 +-
+ libc/upstream-openbsd/lib/libc/stdio/fgetln.c |  22 +-
+ libc/upstream-openbsd/lib/libc/stdio/fputwc.c |   4 +-
+ .../upstream-openbsd/lib/libc/stdio/fvwrite.c |  18 +-
+ libc/upstream-openbsd/lib/libc/stdio/fwide.c  |   6 +-
+ .../lib/libc/stdio/getdelim.c                 |   6 +-
+ .../lib/libc/stdio/open_memstream.c           |   8 +-
+ .../lib/libc/stdio/vasprintf.c                |  27 +-
+ .../lib/libc/stdio/vdprintf.c                 |   4 +-
+ .../lib/libc/stdlib/recallocarray.c           |  81 ++
+ .../upstream-openbsd/lib/libc/stdlib/setenv.c |  29 +-
+ .../upstream-openbsd/lib/libc/string/strstr.c |  14 +-
+ 16 files changed, 539 insertions(+), 417 deletions(-)
+ create mode 100644 libc/upstream-openbsd/lib/libc/stdlib/recallocarray.c
+
+diff --git a/libc/Android.bp b/libc/Android.bp
+index ce714054a..219fcaf5e 100644
+--- a/libc/Android.bp
++++ b/libc/Android.bp
+@@ -532,6 +532,7 @@ cc_library_static {
+         "upstream-openbsd/lib/libc/stdlib/llabs.c",
+         "upstream-openbsd/lib/libc/stdlib/lldiv.c",
+         "upstream-openbsd/lib/libc/stdlib/lsearch.c",
++        "upstream-openbsd/lib/libc/stdlib/recallocarray.c",
+         "upstream-openbsd/lib/libc/stdlib/remque.c",
+         "upstream-openbsd/lib/libc/stdlib/setenv.c",
+         "upstream-openbsd/lib/libc/stdlib/tfind.c",
+diff --git a/libc/NOTICE b/libc/NOTICE
+index 8245ff890..7b2ca81ac 100644
+--- a/libc/NOTICE
++++ b/libc/NOTICE
+@@ -3061,7 +3061,7 @@ POSSIBILITY OF SUCH DAMAGE.
+ 
+ -------------------------------------------------------------------
+ 
+-Copyright (c) 1997 Todd C. Miller <Todd.Miller@courtesan.com>
++Copyright (c) 1997 Todd C. Miller <millert@openbsd.org>
+ 
+ Permission to use, copy, modify, and distribute this software for any
+ purpose with or without fee is hereby granted, provided that the above
+@@ -4301,7 +4301,7 @@ SUCH DAMAGE.
+ 
+ -------------------------------------------------------------------
+ 
+-Copyright (c) 2005-2014 Rich Felker
++Copyright (c) 2005-2018 Rich Felker
+ 
+ Permission is hereby granted, free of charge, to any person obtaining
+ a copy of this software and associated documentation files (the
+@@ -4659,7 +4659,23 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ 
+ -------------------------------------------------------------------
+ 
+-Copyright (c) 2008 Todd C. Miller <millert@openbsd.org>
++Copyright (c) 2008, 2016 Todd C. Miller <millert@openbsd.org>
++
++Permission to use, copy, modify, and distribute this software for any
++purpose with or without fee is hereby granted, provided that the above
++copyright notice and this permission notice appear in all copies.
++
++THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
++OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++
++-------------------------------------------------------------------
++
++Copyright (c) 2008, 2017 Otto Moerbeek <otto@drijf.net>
+ 
+ Permission to use, copy, modify, and distribute this software for any
+ purpose with or without fee is hereby granted, provided that the above
+diff --git a/libc/upstream-openbsd/android/include/openbsd-compat.h b/libc/upstream-openbsd/android/include/openbsd-compat.h
+index 820626956..2fc5046ad 100644
+--- a/libc/upstream-openbsd/android/include/openbsd-compat.h
++++ b/libc/upstream-openbsd/android/include/openbsd-compat.h
+@@ -72,3 +72,7 @@ __LIBC_HIDDEN__ extern const char* __bionic_get_shell_path();
+ 
+ __LIBC_HIDDEN__ extern char* __findenv(const char*, int, int*);
+ __LIBC_HIDDEN__ extern char* _mktemp(char*);
++
++// Only OpenBSD has this at the moment, and we're more likely to just say
++// "malloc is always calloc", so we don't expose this as libc API.
++__LIBC_HIDDEN__ void* recallocarray(void*, size_t, size_t, size_t);
+diff --git a/libc/upstream-openbsd/lib/libc/gen/fnmatch.c b/libc/upstream-openbsd/lib/libc/gen/fnmatch.c
+index 0d0f18ff4..d7afd5f8e 100644
+--- a/libc/upstream-openbsd/lib/libc/gen/fnmatch.c
++++ b/libc/upstream-openbsd/lib/libc/gen/fnmatch.c
+@@ -1,8 +1,8 @@
+-/*	$OpenBSD: fnmatch.c,v 1.19 2015/08/01 18:11:08 millert Exp $	*/
++/*	$OpenBSD: fnmatch.c,v 1.22 2020/03/13 03:25:45 djm Exp $	*/
+ 
+ /* Copyright (c) 2011, VMware, Inc.
+  * All rights reserved.
+- * 
++ *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+  *     * Redistributions of source code must retain the above copyright
+@@ -13,7 +13,7 @@
+  *     * Neither the name of the VMware, Inc. nor the names of its contributors
+  *       may be used to endorse or promote products derived from this software
+  *       without specific prior written permission.
+- * 
++ *
+  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+@@ -27,7 +27,7 @@
+  */
+ 
+ /*
+- * Copyright (c) 2008 Todd C. Miller <millert@openbsd.org>
++ * Copyright (c) 2008, 2016 Todd C. Miller <millert@openbsd.org>
+  *
+  * Permission to use, copy, modify, and distribute this software for any
+  * purpose with or without fee is hereby granted, provided that the above
+@@ -51,9 +51,9 @@
+  * Filename pattern matches defined in section 2.13, "Pattern Matching Notation"
+  * from chapter 2. "Shell Command Language"
+  *   http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_13
+- * where; 1. A bracket expression starting with an unquoted <circumflex> '^' 
+- * character CONTINUES to specify a non-matching list; 2. an explicit <period> '.' 
+- * in a bracket expression matching list, e.g. "[.abc]" does NOT match a leading 
++ * where; 1. A bracket expression starting with an unquoted <circumflex> '^'
++ * character CONTINUES to specify a non-matching list; 2. an explicit <period> '.'
++ * in a bracket expression matching list, e.g. "[.abc]" does NOT match a leading
+  * <period> in a filename; 3. a <left-square-bracket> '[' which does not introduce
+  * a valid bracket expression is treated as an ordinary character; 4. a differing
+  * number of consecutive slashes within pattern and string will NOT match;
+@@ -62,10 +62,10 @@
+  * Bracket expansion defined in section 9.3.5, "RE Bracket Expression",
+  * from chapter 9, "Regular Expressions"
+  *   http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html#tag_09_03_05
+- * with no support for collating symbols, equivalence class expressions or 
+- * character class expressions.  A partial range expression with a leading 
++ * with no support for collating symbols, equivalence class expressions or
++ * character class expressions.  A partial range expression with a leading
+  * hyphen following a valid range expression will match only the ordinary
+- * <hyphen> and the ending character (e.g. "[a-m-z]" will match characters 
++ * <hyphen> and the ending character (e.g. "[a-m-z]" will match characters
+  * 'a' through 'm', a <hyphen> '-', or a 'z').
+  *
+  * Supports BSD extensions FNM_LEADING_DIR to match pattern to the end of one
+@@ -98,22 +98,21 @@
+ static int
+ classmatch(const char *pattern, char test, int foldcase, const char **ep)
+ {
+-	struct cclass *cc;
++	const char * const mismatch = pattern;
+ 	const char *colon;
+-	size_t len;
++	struct cclass *cc;
+ 	int rval = RANGE_NOMATCH;
+-	const char * const mismatch = pattern;
++	size_t len;
+ 
+-	if (*pattern != '[' || pattern[1] != ':') {
++	if (pattern[0] != '[' || pattern[1] != ':') {
+ 		*ep = mismatch;
+-		return(RANGE_ERROR);
++		return RANGE_ERROR;
+ 	}
+-
+ 	pattern += 2;
+ 
+ 	if ((colon = strchr(pattern, ':')) == NULL || colon[1] != ']') {
+ 		*ep = mismatch;
+-		return(RANGE_ERROR);
++		return RANGE_ERROR;
+ 	}
+ 	*ep = colon + 2;
+ 	len = (size_t)(colon - pattern);
+@@ -132,11 +131,11 @@ classmatch(const char *pattern, char test, int foldcase, const char **ep)
+ 		*ep = mismatch;
+ 		rval = RANGE_ERROR;
+ 	}
+-	return(rval);
++	return rval;
+ }
+ 
+ /* Most MBCS/collation/case issues handled here.  Wildcard '*' is not handled.
+- * EOS '\0' and the FNM_PATHNAME '/' delimiters are not advanced over, 
++ * EOS '\0' and the FNM_PATHNAME '/' delimiters are not advanced over,
+  * however the "\/" sequence is advanced to '/'.
+  *
+  * Both pattern and string are **char to support pointer increment of arbitrary
+@@ -144,341 +143,347 @@ classmatch(const char *pattern, char test, int foldcase, const char **ep)
+  */
+ static int fnmatch_ch(const char **pattern, const char **string, int flags)
+ {
+-    const char * const mismatch = *pattern;
+-    const int nocase = !!(flags & FNM_CASEFOLD);
+-    const int escape = !(flags & FNM_NOESCAPE);
+-    const int slash = !!(flags & FNM_PATHNAME);
+-    int result = FNM_NOMATCH;
+-    const char *startch;
+-    int negate;
+-
+-    if (**pattern == '[')
+-    {
+-        ++*pattern;
+-
+-        /* Handle negation, either leading ! or ^ operators (never both) */
+-        negate = ((**pattern == '!') || (**pattern == '^'));
+-        if (negate)
+-            ++*pattern;
+-
+-        /* ']' is an ordinary character at the start of the range pattern */
+-        if (**pattern == ']')
+-            goto leadingclosebrace;
+-
+-        while (**pattern)
+-        {
+-            if (**pattern == ']') {
+-                ++*pattern;
+-                /* XXX: Fix for MBCS character width */
+-                ++*string;
+-                return (result ^ negate);
+-            }
+-
+-            if (escape && (**pattern == '\\')) {
+-                ++*pattern;
+-
+-                /* Patterns must be terminated with ']', not EOS */
+-                if (!**pattern)
+-                    break;
+-            }
+-
+-            /* Patterns must be terminated with ']' not '/' */
+-            if (slash && (**pattern == '/'))
+-                break;
+-
+-            /* Match character classes. */
+-            if (classmatch(*pattern, **string, nocase, pattern)
+-                == RANGE_MATCH) {
+-                result = 0;
+-                continue;
+-            }
+-            if (!**pattern)
+-                break;
++	const char * const mismatch = *pattern;
++	const int nocase = !!(flags & FNM_CASEFOLD);
++	const int escape = !(flags & FNM_NOESCAPE);
++	const int slash = !!(flags & FNM_PATHNAME);
++	int result = FNM_NOMATCH;
++	const char *startch;
++	int negate;
++
++	if (**pattern == '[') {
++		++*pattern;
++
++		/* Handle negation, either leading ! or ^ operators */
++		negate = (**pattern == '!') || (**pattern == '^');
++		if (negate)
++			++*pattern;
++
++		/* ']' is an ordinary char at the start of the range pattern */
++		if (**pattern == ']')
++			goto leadingclosebrace;
++
++		while (**pattern) {
++			if (**pattern == ']') {
++				++*pattern;
++				/* XXX: Fix for MBCS character width */
++				++*string;
++				return (result ^ negate);
++			}
++
++			if (escape && (**pattern == '\\')) {
++				++*pattern;
++
++				/* Patterns must terminate with ']', not EOS */
++				if (!**pattern)
++					break;
++			}
++
++			/* Patterns must terminate with ']' not '/' */
++			if (slash && (**pattern == '/'))
++				break;
++
++			/* Match character classes. */
++			switch (classmatch(*pattern, **string, nocase, pattern)) {
++			case RANGE_MATCH:
++				result = 0;
++				continue;
++			case RANGE_NOMATCH:
++				/* Valid character class but no match. */
++				continue;
++			default:
++				/* Not a valid character class. */
++				break;
++			}
++			if (!**pattern)
++				break;
+ 
+ leadingclosebrace:
+-            /* Look at only well-formed range patterns; 
+-             * "x-]" is not allowed unless escaped ("x-\]")
+-             * XXX: Fix for locale/MBCS character width
+-             */
+-            if (((*pattern)[1] == '-') && ((*pattern)[2] != ']'))
+-            {
+-                startch = *pattern;
+-                *pattern += (escape && ((*pattern)[2] == '\\')) ? 3 : 2;
+-
+-                /* NOT a properly balanced [expr] pattern, EOS terminated 
+-                 * or ranges containing a slash in FNM_PATHNAME mode pattern
+-                 * fall out to to the rewind and test '[' literal code path
+-                 */
+-                if (!**pattern || (slash && (**pattern == '/')))
+-                    break;
+-
+-                /* XXX: handle locale/MBCS comparison, advance by MBCS char width */
+-                if ((**string >= *startch) && (**string <= **pattern))
+-                    result = 0;
+-                else if (nocase && (isupper((unsigned char)**string) ||
+-			    isupper((unsigned char)*startch) ||
+-                            isupper((unsigned char)**pattern))
+-                            && (tolower((unsigned char)**string) >=
+-			        tolower((unsigned char)*startch)) 
+-                            && (tolower((unsigned char)**string) <=
+-				tolower((unsigned char)**pattern)))
+-                    result = 0;
+-
+-                ++*pattern;
+-                continue;
+-            }
+-
+-            /* XXX: handle locale/MBCS comparison, advance by MBCS char width */
+-            if ((**string == **pattern))
+-                result = 0;
+-            else if (nocase && (isupper((unsigned char)**string) ||
+-			    isupper((unsigned char)**pattern))
+-                            && (tolower((unsigned char)**string) ==
+-				tolower((unsigned char)**pattern)))
+-                result = 0;
+-
+-            ++*pattern;
+-        }
+-
+-        /* NOT a properly balanced [expr] pattern; Rewind
+-         * and reset result to test '[' literal
+-         */
+-        *pattern = mismatch;
+-        result = FNM_NOMATCH;
+-    }
+-    else if (**pattern == '?') {
+-        /* Optimize '?' match before unescaping **pattern */
+-        if (!**string || (slash && (**string == '/')))
+-            return FNM_NOMATCH;
+-        result = 0;
+-        goto fnmatch_ch_success;
+-    }
+-    else if (escape && (**pattern == '\\') && (*pattern)[1]) {
+-        ++*pattern;
+-    }
+-
+-    /* XXX: handle locale/MBCS comparison, advance by the MBCS char width */
+-    if (**string == **pattern)
+-        result = 0;
+-    else if (nocase && (isupper((unsigned char)**string) ||
+-		    isupper((unsigned char)**pattern))
+-                    && (tolower((unsigned char)**string) ==
+-			tolower((unsigned char)**pattern)))
+-        result = 0;
+-
+-    /* Refuse to advance over trailing slash or nulls
+-     */
+-    if (!**string || !**pattern || (slash && ((**string == '/') || (**pattern == '/'))))
+-        return result;
++			/* Look at only well-formed range patterns;
++			 * "x-]" is not allowed unless escaped ("x-\]")
++			 * XXX: Fix for locale/MBCS character width
++			 */
++			if (((*pattern)[1] == '-') && ((*pattern)[2] != ']')) {
++				startch = *pattern;
++				*pattern += (escape && ((*pattern)[2] == '\\')) ? 3 : 2;
++
++				/*
++				 * NOT a properly balanced [expr] pattern, EOS
++				 * terminated or ranges containing a slash in
++				 * FNM_PATHNAME mode pattern fall out to to the
++				 * rewind and test '[' literal code path.
++				 */
++				if (!**pattern || (slash && (**pattern == '/')))
++					break;
++
++				/* XXX: handle locale/MBCS comparison, advance by MBCS char width */
++				if ((**string >= *startch) && (**string <= **pattern))
++					result = 0;
++				else if (nocase &&
++				    (isupper((unsigned char)**string) ||
++				     isupper((unsigned char)*startch) ||
++				     isupper((unsigned char)**pattern)) &&
++				    (tolower((unsigned char)**string) >=
++				     tolower((unsigned char)*startch)) &&
++				    (tolower((unsigned char)**string) <=
++				     tolower((unsigned char)**pattern)))
++					result = 0;
++
++				++*pattern;
++				continue;
++			}
++
++			/* XXX: handle locale/MBCS comparison, advance by MBCS char width */
++			if ((**string == **pattern))
++				result = 0;
++			else if (nocase && (isupper((unsigned char)**string) ||
++			    isupper((unsigned char)**pattern)) &&
++			    (tolower((unsigned char)**string) ==
++			    tolower((unsigned char)**pattern)))
++				result = 0;
++
++			++*pattern;
++		}
++		/*
++		 * NOT a properly balanced [expr] pattern;
++		 * Rewind and reset result to test '[' literal
++		 */
++		*pattern = mismatch;
++		result = FNM_NOMATCH;
++	} else if (**pattern == '?') {
++		/* Optimize '?' match before unescaping **pattern */
++		if (!**string || (slash && (**string == '/')))
++			return FNM_NOMATCH;
++		result = 0;
++		goto fnmatch_ch_success;
++	} else if (escape && (**pattern == '\\') && (*pattern)[1]) {
++		++*pattern;
++	}
++
++	/* XXX: handle locale/MBCS comparison, advance by the MBCS char width */
++	if (**string == **pattern)
++		result = 0;
++	else if (nocase && (isupper((unsigned char)**string) ||
++	    isupper((unsigned char)**pattern)) &&
++	    (tolower((unsigned char)**string) ==
++	    tolower((unsigned char)**pattern)))
++		result = 0;
++
++	/* Refuse to advance over trailing slash or NULs */
++	if (**string == '\0' || **pattern == '\0' ||
++	    (slash && ((**string == '/') || (**pattern == '/'))))
++		return result;
+ 
+ fnmatch_ch_success:
+-    ++*pattern;
+-    ++*string;
+-    return result;
++	++*pattern;
++	++*string;
++	return result;
+ }
+ 
+ 
+ int fnmatch(const char *pattern, const char *string, int flags)
+ {
+-    static const char dummystring[2] = {' ', 0};
+-    const int escape = !(flags & FNM_NOESCAPE);
+-    const int slash = !!(flags & FNM_PATHNAME);
+-    const int leading_dir = !!(flags & FNM_LEADING_DIR);
+-    const char *strendseg;
+-    const char *dummyptr;
+-    const char *matchptr;
+-    int wild;
+-    /* For '*' wild processing only; surpress 'used before initialization'
+-     * warnings with dummy initialization values;
+-     */
+-    const char *strstartseg = NULL;
+-    const char *mismatch = NULL;
+-    int matchlen = 0;
+-
+-    if (*pattern == '*')
+-        goto firstsegment;
+-
+-    while (*pattern && *string)
+-    {
+-        /* Pre-decode "\/" which has no special significance, and
+-         * match balanced slashes, starting a new segment pattern
+-         */
+-        if (slash && escape && (*pattern == '\\') && (pattern[1] == '/'))
+-            ++pattern;
+-        if (slash && (*pattern == '/') && (*string == '/')) {
+-            ++pattern;
+-            ++string;
+-        }            
++	static const char dummystring[2] = {' ', 0};
++	const int escape = !(flags & FNM_NOESCAPE);
++	const int slash = !!(flags & FNM_PATHNAME);
++	const int leading_dir = !!(flags & FNM_LEADING_DIR);
++	const char *dummyptr, *matchptr, *strendseg;
++	int wild;
++	/* For '*' wild processing only; suppress 'used before initialization'
++	 * warnings with dummy initialization values;
++	 */
++	const char *strstartseg = NULL;
++	const char *mismatch = NULL;
++	int matchlen = 0;
++
++	if (*pattern == '*')
++		goto firstsegment;
++
++	while (*pattern && *string) {
++		/*
++		 * Pre-decode "\/" which has no special significance, and
++		 * match balanced slashes, starting a new segment pattern.
++		 */
++		if (slash && escape && (*pattern == '\\') && (pattern[1] == '/'))
++			++pattern;
++		if (slash && (*pattern == '/') && (*string == '/')) {
++			++pattern;
++			++string;
++		}
+ 
+ firstsegment:
+-        /* At the beginning of each segment, validate leading period behavior.
+-         */
+-        if ((flags & FNM_PERIOD) && (*string == '.'))
+-        {
+-            if (*pattern == '.')
+-                ++pattern;
+-            else if (escape && (*pattern == '\\') && (pattern[1] == '.'))
+-                pattern += 2;
+-            else
+-                return FNM_NOMATCH;
+-            ++string;
+-        }
+-
+-        /* Determine the end of string segment
+-         *
+-         * Presumes '/' character is unique, not composite in any MBCS encoding
+-         */
+-        if (slash) {
+-            strendseg = strchr(string, '/');
+-            if (!strendseg)
+-                strendseg = strchr(string, '\0');
+-        }
+-        else {
+-            strendseg = strchr(string, '\0');
+-        }
+-
+-        /* Allow pattern '*' to be consumed even with no remaining string to match
+-         */
+-        while (*pattern)
+-        {
+-            if ((string > strendseg)
+-                || ((string == strendseg) && (*pattern != '*')))
+-                break;
+-
+-            if (slash && ((*pattern == '/')
+-                           || (escape && (*pattern == '\\')
+-                                      && (pattern[1] == '/'))))
+-                break;
+-
+-            /* Reduce groups of '*' and '?' to n '?' matches
+-             * followed by one '*' test for simplicity
+-             */
+-            for (wild = 0; ((*pattern == '*') || (*pattern == '?')); ++pattern)
+-            {
+-                if (*pattern == '*') {
+-                    wild = 1;
+-                }
+-                else if (string < strendseg) {  /* && (*pattern == '?') */
+-                    /* XXX: Advance 1 char for MBCS locale */
+-                    ++string;
+-                }
+-                else {  /* (string >= strendseg) && (*pattern == '?') */
+-                    return FNM_NOMATCH;
+-                }
+-            }
+-
+-            if (wild)
+-            {
+-                strstartseg = string;
+-                mismatch = pattern;
+-
+-                /* Count fixed (non '*') char matches remaining in pattern
+-                 * excluding '/' (or "\/") and '*'
+-                 */
+-                for (matchptr = pattern, matchlen = 0; 1; ++matchlen)
+-                {
+-                    if ((*matchptr == '\0') 
+-                        || (slash && ((*matchptr == '/')
+-                                      || (escape && (*matchptr == '\\')
+-                                                 && (matchptr[1] == '/')))))
+-                    {
+-                        /* Compare precisely this many trailing string chars,
+-                         * the resulting match needs no wildcard loop
+-                         */
+-                        /* XXX: Adjust for MBCS */
+-                        if (string + matchlen > strendseg)
+-                            return FNM_NOMATCH;
+-
+-                        string = strendseg - matchlen;
+-                        wild = 0;
+-                        break;
+-                    }
+-
+-                    if (*matchptr == '*')
+-                    {
+-                        /* Ensure at least this many trailing string chars remain
+-                         * for the first comparison
+-                         */
+-                        /* XXX: Adjust for MBCS */
+-                        if (string + matchlen > strendseg)
+-                            return FNM_NOMATCH;
+-
+-                        /* Begin first wild comparison at the current position */
+-                        break;
+-                    }
+-
+-                    /* Skip forward in pattern by a single character match
+-                     * Use a dummy fnmatch_ch() test to count one "[range]" escape
+-                     */ 
+-                    /* XXX: Adjust for MBCS */
+-                    if (escape && (*matchptr == '\\') && matchptr[1]) {
+-                        matchptr += 2;
+-                    }
+-                    else if (*matchptr == '[') {
+-                        dummyptr = dummystring;
+-                        fnmatch_ch(&matchptr, &dummyptr, flags);
+-                    }
+-                    else {
+-                        ++matchptr;
+-                    }
+-                }
+-            }
+-
+-            /* Incrementally match string against the pattern
+-             */
+-            while (*pattern && (string < strendseg))
+-            {
+-                /* Success; begin a new wild pattern search
+-                 */
+-                if (*pattern == '*')
+-                    break;
+-
+-                if (slash && ((*string == '/')
+-                              || (*pattern == '/')
+-                              || (escape && (*pattern == '\\')
+-                                         && (pattern[1] == '/'))))
+-                    break;
+-
+-                /* Compare ch's (the pattern is advanced over "\/" to the '/',
+-                 * but slashes will mismatch, and are not consumed)
+-                 */
+-                if (!fnmatch_ch(&pattern, &string, flags))
+-                    continue;
+-
+-                /* Failed to match, loop against next char offset of string segment 
+-                 * until not enough string chars remain to match the fixed pattern
+-                 */
+-                if (wild) {
+-                    /* XXX: Advance 1 char for MBCS locale */
+-                    string = ++strstartseg;
+-                    if (string + matchlen > strendseg)
+-                        return FNM_NOMATCH;
+-
+-                    pattern = mismatch;
+-                    continue;
+-                }
+-                else
+-                    return FNM_NOMATCH;
+-            }
+-        }
+-
+-        if (*string && !((slash || leading_dir) && (*string == '/')))
+-            return FNM_NOMATCH;
+-
+-        if (*pattern && !(slash && ((*pattern == '/')
+-                                    || (escape && (*pattern == '\\')
+-                                               && (pattern[1] == '/')))))
+-            return FNM_NOMATCH;
+-
+-        if (leading_dir && !*pattern && *string == '/')
+-            return 0;
+-    }
+-
+-    /* Where both pattern and string are at EOS, declare success
+-     */
+-    if (!*string && !*pattern)
+-        return 0;
+-
+-    /* pattern didn't match to the end of string */
+-    return FNM_NOMATCH;
++		/*
++		 * At the beginning of each segment, validate leading period
++		 * behavior.
++		 */
++		if ((flags & FNM_PERIOD) && (*string == '.')) {
++		    if (*pattern == '.')
++			    ++pattern;
++		    else if (escape && (*pattern == '\\') && (pattern[1] == '.'))
++			    pattern += 2;
++		    else
++			    return FNM_NOMATCH;
++		    ++string;
++		}
++
++		/*
++		 * Determine the end of string segment.  Presumes '/'
++		 * character is unique, not composite in any MBCS encoding
++		 */
++		if (slash) {
++			strendseg = strchr(string, '/');
++			if (!strendseg)
++				strendseg = strchr(string, '\0');
++		} else {
++			strendseg = strchr(string, '\0');
++		}
++
++		/*
++		 * Allow pattern '*' to be consumed even with no remaining
++		 * string to match.
++		 */
++		while (*pattern) {
++			if ((string > strendseg) ||
++			    ((string == strendseg) && (*pattern != '*')))
++				break;
++
++			if (slash && ((*pattern == '/') ||
++			    (escape && (*pattern == '\\') && (pattern[1] == '/'))))
++				break;
++
++			/*
++			 * Reduce groups of '*' and '?' to n '?' matches
++			 * followed by one '*' test for simplicity.
++			 */
++			for (wild = 0; (*pattern == '*') || (*pattern == '?'); ++pattern) {
++				if (*pattern == '*') {
++					wild = 1;
++				} else if (string < strendseg) {  /* && (*pattern == '?') */
++					/* XXX: Advance 1 char for MBCS locale */
++					++string;
++				}
++				else {  /* (string >= strendseg) && (*pattern == '?') */
++					return FNM_NOMATCH;
++				}
++			}
++
++			if (wild) {
++				strstartseg = string;
++				mismatch = pattern;
++
++				/*
++				 * Count fixed (non '*') char matches remaining
++				 * in pattern * excluding '/' (or "\/") and '*'.
++				 */
++				for (matchptr = pattern, matchlen = 0; 1; ++matchlen) {
++					if ((*matchptr == '\0') ||
++					    (slash && ((*matchptr == '/') ||
++					    (escape && (*matchptr == '\\') &&
++					    (matchptr[1] == '/'))))) {
++						/* Compare precisely this many
++						 * trailing string chars, the
++						 * resulting match needs no
++						 * wildcard loop.
++						 */
++						/* XXX: Adjust for MBCS */
++						if (string + matchlen > strendseg)
++							return FNM_NOMATCH;
++
++						string = strendseg - matchlen;
++						wild = 0;
++						break;
++					}
++
++					if (*matchptr == '*') {
++						/*
++						 * Ensure at least this many
++						 * trailing string chars remain
++						 * for the first comparison.
++						 */
++						/* XXX: Adjust for MBCS */
++						if (string + matchlen > strendseg)
++							return FNM_NOMATCH;
++
++						/*
++						 * Begin first wild comparison
++						 * at the current position.
++						 */
++						break;
++					}
++
++					/*
++					 * Skip forward in pattern by a single
++					 * character match Use a dummy
++					 * fnmatch_ch() test to count one
++					 * "[range]" escape.
++					 */
++					/* XXX: Adjust for MBCS */
++					if (escape && (*matchptr == '\\') &&
++					    matchptr[1]) {
++						matchptr += 2;
++					} else if (*matchptr == '[') {
++						dummyptr = dummystring;
++						fnmatch_ch(&matchptr, &dummyptr,
++						    flags);
++					} else {
++						++matchptr;
++					}
++				}
++			}
++
++			/* Incrementally match string against the pattern. */
++			while (*pattern && (string < strendseg)) {
++				/* Success; begin a new wild pattern search. */
++				if (*pattern == '*')
++					break;
++
++				if (slash && ((*string == '/') ||
++				    (*pattern == '/') || (escape &&
++				    (*pattern == '\\') && (pattern[1] == '/'))))
++					break;
++
++				/*
++				 * Compare ch's (the pattern is advanced over
++				 * "\/" to the '/', but slashes will mismatch,
++				 * and are not consumed).
++				 */
++				if (!fnmatch_ch(&pattern, &string, flags))
++					continue;
++
++				/*
++				 * Failed to match, loop against next char
++				 * offset of string segment until not enough
++				 * string chars remain to match the fixed
++				 * pattern.
++				 */
++				if (wild) {
++					/* XXX: Advance 1 char for MBCS locale */
++					string = ++strstartseg;
++					if (string + matchlen > strendseg)
++						return FNM_NOMATCH;
++
++					pattern = mismatch;
++					continue;
++				} else
++					return FNM_NOMATCH;
++			}
++		}
++
++		if (*string && !((slash || leading_dir) && (*string == '/')))
++			return FNM_NOMATCH;
++
++		if (*pattern && !(slash && ((*pattern == '/') ||
++		    (escape && (*pattern == '\\') && (pattern[1] == '/')))))
++			return FNM_NOMATCH;
++
++		if (leading_dir && !*pattern && *string == '/')
++			return 0;
++	}
++
++	/* Where both pattern and string are at EOS, declare success.  */
++	if (!*string && !*pattern)
++		return 0;
++
++	/* Pattern didn't match to the end of string. */
++	return FNM_NOMATCH;
+ }
+diff --git a/libc/upstream-openbsd/lib/libc/locale/mbtowc.c b/libc/upstream-openbsd/lib/libc/locale/mbtowc.c
+index 920f4bf26..4399ed840 100644
+--- a/libc/upstream-openbsd/lib/libc/locale/mbtowc.c
++++ b/libc/upstream-openbsd/lib/libc/locale/mbtowc.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: mbtowc.c,v 1.2 2012/12/05 23:20:00 deraadt Exp $ */
++/*	$OpenBSD: mbtowc.c,v 1.3 2016/02/27 14:02:13 schwarze Exp $ */
+ 
+ /*-
+  * Copyright (c) 2002-2004 Tim J. Robbins.
+@@ -44,7 +44,14 @@ mbtowc(wchar_t * __restrict pwc, const char * __restrict s, size_t n)
+ 		return (0);
+ 	}
+ 	rval = mbrtowc(pwc, s, n, &mbs);
+-	if (rval == (size_t)-1 || rval == (size_t)-2)
+-		return (-1);
+-	return ((int)rval);
++
++	switch (rval) {
++	case (size_t)-2:
++		errno = EILSEQ;
++		/* FALLTHROUGH */
++	case (size_t)-1:
++		return -1;
++	default:
++		return (int)rval;
++	}
+ }
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/fgetln.c b/libc/upstream-openbsd/lib/libc/stdio/fgetln.c
+index 1109cf25c..903dbd606 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/fgetln.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/fgetln.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: fgetln.c,v 1.13 2015/01/05 21:58:52 millert Exp $ */
++/*	$OpenBSD: fgetln.c,v 1.17 2017/03/17 14:53:08 deraadt Exp $ */
+ /*-
+  * Copyright (c) 1990, 1993
+  *	The Regents of the University of California.  All rights reserved.
+@@ -46,7 +46,7 @@ __slbexpand(FILE *fp, size_t newsize)
+ 
+ 	if (fp->_lb._size >= newsize)
+ 		return (0);
+-	if ((p = realloc(fp->_lb._base, newsize)) == NULL)
++	if ((p = recallocarray(fp->_lb._base, fp->_lb._size, newsize, 1)) == NULL)
+ 		return (-1);
+ 	fp->_lb._base = p;
+ 	fp->_lb._size = newsize;
+@@ -76,7 +76,7 @@ fgetln(FILE *fp, size_t *lenp)
+ 		goto error;
+ 
+ 	/* look for a newline in the input */
+-	if ((p = memchr((void *)fp->_p, '\n', fp->_r)) != NULL) {
++	if ((p = memchr(fp->_p, '\n', fp->_r)) != NULL) {
+ 		/*
+ 		 * Found one.  Flag buffer as modified to keep fseek from
+ 		 * `optimising' a backward seek, in case the user stomps on
+@@ -112,12 +112,14 @@ fgetln(FILE *fp, size_t *lenp)
+ 		 */
+ 		if (__slbexpand(fp, len + OPTIMISTIC))
+ 			goto error;
+-		(void)memcpy((void *)(fp->_lb._base + off), (void *)fp->_p,
+-		    len - off);
++		(void)memcpy(fp->_lb._base + off, fp->_p, len - off);
+ 		off = len;
+-		if (__srefill(fp))
+-			break;	/* EOF or error: return partial line */
+-		if ((p = memchr((void *)fp->_p, '\n', fp->_r)) == NULL)
++		if (__srefill(fp)) {
++			if (fp->_flags & __SEOF)
++				break;
++			goto error;
++		}
++		if ((p = memchr(fp->_p, '\n', fp->_r)) == NULL)
+ 			continue;
+ 
+ 		/* got it: finish up the line (like code above) */
+@@ -126,8 +128,7 @@ fgetln(FILE *fp, size_t *lenp)
+ 		len += diff;
+ 		if (__slbexpand(fp, len))
+ 			goto error;
+-		(void)memcpy((void *)(fp->_lb._base + off), (void *)fp->_p,
+-		    diff);
++		(void)memcpy(fp->_lb._base + off, fp->_p, diff);
+ 		fp->_r -= diff;
+ 		fp->_p = p;
+ 		break;
+@@ -142,3 +143,4 @@ error:
+ 	*lenp = 0;
+ 	return (NULL);
+ }
++DEF_WEAK(fgetln);
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/fputwc.c b/libc/upstream-openbsd/lib/libc/stdio/fputwc.c
+index 829c22c48..e156922ad 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/fputwc.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/fputwc.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: fputwc.c,v 1.6 2015/10/01 02:32:07 guenther Exp $	*/
++/*	$OpenBSD: fputwc.c,v 1.7 2016/01/26 13:57:02 schwarze Exp $	*/
+ /* $NetBSD: fputwc.c,v 1.3 2003/03/07 07:11:37 tshiozak Exp $ */
+ 
+ /*-
+@@ -62,7 +62,7 @@ __fputwc_unlock(wchar_t wc, FILE *fp)
+ 
+ 	size = wcrtomb(buf, wc, st);
+ 	if (size == (size_t)-1) {
+-		errno = EILSEQ;
++		fp->_flags |= __SERR;
+ 		return WEOF;
+ 	}
+ 
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/fvwrite.c b/libc/upstream-openbsd/lib/libc/stdio/fvwrite.c
+index 1088991fd..ba58f9de0 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/fvwrite.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/fvwrite.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: fvwrite.c,v 1.17 2009/11/09 00:18:27 kurt Exp $ */
++/*	$OpenBSD: fvwrite.c,v 1.20 2017/03/17 16:06:33 millert Exp $ */
+ /*-
+  * Copyright (c) 1990, 1993
+  *	The Regents of the University of California.  All rights reserved.
+@@ -35,6 +35,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <errno.h>
++#include <unistd.h>
+ #include "local.h"
+ #include "fvwrite.h"
+ 
+@@ -63,7 +64,7 @@ __sfvwrite(FILE *fp, struct __suio *uio)
+ 	}
+ 
+ #define	MIN(a, b) ((a) < (b) ? (a) : (b))
+-#define	COPY(n)	  (void)memcpy((void *)fp->_p, (void *)p, (size_t)(n))
++#define	COPY(n)	  (void)memcpy(fp->_p, p, n)
+ 
+ 	iov = uio->uio_iov;
+ 	p = iov->iov_base;
+@@ -105,15 +106,14 @@ __sfvwrite(FILE *fp, struct __suio *uio)
+ 			if ((fp->_flags & (__SALC | __SSTR)) ==
+ 			    (__SALC | __SSTR) && fp->_w < len) {
+ 				size_t blen = fp->_p - fp->_bf._base;
++				int pgmsk = getpagesize() - 1;
+ 				unsigned char *_base;
+ 				int _size;
+ 
+-				/* Allocate space exponentially. */
+-				_size = fp->_bf._size;
+-				do {
+-					_size = (_size << 1) + 1;
+-				} while (_size < blen + len);
+-				_base = realloc(fp->_bf._base, _size + 1);
++				/* Round up to nearest page. */
++				_size = ((blen + len + 1 + pgmsk) & ~pgmsk) - 1;
++				_base = recallocarray(fp->_bf._base,
++				    fp->_bf._size + 1, _size + 1, 1);
+ 				if (_base == NULL)
+ 					goto err;
+ 				fp->_w += _size - fp->_bf._size;
+@@ -164,7 +164,7 @@ __sfvwrite(FILE *fp, struct __suio *uio)
+ 		do {
+ 			GETIOV(nlknown = 0);
+ 			if (!nlknown) {
+-				nl = memchr((void *)p, '\n', len);
++				nl = memchr(p, '\n', len);
+ 				nldist = nl ? nl + 1 - p : len + 1;
+ 				nlknown = 1;
+ 			}
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/fwide.c b/libc/upstream-openbsd/lib/libc/stdio/fwide.c
+index 27ca0f8ac..4b93d598e 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/fwide.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/fwide.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: fwide.c,v 1.5 2015/08/31 02:53:57 guenther Exp $	*/
++/*	$OpenBSD: fwide.c,v 1.6 2019/12/03 05:03:37 asou Exp $	*/
+ /* $NetBSD: fwide.c,v 1.2 2003/01/18 11:29:54 thorpej Exp $ */
+ 
+ /*-
+@@ -51,8 +51,10 @@ fwide(FILE *fp, int mode)
+ 
+ 	FLOCKFILE(fp);
+ 	wcio = WCIO_GET(fp);
+-	if (!wcio)
++	if (!wcio) {
++		FUNLOCKFILE(fp);
+ 		return 0; /* XXX */
++	}
+ 
+ 	if (wcio->wcio_mode == 0 && mode != 0)
+ 		wcio->wcio_mode = mode;
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/getdelim.c b/libc/upstream-openbsd/lib/libc/stdio/getdelim.c
+index 58ff0a1be..d709a3d18 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/getdelim.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/getdelim.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: getdelim.c,v 1.4 2015/08/31 02:53:57 guenther Exp $	*/
++/*	$OpenBSD: getdelim.c,v 1.6 2017/04/13 18:36:51 brynet Exp $	*/
+ /* $NetBSD: getdelim.c,v 1.13 2011/07/22 23:12:30 joerg Exp $ */
+ 
+ /*
+@@ -73,7 +73,7 @@ getdelim(char **__restrict buf, size_t *__restrict buflen,
+ 		}
+ 
+ 		/* Scan through looking for the separator */
+-		p = memchr(fp->_p, sep, (size_t)fp->_r);
++		p = memchr(fp->_p, sep, fp->_r);
+ 		if (p == NULL)
+ 			len = fp->_r;
+ 		else
+@@ -103,7 +103,7 @@ getdelim(char **__restrict buf, size_t *__restrict buflen,
+ 				newlen++;
+ 			}
+ 
+-			newb = realloc(*buf, newlen);
++			newb = recallocarray(*buf, *buflen, newlen, 1);
+ 			if (newb == NULL)
+ 				goto error;
+ 			*buf = newb;
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/open_memstream.c b/libc/upstream-openbsd/lib/libc/stdio/open_memstream.c
+index f708acc50..6ee5a5c27 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/open_memstream.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/open_memstream.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: open_memstream.c,v 1.6 2015/08/31 02:53:57 guenther Exp $	*/
++/*	$OpenBSD: open_memstream.c,v 1.8 2019/05/02 08:30:10 yasuoka Exp $	*/
+ 
+ /*
+  * Copyright (c) 2011 Martin Pieuchot <mpi@openbsd.org>
+@@ -50,7 +50,7 @@ memstream_write(void *v, const char *b, int l)
+ 
+ 		if (sz < end + 1)
+ 			sz = end + 1;
+-		p = realloc(st->string, sz);
++		p = recallocarray(st->string, st->size, sz, 1);
+ 		if (!p)
+ 			return (-1);
+ 		bzero(p + st->size, sz - st->size);
+@@ -76,7 +76,7 @@ static fpos_t
+ memstream_seek(void *v, fpos_t off, int whence)
+ {
+ 	struct state	*st = v;
+-	ssize_t		 base = 0;
++	size_t		 base = 0;
+ 
+ 	switch (whence) {
+ 	case SEEK_SET:
+@@ -89,7 +89,7 @@ memstream_seek(void *v, fpos_t off, int whence)
+ 		break;
+ 	}
+ 
+-	if (off > SIZE_MAX - base || off < -base) {
++	if ((off > 0 && off > SIZE_MAX - base) || (off < 0 && base < -off)) {
+ 		errno = EOVERFLOW;
+ 		return (-1);
+ 	}
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/vasprintf.c b/libc/upstream-openbsd/lib/libc/stdio/vasprintf.c
+index 98cdb4554..c2e17e7c1 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/vasprintf.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/vasprintf.c
+@@ -1,7 +1,7 @@
+-/*	$OpenBSD: vasprintf.c,v 1.19 2015/12/28 22:08:18 mmcc Exp $	*/
++/*	$OpenBSD: vasprintf.c,v 1.23 2019/01/25 00:19:25 millert Exp $	*/
+ 
+ /*
+- * Copyright (c) 1997 Todd C. Miller <Todd.Miller@courtesan.com>
++ * Copyright (c) 1997 Todd C. Miller <millert@openbsd.org>
+  *
+  * Permission to use, copy, modify, and distribute this software for any
+  * purpose with or without fee is hereby granted, provided that the above
+@@ -20,31 +20,40 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <errno.h>
++#include <unistd.h>
+ #include "local.h"
+ 
++#define	INITIAL_SIZE	128
++
+ int
+ vasprintf(char **str, const char *fmt, __va_list ap)
+ {
+ 	int ret;
+ 	FILE f;
+ 	struct __sfileext fext;
+-	unsigned char *_base;
++	const int pgsz = getpagesize();
+ 
+ 	_FILEEXT_SETUP(&f, &fext);
+ 	f._file = -1;
+ 	f._flags = __SWR | __SSTR | __SALC;
+-	f._bf._base = f._p = malloc(128);
++	f._bf._base = f._p = malloc(INITIAL_SIZE);
+ 	if (f._bf._base == NULL)
+ 		goto err;
+-	f._bf._size = f._w = 127;		/* Leave room for the NUL */
++	f._bf._size = f._w = INITIAL_SIZE - 1;	/* leave room for the NUL */
+ 	ret = __vfprintf(&f, fmt, ap);
+ 	if (ret == -1)
+ 		goto err;
+ 	*f._p = '\0';
+-	_base = realloc(f._bf._base, ret + 1);
+-	if (_base == NULL)
+-		goto err;
+-	*str = (char *)_base;
++	if (ret + 1 > INITIAL_SIZE && ret + 1 < pgsz / 2) {
++		/* midsize allocations can try to conserve memory */
++		unsigned char *_base = recallocarray(f._bf._base,
++		    f._bf._size + 1, ret + 1, 1);
++
++		if (_base == NULL)
++			goto err;
++		*str = (char *)_base;
++	} else
++		*str = (char *)f._bf._base;
+ 	return (ret);
+ 
+ err:
+diff --git a/libc/upstream-openbsd/lib/libc/stdio/vdprintf.c b/libc/upstream-openbsd/lib/libc/stdio/vdprintf.c
+index e76fcd498..ad4ab0a76 100644
+--- a/libc/upstream-openbsd/lib/libc/stdio/vdprintf.c
++++ b/libc/upstream-openbsd/lib/libc/stdio/vdprintf.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: vdprintf.c,v 1.2 2015/08/31 02:53:57 guenther Exp $	*/
++/*	$OpenBSD: vdprintf.c,v 1.3 2019/03/03 16:41:41 semarie Exp $	*/
+ /*	$FreeBSD: src/lib/libc/stdio/vdprintf.c,v 1.4 2012/11/17 01:49:40 svnexp Exp $ */
+ 
+ /*-
+@@ -69,6 +69,6 @@ vdprintf(int fd, const char * __restrict fmt, va_list ap)
+ 	if ((ret = __vfprintf(&f, fmt, ap)) < 0)
+ 		return ret;
+ 
+-	return fflush(&f) ? EOF : ret;
++	return __sflush(&f) ? EOF : ret;
+ }
+ DEF_WEAK(vdprintf);
+diff --git a/libc/upstream-openbsd/lib/libc/stdlib/recallocarray.c b/libc/upstream-openbsd/lib/libc/stdlib/recallocarray.c
+new file mode 100644
+index 000000000..a2f37fe81
+--- /dev/null
++++ b/libc/upstream-openbsd/lib/libc/stdlib/recallocarray.c
+@@ -0,0 +1,81 @@
++/*	$OpenBSD: recallocarray.c,v 1.1 2017/03/06 18:44:21 otto Exp $	*/
++/*
++ * Copyright (c) 2008, 2017 Otto Moerbeek <otto@drijf.net>
++ *
++ * Permission to use, copy, modify, and distribute this software for any
++ * purpose with or without fee is hereby granted, provided that the above
++ * copyright notice and this permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
++ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++
++#include <errno.h>
++#include <stdlib.h>
++#include <stdint.h>
++#include <string.h>
++#include <unistd.h>
++
++/*
++ * This is sqrt(SIZE_MAX+1), as s1*s2 <= SIZE_MAX
++ * if both s1 < MUL_NO_OVERFLOW and s2 < MUL_NO_OVERFLOW
++ */
++#define MUL_NO_OVERFLOW ((size_t)1 << (sizeof(size_t) * 4))
++
++void *
++recallocarray(void *ptr, size_t oldnmemb, size_t newnmemb, size_t size)
++{
++	size_t oldsize, newsize;
++	void *newptr;
++
++	if (ptr == NULL)
++		return calloc(newnmemb, size);
++
++	if ((newnmemb >= MUL_NO_OVERFLOW || size >= MUL_NO_OVERFLOW) &&
++	    newnmemb > 0 && SIZE_MAX / newnmemb < size) {
++		errno = ENOMEM;
++		return NULL;
++	}
++	newsize = newnmemb * size;
++
++	if ((oldnmemb >= MUL_NO_OVERFLOW || size >= MUL_NO_OVERFLOW) &&
++	    oldnmemb > 0 && SIZE_MAX / oldnmemb < size) {
++		errno = EINVAL;
++		return NULL;
++	}
++	oldsize = oldnmemb * size;
++	
++	/*
++	 * Don't bother too much if we're shrinking just a bit,
++	 * we do not shrink for series of small steps, oh well.
++	 */
++	if (newsize <= oldsize) {
++		size_t d = oldsize - newsize;
++
++		if (d < oldsize / 2 && d < getpagesize()) {
++			memset((char *)ptr + newsize, 0, d);
++			return ptr;
++		}
++	}
++
++	newptr = malloc(newsize);
++	if (newptr == NULL)
++		return NULL;
++
++	if (newsize > oldsize) {
++		memcpy(newptr, ptr, oldsize);
++		memset((char *)newptr + oldsize, 0, newsize - oldsize);
++	} else
++		memcpy(newptr, ptr, newsize);
++
++	explicit_bzero(ptr, oldsize);
++	free(ptr);
++
++	return newptr;
++}
++DEF_WEAK(recallocarray);
+diff --git a/libc/upstream-openbsd/lib/libc/stdlib/setenv.c b/libc/upstream-openbsd/lib/libc/stdlib/setenv.c
+index e55a1feb6..15c550ba3 100644
+--- a/libc/upstream-openbsd/lib/libc/stdlib/setenv.c
++++ b/libc/upstream-openbsd/lib/libc/stdlib/setenv.c
+@@ -1,4 +1,4 @@
+-/*	$OpenBSD: setenv.c,v 1.16 2015/09/13 08:31:47 guenther Exp $ */
++/*	$OpenBSD: setenv.c,v 1.19 2016/09/21 04:38:56 guenther Exp $ */
+ /*
+  * Copyright (c) 1987 Regents of the University of California.
+  * All rights reserved.
+@@ -32,7 +32,6 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
+-extern char **environ;
+ static char **lastenv;				/* last value of environ */
+ 
+ /*
+@@ -44,7 +43,7 @@ int
+ putenv(char *str)
+ {
+ 	char **P, *cp;
+-	size_t cnt;
++	size_t cnt = 0;
+ 	int offset = 0;
+ 
+ 	for (cp = str; *cp && *cp != '='; ++cp)
+@@ -66,13 +65,15 @@ putenv(char *str)
+ 	}
+ 
+ 	/* create new slot for string */
+-	for (P = environ; *P != NULL; P++)
+-		;
+-	cnt = P - environ;
++	if (environ != NULL) {
++		for (P = environ; *P != NULL; P++)
++			;
++		cnt = P - environ;
++	}
+ 	P = reallocarray(lastenv, cnt + 2, sizeof(char *));
+ 	if (!P)
+ 		return (-1);
+-	if (lastenv != environ)
++	if (lastenv != environ && environ != NULL)
+ 		memcpy(P, environ, cnt * sizeof(char *));
+ 	lastenv = environ = P;
+ 	environ[cnt] = str;
+@@ -123,22 +124,24 @@ setenv(const char *name, const char *value, int rewrite)
+ 					break;
+ 		}
+ 	} else {					/* create new slot */
+-		size_t cnt;
++		size_t cnt = 0;
+ 
+-		for (P = environ; *P != NULL; P++)
+-			;
+-		cnt = P - environ;
++		if (environ != NULL) {
++			for (P = environ; *P != NULL; P++)
++				;
++			cnt = P - environ;
++		}
+ 		P = reallocarray(lastenv, cnt + 2, sizeof(char *));
+ 		if (!P)
+ 			return (-1);
+-		if (lastenv != environ)
++		if (lastenv != environ && environ != NULL)
+ 			memcpy(P, environ, cnt * sizeof(char *));
+ 		lastenv = environ = P;
+ 		offset = cnt;
+ 		environ[cnt + 1] = NULL;
+ 	}
+ 	if (!(environ[offset] =			/* name + `=' + value */
+-	    malloc((size_t)((int)(np - name) + l_value + 2))))
++	    malloc((int)(np - name) + l_value + 2)))
+ 		return (-1);
+ 	for (C = environ[offset]; (*C = *name++) && *C != '='; ++C)
+ 		;
+diff --git a/libc/upstream-openbsd/lib/libc/string/strstr.c b/libc/upstream-openbsd/lib/libc/string/strstr.c
+index 079d69d25..241a080e7 100644
+--- a/libc/upstream-openbsd/lib/libc/string/strstr.c
++++ b/libc/upstream-openbsd/lib/libc/string/strstr.c
+@@ -1,7 +1,7 @@
+-/*	$OpenBSD: strstr.c,v 1.8 2018/04/30 07:44:56 denis Exp $ */
++/*	$OpenBSD: strstr.c,v 1.9 2020/04/16 12:37:52 claudio Exp $ */
+ 
+ /*
+- * Copyright (c) 2005-2014 Rich Felker
++ * Copyright (c) 2005-2018 Rich Felker
+  *
+  * Permission is hereby granted, free of charge, to any person obtaining
+  * a copy of this software and associated documentation files (the
+@@ -24,13 +24,8 @@
+  */
+ 
+ #include <string.h>
+-#include <stdlib.h>
+ #include <stdint.h>
+ 
+-#ifdef DEBUG
+-#include <stdio.h>
+-#endif
+-
+ static char *
+ twobyte_strstr(const unsigned char *h, const unsigned char *n)
+ {
+@@ -146,11 +141,8 @@ twoway_strstr(const unsigned char *h, const unsigned char *n)
+ 		/* Check last byte first; advance by shift on mismatch */
+ 		if (BITOP(byteset, h[l-1], &)) {
+ 			k = l-shift[h[l-1]];
+-#ifdef DEBUG
+-			printf("adv by %zu (on %c) at [%s] (%zu;l=%zu)\n", k, h[l-1], h, shift[h[l-1]], l);
+-#endif
+ 			if (k) {
+-				if (mem0 && mem && k < p) k = l-p;
++				if (k < mem) k = mem;
+ 				h += k;
+ 				mem = 0;
+ 				continue;
+-- 
+2.31.1
+

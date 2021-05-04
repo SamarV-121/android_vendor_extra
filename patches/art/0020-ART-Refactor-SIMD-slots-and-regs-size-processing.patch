@@ -1,0 +1,558 @@
+From 5f823c91f429ada260a73579ae08d53e87c5e8f3 Mon Sep 17 00:00:00 2001
+From: Artem Serov <artem.serov@linaro.org>
+Date: Wed, 31 Jul 2019 18:28:00 +0100
+Subject: [PATCH 20/27] ART: Refactor SIMD slots and regs size processing.
+
+ART vectorizer assumes that there is single size of SIMD
+register used for the whole program. Make this assumption explicit
+and refactor the code.
+
+Note: This is a base for the future introduction of SIMD slots of
+size other than 8 or 16 bytes.
+
+Test: test-art-target, test-art-host.
+Change-Id: Id699d5e3590ca8c655ecd9f9ed4e63f49e3c4f9c
+---
+ compiler/optimizing/code_generator.h          |  2 +
+ compiler/optimizing/code_generator_arm64.cc   |  6 +-
+ compiler/optimizing/code_generator_arm64.h    |  6 +-
+ compiler/optimizing/code_generator_arm_vixl.h |  7 +++
+ compiler/optimizing/code_generator_x86.h      |  6 +-
+ compiler/optimizing/code_generator_x86_64.h   |  6 +-
+ compiler/optimizing/locations.h               | 13 ++++
+ compiler/optimizing/loop_optimization.cc      | 60 +++++++++----------
+ compiler/optimizing/loop_optimization.h       | 15 ++++-
+ compiler/optimizing/loop_optimization_test.cc | 30 +++++++---
+ compiler/optimizing/optimization.cc           |  2 +-
+ .../register_allocation_resolver.cc           | 23 ++++---
+ compiler/optimizing/ssa_liveness_analysis.cc  |  8 +--
+ compiler/optimizing/superblock_cloner.cc      | 15 ++---
+ compiler/optimizing/superblock_cloner.h       |  1 +
+ 15 files changed, 128 insertions(+), 72 deletions(-)
+
+diff --git a/compiler/optimizing/code_generator.h b/compiler/optimizing/code_generator.h
+index 9e3e454f3d..84bf4914d0 100644
+--- a/compiler/optimizing/code_generator.h
++++ b/compiler/optimizing/code_generator.h
+@@ -235,6 +235,8 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
+   // Get FP register width required to be preserved by the target ABI.
+   virtual size_t GetCalleePreservedFPWidth() const  = 0;
+ 
++  // Get the size of the target SIMD register in bytes.
++  virtual size_t GetSIMDRegisterWidth() const = 0;
+   virtual uintptr_t GetAddressOf(HBasicBlock* block) = 0;
+   void InitializeCodeGeneration(size_t number_of_spill_slots,
+                                 size_t maximum_safepoint_spill_size,
+diff --git a/compiler/optimizing/code_generator_arm64.cc b/compiler/optimizing/code_generator_arm64.cc
+index 5ed3937fc1..d5dfdcec06 100644
+--- a/compiler/optimizing/code_generator_arm64.cc
++++ b/compiler/optimizing/code_generator_arm64.cc
+@@ -176,8 +176,8 @@ static void SaveRestoreLiveRegistersHelper(CodeGenerator* codegen,
+                                          codegen->GetNumberOfFloatingPointRegisters()));
+ 
+   CPURegList core_list = CPURegList(CPURegister::kRegister, kXRegSize, core_spills);
+-  unsigned v_reg_size = codegen->GetGraph()->HasSIMD() ? kQRegSize : kDRegSize;
+-  CPURegList fp_list = CPURegList(CPURegister::kVRegister, v_reg_size, fp_spills);
++  const unsigned v_reg_size_in_bits = codegen->GetSlowPathFPWidth() * 8;
++  CPURegList fp_list = CPURegList(CPURegister::kVRegister, v_reg_size_in_bits, fp_spills);
+ 
+   MacroAssembler* masm = down_cast<CodeGeneratorARM64*>(codegen)->GetVIXLAssembler();
+   UseScratchRegisterScope temps(masm);
+@@ -224,7 +224,7 @@ void SlowPathCodeARM64::SaveLiveRegisters(CodeGenerator* codegen, LocationSummar
+     stack_offset += kXRegSizeInBytes;
+   }
+ 
+-  const size_t fp_reg_size = codegen->GetGraph()->HasSIMD() ? kQRegSizeInBytes : kDRegSizeInBytes;
++  const size_t fp_reg_size = codegen->GetSlowPathFPWidth();
+   const uint32_t fp_spills = codegen->GetSlowPathSpills(locations, /* core_registers= */ false);
+   for (uint32_t i : LowToHighBits(fp_spills)) {
+     DCHECK_LT(stack_offset, codegen->GetFrameSize() - codegen->FrameEntrySpillSize());
+diff --git a/compiler/optimizing/code_generator_arm64.h b/compiler/optimizing/code_generator_arm64.h
+index da4577d1bd..aa9b1c20c6 100644
+--- a/compiler/optimizing/code_generator_arm64.h
++++ b/compiler/optimizing/code_generator_arm64.h
+@@ -447,7 +447,7 @@ class CodeGeneratorARM64 : public CodeGenerator {
+ 
+   size_t GetSlowPathFPWidth() const override {
+     return GetGraph()->HasSIMD()
+-        ? vixl::aarch64::kQRegSizeInBytes
++        ? GetSIMDRegisterWidth()
+         : vixl::aarch64::kDRegSizeInBytes;
+   }
+ 
+@@ -455,6 +455,10 @@ class CodeGeneratorARM64 : public CodeGenerator {
+     return vixl::aarch64::kDRegSizeInBytes;
+   }
+ 
++  size_t GetSIMDRegisterWidth() const override {
++    return vixl::aarch64::kQRegSizeInBytes;
++  }
++
+   uintptr_t GetAddressOf(HBasicBlock* block) override {
+     vixl::aarch64::Label* block_entry_label = GetLabelOf(block);
+     DCHECK(block_entry_label->IsBound());
+diff --git a/compiler/optimizing/code_generator_arm_vixl.h b/compiler/optimizing/code_generator_arm_vixl.h
+index 48fb0827d7..3eed730223 100644
+--- a/compiler/optimizing/code_generator_arm_vixl.h
++++ b/compiler/optimizing/code_generator_arm_vixl.h
+@@ -450,6 +450,13 @@ class CodeGeneratorARMVIXL : public CodeGenerator {
+     return vixl::aarch32::kSRegSizeInBytes;
+   }
+ 
++  size_t GetSIMDRegisterWidth() const override {
++    // ARM 32-bit backend doesn't support Q registers in vectorizer, only D
++    // registers (due to register allocator restrictions: overlapping s/d/q
++    // registers).
++    return vixl::aarch32::kDRegSizeInBytes;
++  }
++
+   HGraphVisitor* GetLocationBuilder() override { return &location_builder_; }
+ 
+   HGraphVisitor* GetInstructionVisitor() override { return &instruction_visitor_; }
+diff --git a/compiler/optimizing/code_generator_x86.h b/compiler/optimizing/code_generator_x86.h
+index 16446ce561..43f5acdd65 100644
+--- a/compiler/optimizing/code_generator_x86.h
++++ b/compiler/optimizing/code_generator_x86.h
+@@ -359,7 +359,7 @@ class CodeGeneratorX86 : public CodeGenerator {
+ 
+   size_t GetSlowPathFPWidth() const override {
+     return GetGraph()->HasSIMD()
+-        ? 4 * kX86WordSize   // 16 bytes == 4 words for each spill
++        ? GetSIMDRegisterWidth()
+         : 2 * kX86WordSize;  //  8 bytes == 2 words for each spill
+   }
+ 
+@@ -367,6 +367,10 @@ class CodeGeneratorX86 : public CodeGenerator {
+     return 2 * kX86WordSize;
+   }
+ 
++  size_t GetSIMDRegisterWidth() const override {
++    return 4 * kX86WordSize;
++  }
++
+   HGraphVisitor* GetLocationBuilder() override {
+     return &location_builder_;
+   }
+diff --git a/compiler/optimizing/code_generator_x86_64.h b/compiler/optimizing/code_generator_x86_64.h
+index 2e8d9b3315..01810f45f5 100644
+--- a/compiler/optimizing/code_generator_x86_64.h
++++ b/compiler/optimizing/code_generator_x86_64.h
+@@ -340,7 +340,7 @@ class CodeGeneratorX86_64 : public CodeGenerator {
+ 
+   size_t GetSlowPathFPWidth() const override {
+     return GetGraph()->HasSIMD()
+-        ? 2 * kX86_64WordSize   // 16 bytes == 2 x86_64 words for each spill
++        ? GetSIMDRegisterWidth()
+         : 1 * kX86_64WordSize;  //  8 bytes == 1 x86_64 words for each spill
+   }
+ 
+@@ -348,6 +348,10 @@ class CodeGeneratorX86_64 : public CodeGenerator {
+     return 1 * kX86_64WordSize;
+   }
+ 
++  size_t GetSIMDRegisterWidth() const override {
++    return 2 * kX86_64WordSize;
++  }
++
+   HGraphVisitor* GetLocationBuilder() override {
+     return &location_builder_;
+   }
+diff --git a/compiler/optimizing/locations.h b/compiler/optimizing/locations.h
+index d56c151748..5e7e74b948 100644
+--- a/compiler/optimizing/locations.h
++++ b/compiler/optimizing/locations.h
+@@ -281,6 +281,19 @@ class Location : public ValueObject {
+     return GetKind() == kSIMDStackSlot;
+   }
+ 
++  static Location StackSlotByNumOfSlots(size_t num_of_slots, int spill_slot) {
++    DCHECK_NE(num_of_slots, 0u);
++    switch (num_of_slots) {
++      case 1u:
++        return Location::StackSlot(spill_slot);
++      case 2u:
++        return Location::DoubleStackSlot(spill_slot);
++      default:
++        // Assume all other stack slot sizes correspond to SIMD slot size.
++        return Location::SIMDStackSlot(spill_slot);
++    }
++  }
++
+   intptr_t GetStackIndex() const {
+     DCHECK(IsStackSlot() || IsDoubleStackSlot() || IsSIMDStackSlot());
+     // Decode stack index manually to preserve sign.
+diff --git a/compiler/optimizing/loop_optimization.cc b/compiler/optimizing/loop_optimization.cc
+index 5784707d0e..c6b5018fae 100644
+--- a/compiler/optimizing/loop_optimization.cc
++++ b/compiler/optimizing/loop_optimization.cc
+@@ -21,6 +21,7 @@
+ #include "arch/instruction_set.h"
+ #include "arch/x86/instruction_set_features_x86.h"
+ #include "arch/x86_64/instruction_set_features_x86_64.h"
++#include "code_generator.h"
+ #include "driver/compiler_options.h"
+ #include "linear_order.h"
+ #include "mirror/array-inl.h"
+@@ -456,12 +457,13 @@ static DataType::Type GetNarrowerType(HInstruction* a, HInstruction* b) {
+ //
+ 
+ HLoopOptimization::HLoopOptimization(HGraph* graph,
+-                                     const CompilerOptions* compiler_options,
++                                     const CodeGenerator& codegen,
+                                      HInductionVarAnalysis* induction_analysis,
+                                      OptimizingCompilerStats* stats,
+                                      const char* name)
+     : HOptimization(graph, name, stats),
+-      compiler_options_(compiler_options),
++      compiler_options_(&codegen.GetCompilerOptions()),
++      simd_register_size_(codegen.GetSIMDRegisterWidth()),
+       induction_range_(induction_analysis),
+       loop_allocator_(nullptr),
+       global_allocator_(graph_->GetAllocator()),
+@@ -885,12 +887,6 @@ bool HLoopOptimization::TryFullUnrolling(LoopAnalysisInfo* analysis_info, bool g
+ }
+ 
+ bool HLoopOptimization::TryPeelingAndUnrolling(LoopNode* node) {
+-  // Don't run peeling/unrolling if compiler_options_ is nullptr (i.e., running under tests)
+-  // as InstructionSet is needed.
+-  if (compiler_options_ == nullptr) {
+-    return false;
+-  }
+-
+   HLoopInformation* loop_info = node->loop_info;
+   int64_t trip_count = LoopAnalysis::GetLoopTripCount(loop_info, &induction_range_);
+   LoopAnalysisInfo analysis_info(loop_info);
+@@ -1542,13 +1538,15 @@ bool HLoopOptimization::VectorizeUse(LoopNode* node,
+ }
+ 
+ uint32_t HLoopOptimization::GetVectorSizeInBytes() {
+-  switch (compiler_options_->GetInstructionSet()) {
+-    case InstructionSet::kArm:
+-    case InstructionSet::kThumb2:
+-      return 8;  // 64-bit SIMD
+-    default:
+-      return 16;  // 128-bit SIMD
++  if (kIsDebugBuild) {
++    InstructionSet isa = compiler_options_->GetInstructionSet();
++    // TODO: Remove this check when there are no implicit assumptions on the SIMD reg size.
++    DCHECK_EQ(simd_register_size_, (isa == InstructionSet::kArm || isa == InstructionSet::kThumb2)
++                                   ? 8u
++                                   : 16u);
+   }
++
++  return simd_register_size_;
+ }
+ 
+ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrictions) {
+@@ -1563,14 +1561,14 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
+         case DataType::Type::kUint8:
+         case DataType::Type::kInt8:
+           *restrictions |= kNoDiv | kNoReduction | kNoDotProd;
+-          return TrySetVectorLength(8);
++          return TrySetVectorLength(type, 8);
+         case DataType::Type::kUint16:
+         case DataType::Type::kInt16:
+           *restrictions |= kNoDiv | kNoStringCharAt | kNoReduction | kNoDotProd;
+-          return TrySetVectorLength(4);
++          return TrySetVectorLength(type, 4);
+         case DataType::Type::kInt32:
+           *restrictions |= kNoDiv | kNoWideSAD;
+-          return TrySetVectorLength(2);
++          return TrySetVectorLength(type, 2);
+         default:
+           break;
+       }
+@@ -1583,23 +1581,23 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
+         case DataType::Type::kUint8:
+         case DataType::Type::kInt8:
+           *restrictions |= kNoDiv;
+-          return TrySetVectorLength(16);
++          return TrySetVectorLength(type, 16);
+         case DataType::Type::kUint16:
+         case DataType::Type::kInt16:
+           *restrictions |= kNoDiv;
+-          return TrySetVectorLength(8);
++          return TrySetVectorLength(type, 8);
+         case DataType::Type::kInt32:
+           *restrictions |= kNoDiv;
+-          return TrySetVectorLength(4);
++          return TrySetVectorLength(type, 4);
+         case DataType::Type::kInt64:
+           *restrictions |= kNoDiv | kNoMul;
+-          return TrySetVectorLength(2);
++          return TrySetVectorLength(type, 2);
+         case DataType::Type::kFloat32:
+           *restrictions |= kNoReduction;
+-          return TrySetVectorLength(4);
++          return TrySetVectorLength(type, 4);
+         case DataType::Type::kFloat64:
+           *restrictions |= kNoReduction;
+-          return TrySetVectorLength(2);
++          return TrySetVectorLength(type, 2);
+         default:
+           return false;
+       }
+@@ -1619,7 +1617,7 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
+                              kNoUnroundedHAdd |
+                              kNoSAD |
+                              kNoDotProd;
+-            return TrySetVectorLength(16);
++            return TrySetVectorLength(type, 16);
+           case DataType::Type::kUint16:
+             *restrictions |= kNoDiv |
+                              kNoAbs |
+@@ -1627,26 +1625,26 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
+                              kNoUnroundedHAdd |
+                              kNoSAD |
+                              kNoDotProd;
+-            return TrySetVectorLength(8);
++            return TrySetVectorLength(type, 8);
+           case DataType::Type::kInt16:
+             *restrictions |= kNoDiv |
+                              kNoAbs |
+                              kNoSignedHAdd |
+                              kNoUnroundedHAdd |
+                              kNoSAD;
+-            return TrySetVectorLength(8);
++            return TrySetVectorLength(type, 8);
+           case DataType::Type::kInt32:
+             *restrictions |= kNoDiv | kNoSAD;
+-            return TrySetVectorLength(4);
++            return TrySetVectorLength(type, 4);
+           case DataType::Type::kInt64:
+             *restrictions |= kNoMul | kNoDiv | kNoShr | kNoAbs | kNoSAD;
+-            return TrySetVectorLength(2);
++            return TrySetVectorLength(type, 2);
+           case DataType::Type::kFloat32:
+             *restrictions |= kNoReduction;
+-            return TrySetVectorLength(4);
++            return TrySetVectorLength(type, 4);
+           case DataType::Type::kFloat64:
+             *restrictions |= kNoReduction;
+-            return TrySetVectorLength(2);
++            return TrySetVectorLength(type, 2);
+           default:
+             break;
+         }  // switch type
+@@ -1657,7 +1655,7 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
+   }  // switch instruction set
+ }
+ 
+-bool HLoopOptimization::TrySetVectorLength(uint32_t length) {
++bool HLoopOptimization::TrySetVectorLengthImpl(uint32_t length) {
+   DCHECK(IsPowerOfTwo(length) && length >= 2u);
+   // First time set?
+   if (vector_length_ == 0) {
+diff --git a/compiler/optimizing/loop_optimization.h b/compiler/optimizing/loop_optimization.h
+index 1a842c4bf3..0c35f294d8 100644
+--- a/compiler/optimizing/loop_optimization.h
++++ b/compiler/optimizing/loop_optimization.h
+@@ -38,7 +38,7 @@ class ArchNoOptsLoopHelper;
+ class HLoopOptimization : public HOptimization {
+  public:
+   HLoopOptimization(HGraph* graph,
+-                    const CompilerOptions* compiler_options,
++                    const CodeGenerator& codegen,    // Needs info about the target.
+                     HInductionVarAnalysis* induction_analysis,
+                     OptimizingCompilerStats* stats,
+                     const char* name = kLoopOptimizationPassName);
+@@ -186,7 +186,15 @@ class HLoopOptimization : public HOptimization {
+                     uint64_t restrictions);
+   uint32_t GetVectorSizeInBytes();
+   bool TrySetVectorType(DataType::Type type, /*out*/ uint64_t* restrictions);
+-  bool TrySetVectorLength(uint32_t length);
++  bool TrySetVectorLengthImpl(uint32_t length);
++
++  bool TrySetVectorLength(DataType::Type type, uint32_t length) {
++    bool res = TrySetVectorLengthImpl(length);
++    // Currently the vectorizer supports only the mode when full SIMD registers are used.
++    DCHECK(!res || (DataType::Size(type) * length == GetVectorSizeInBytes()));
++    return res;
++  }
++
+   void GenerateVecInv(HInstruction* org, DataType::Type type);
+   void GenerateVecSub(HInstruction* org, HInstruction* offset);
+   void GenerateVecMem(HInstruction* org,
+@@ -265,6 +273,9 @@ class HLoopOptimization : public HOptimization {
+   // Compiler options (to query ISA features).
+   const CompilerOptions* compiler_options_;
+ 
++  // Cached target SIMD vector register size in bytes.
++  const size_t simd_register_size_;
++
+   // Range information based on prior induction variable analysis.
+   InductionVarRange induction_range_;
+ 
+diff --git a/compiler/optimizing/loop_optimization_test.cc b/compiler/optimizing/loop_optimization_test.cc
+index 310d98b5b0..8b4d58eaae 100644
+--- a/compiler/optimizing/loop_optimization_test.cc
++++ b/compiler/optimizing/loop_optimization_test.cc
+@@ -14,6 +14,7 @@
+  * limitations under the License.
+  */
+ 
++#include "code_generator.h"
+ #include "loop_optimization.h"
+ #include "optimizing_unit_test.h"
+ 
+@@ -25,16 +26,29 @@ namespace art {
+  * through the checker tests.
+  */
+ class LoopOptimizationTest : public OptimizingUnitTest {
+- public:
+-  LoopOptimizationTest()
+-      : graph_(CreateGraph()),
+-        iva_(new (GetAllocator()) HInductionVarAnalysis(graph_)),
+-        loop_opt_(new (GetAllocator()) HLoopOptimization(
+-            graph_, /* compiler_options= */ nullptr, iva_, /* stats= */ nullptr)) {
++ protected:
++  void SetUp() override {
++    OverrideInstructionSetFeatures(instruction_set_, "default");
++    OptimizingUnitTest::SetUp();
++
++    graph_ = CreateGraph();
+     BuildGraph();
++    iva_  = new (GetAllocator()) HInductionVarAnalysis(graph_);
++    DCHECK(compiler_options_ != nullptr);
++    codegen_ = CodeGenerator::Create(graph_, *compiler_options_);
++    DCHECK(codegen_.get() != nullptr);
++    loop_opt_ = new (GetAllocator()) HLoopOptimization(
++        graph_, *codegen_.get(), iva_, /* stats= */ nullptr);
++  }
++
++  void TearDown() override {
++    codegen_.reset();
++    graph_ = nullptr;
++    ResetPoolAndAllocator();
++    OptimizingUnitTest::TearDown();
+   }
+ 
+-  ~LoopOptimizationTest() { }
++  virtual ~LoopOptimizationTest() {}
+ 
+   /** Constructs bare minimum graph. */
+   void BuildGraph() {
+@@ -102,6 +116,8 @@ class LoopOptimizationTest : public OptimizingUnitTest {
+ 
+   // General building fields.
+   HGraph* graph_;
++
++  std::unique_ptr<CodeGenerator> codegen_;
+   HInductionVarAnalysis* iva_;
+   HLoopOptimization* loop_opt_;
+ 
+diff --git a/compiler/optimizing/optimization.cc b/compiler/optimizing/optimization.cc
+index d2ff58da73..40e8071f55 100644
+--- a/compiler/optimizing/optimization.cc
++++ b/compiler/optimizing/optimization.cc
+@@ -215,7 +215,7 @@ ArenaVector<HOptimization*> ConstructOptimizations(
+       case OptimizationPass::kLoopOptimization:
+         CHECK(most_recent_induction != nullptr);
+         opt = new (allocator) HLoopOptimization(
+-            graph, &codegen->GetCompilerOptions(), most_recent_induction, stats, pass_name);
++            graph, *codegen, most_recent_induction, stats, pass_name);
+         break;
+       case OptimizationPass::kBoundsCheckElimination:
+         CHECK(most_recent_side_effects != nullptr && most_recent_induction != nullptr);
+diff --git a/compiler/optimizing/register_allocation_resolver.cc b/compiler/optimizing/register_allocation_resolver.cc
+index 1786048b12..670db42f6f 100644
+--- a/compiler/optimizing/register_allocation_resolver.cc
++++ b/compiler/optimizing/register_allocation_resolver.cc
+@@ -303,12 +303,12 @@ void RegisterAllocationResolver::ConnectSiblings(LiveInterval* interval) {
+       && !interval->GetDefinedBy()->IsCurrentMethod()) {
+     // We spill eagerly, so move must be at definition.
+     Location loc;
+-    switch (interval->NumberOfSpillSlotsNeeded()) {
+-      case 1: loc = Location::StackSlot(interval->GetParent()->GetSpillSlot()); break;
+-      case 2: loc = Location::DoubleStackSlot(interval->GetParent()->GetSpillSlot()); break;
+-      case 4: loc = Location::SIMDStackSlot(interval->GetParent()->GetSpillSlot()); break;
+-      default: LOG(FATAL) << "Unexpected number of spill slots"; UNREACHABLE();
+-    }
++    size_t num_of_slots = interval->NumberOfSpillSlotsNeeded();
++    loc = Location::StackSlotByNumOfSlots(num_of_slots, interval->GetParent()->GetSpillSlot());
++
++    CHECK(!loc.IsSIMDStackSlot() ||
++          (codegen_->GetSIMDRegisterWidth() / kVRegSize == num_of_slots)) <<
++          "Unexpected number of spill slots";
+     InsertMoveAfter(interval->GetDefinedBy(), interval->ToLocation(), loc);
+   }
+   UsePositionList::const_iterator use_it = current->GetUses().begin();
+@@ -466,12 +466,11 @@ void RegisterAllocationResolver::ConnectSplitSiblings(LiveInterval* interval,
+       location_source = defined_by->GetLocations()->Out();
+     } else {
+       DCHECK(defined_by->IsCurrentMethod());
+-      switch (parent->NumberOfSpillSlotsNeeded()) {
+-        case 1: location_source = Location::StackSlot(parent->GetSpillSlot()); break;
+-        case 2: location_source = Location::DoubleStackSlot(parent->GetSpillSlot()); break;
+-        case 4: location_source = Location::SIMDStackSlot(parent->GetSpillSlot()); break;
+-        default: LOG(FATAL) << "Unexpected number of spill slots"; UNREACHABLE();
+-      }
++      size_t num_of_slots = parent->NumberOfSpillSlotsNeeded();
++      location_source = Location::StackSlotByNumOfSlots(num_of_slots, parent->GetSpillSlot());
++      CHECK(!location_source.IsSIMDStackSlot() ||
++            (codegen_->GetSIMDRegisterWidth() == num_of_slots * kVRegSize)) <<
++            "Unexpected number of spill slots";
+     }
+   } else {
+     DCHECK(source != nullptr);
+diff --git a/compiler/optimizing/ssa_liveness_analysis.cc b/compiler/optimizing/ssa_liveness_analysis.cc
+index 7b2c3a939c..18942a1823 100644
+--- a/compiler/optimizing/ssa_liveness_analysis.cc
++++ b/compiler/optimizing/ssa_liveness_analysis.cc
+@@ -523,12 +523,8 @@ Location LiveInterval::ToLocation() const {
+     if (defined_by->IsConstant()) {
+       return defined_by->GetLocations()->Out();
+     } else if (GetParent()->HasSpillSlot()) {
+-      switch (NumberOfSpillSlotsNeeded()) {
+-        case 1: return Location::StackSlot(GetParent()->GetSpillSlot());
+-        case 2: return Location::DoubleStackSlot(GetParent()->GetSpillSlot());
+-        case 4: return Location::SIMDStackSlot(GetParent()->GetSpillSlot());
+-        default: LOG(FATAL) << "Unexpected number of spill slots"; UNREACHABLE();
+-      }
++      return Location::StackSlotByNumOfSlots(NumberOfSpillSlotsNeeded(),
++                                             GetParent()->GetSpillSlot());
+     } else {
+       return Location();
+     }
+diff --git a/compiler/optimizing/superblock_cloner.cc b/compiler/optimizing/superblock_cloner.cc
+index dc433feb51..9f7a316b50 100644
+--- a/compiler/optimizing/superblock_cloner.cc
++++ b/compiler/optimizing/superblock_cloner.cc
+@@ -742,14 +742,15 @@ void SuperblockCloner::VerifyGraph() {
+       DCHECK(it.second->GetBlock() != nullptr);
+     }
+   }
+-
+-  GraphChecker checker(graph_);
+-  checker.Run();
+-  if (!checker.IsValid()) {
+-    for (const std::string& error : checker.GetErrors()) {
+-      std::cout << error << std::endl;
++  if (kSuperblockClonerVerify) {
++    GraphChecker checker(graph_);
++    checker.Run();
++    if (!checker.IsValid()) {
++      for (const std::string& error : checker.GetErrors()) {
++        std::cout << error << std::endl;
++      }
++      LOG(FATAL) << "GraphChecker failed: superblock cloner\n";
+     }
+-    LOG(FATAL) << "GraphChecker failed: superblock cloner\n";
+   }
+ }
+ 
+diff --git a/compiler/optimizing/superblock_cloner.h b/compiler/optimizing/superblock_cloner.h
+index ece0914ddb..5af1e4d856 100644
+--- a/compiler/optimizing/superblock_cloner.h
++++ b/compiler/optimizing/superblock_cloner.h
+@@ -27,6 +27,7 @@ namespace art {
+ class InductionVarRange;
+ 
+ static const bool kSuperblockClonerLogging = false;
++static const bool kSuperblockClonerVerify = false;
+ 
+ // Represents an edge between two HBasicBlocks.
+ //
+-- 
+2.31.1
+
