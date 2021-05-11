@@ -71,7 +71,8 @@ PRODUCT_PACKAGES += \
     FontGoogleSansOverlay \
     FontOneplusSlateSource \
     FontSamsungOneSourceOverlay \
-    FontInterOverlay
+    FontInterOverlay \
+    ThemePrimerBlueOverlay
 
 # IORap app launch prefetching using Perfetto traces and madvise
 PRODUCT_PRODUCT_PROPERTIES += \
