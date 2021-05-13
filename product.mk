@@ -19,6 +19,7 @@ PRODUCT_PACKAGES += \
 ifeq ($(WITH_DEBUGGING), true)
 PRODUCT_PACKAGES += debugging.rc
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    ro.adb.secure=0 \
     persist.sys.usb.config=adb \
     service.adb.root=1
 endif
