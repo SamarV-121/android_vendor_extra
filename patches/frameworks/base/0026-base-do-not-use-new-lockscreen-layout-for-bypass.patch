@@ -1,7 +1,7 @@
-From 030f6960958dd7d511712cb44e451f394cebe88f Mon Sep 17 00:00:00 2001
+From f2db3f6511bedc84a4505e7de0292663c23bc4ec Mon Sep 17 00:00:00 2001
 From: Ethan Halsall <ethan.halsall@gmail.com>
 Date: Thu, 9 Apr 2020 23:35:54 +0100
-Subject: [PATCH 26/48] base: do not use new lockscreen layout for bypass
+Subject: [PATCH 26/50] base: do not use new lockscreen layout for bypass
 
 - bypassEnabled will always evaluate to false now.
 - Introduce bypassEnabledBiometric which is only used to tell the biometric service whether we can bypass lockscreen without swipe dependant on Settings.Secure.FACE_UNLOCK_DISMISSES_KEYGUARD.
@@ -15,7 +15,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  2 files changed, 9 insertions(+), 6 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
-index 0e76c904..20ed8491 100644
+index 0e76c904f8c..20ed8491bd6 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
 @@ -533,7 +533,7 @@ public class BiometricUnlockController extends KeyguardUpdateMonitorCallback imp
@@ -28,7 +28,7 @@ index 0e76c904..20ed8491 100644
          if (!mUpdateMonitor.isDeviceInteractive()) {
              if (!mKeyguardViewController.isShowing()) {
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt
-index 0827511c..c01132fb 100644
+index 0827511cac3..c01132fb5b6 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt
 @@ -63,6 +63,8 @@ open class KeyguardBypassController : Dumpable {
@@ -87,5 +87,5 @@ index 0827511c..c01132fb 100644
          pw.println("  bouncerShowing: $bouncerShowing")
          pw.println("  isPulseExpanding: $isPulseExpanding")
 -- 
-2.30.1
+2.31.1
 

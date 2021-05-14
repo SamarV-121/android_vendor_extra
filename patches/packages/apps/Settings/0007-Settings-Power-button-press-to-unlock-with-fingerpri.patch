@@ -1,0 +1,119 @@
+From eb813ed94f4287830f3e9d052bf9dd8404ec9f6f Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Tue, 13 Apr 2021 16:20:12 +0530
+Subject: [PATCH 7/7] Settings: Power button press to unlock with fingerprint
+ [2/2]
+
+ * this is for devices that have fingerprint sensor embedded
+   in the power button, such as modern side mounted fp devices
+   and requires overlay in device tree (refer fwb counterpart)
+
+Signed-off-by: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Change-Id: Ia41e0a676ffaf1d966d1df3372b776ec6413ad55
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ res/values/cm_strings.xml                     |  5 +++
+ .../fingerprint/FingerprintSettings.java      | 31 ++++++++++++++++++-
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
+index f77d67c..ea2a673 100644
+--- a/res/values/cm_strings.xml
++++ b/res/values/cm_strings.xml
+@@ -177,4 +177,9 @@
+     <string name="security_dashboard_summary_face_and_fingerprint">Screen lock, fingerprint, face unlock</string>
+     <string name="face_redo_confirm_btn">Redo</string>
+     <string name="face_redo_warning_msg">Do you want to remove the existing face scan and create a new one?</string>
++
++    <!-- Power Button Fingerprint -->
++    <string name="fingerprint_power_button_press_title">Press to unlock</string>
++    <string name="fingerprint_power_button_press_off_summary">Touch power button to unlock with fingerprint when screen is off</string>
++    <string name="fingerprint_power_button_press_on_summary">Press power button firmly to unlock with fingerprint when screen is off</string>
+ </resources>
+diff --git a/src/com/android/settings/biometrics/fingerprint/FingerprintSettings.java b/src/com/android/settings/biometrics/fingerprint/FingerprintSettings.java
+index 8b16aee..60b8200 100644
+--- a/src/com/android/settings/biometrics/fingerprint/FingerprintSettings.java
++++ b/src/com/android/settings/biometrics/fingerprint/FingerprintSettings.java
+@@ -16,7 +16,6 @@
+ 
+ package com.android.settings.biometrics.fingerprint;
+ 
+-
+ import static com.android.settings.Utils.SETTINGS_PACKAGE_NAME;
+ 
+ import android.app.Activity;
+@@ -33,6 +32,7 @@ import android.os.Bundle;
+ import android.os.Handler;
+ import android.os.UserHandle;
+ import android.os.UserManager;
++import android.provider.Settings;
+ import android.text.TextUtils;
+ import android.util.Log;
+ import android.view.View;
+@@ -51,6 +51,7 @@ import com.android.settings.R;
+ import com.android.settings.SettingsPreferenceFragment;
+ import com.android.settings.SubSettings;
+ import com.android.settings.Utils;
++import com.android.settings.accessibility.DividerSwitchPreference;
+ import com.android.settings.biometrics.BiometricEnrollBase;
+ import com.android.settings.core.instrumentation.InstrumentedDialogFragment;
+ import com.android.settings.password.ChooseLockGeneric;
+@@ -111,6 +112,8 @@ public class FingerprintSettings extends SubSettings {
+         private static final String KEY_FINGERPRINT_ADD = "key_fingerprint_add";
+         private static final String KEY_FINGERPRINT_ENABLE_KEYGUARD_TOGGLE =
+                 "fingerprint_enable_keyguard_toggle";
++        private static final String KEY_FINGERPRINT_POWER_BUTTON_PRESS =
++                "fingerprint_power_button_press";
+         private static final String KEY_LAUNCHED_CONFIRM = "launched_confirm";
+ 
+         private static final int MSG_REFRESH_FINGERPRINT_TEMPLATES = 1000;
+@@ -373,6 +376,12 @@ public class FingerprintSettings extends SubSettings {
+             return root;
+         }
+ 
++        private boolean isPowerButtonPressEnabled() {
++            return Settings.Secure.getIntForUser(getContext().getContentResolver(),
++                       Settings.Secure.FINGERPRINT_POWER_BUTTON_PRESS, 0,
++                       UserHandle.USER_CURRENT) == 1;
++        }
++
+         private void addFingerprintItemPreferences(PreferenceGroup root) {
+             root.removeAll();
+             final List<Fingerprint> items = mFingerprintManager.getEnrolledFingerprints(mUserId);
+@@ -402,6 +411,18 @@ public class FingerprintSettings extends SubSettings {
+             root.addPreference(addPreference);
+             addPreference.setOnPreferenceChangeListener(this);
+             updateAddPreference();
++            if (getContext().getResources().getBoolean(
++                    com.android.internal.R.bool.config_powerButtonFingerprint)) {
++                DividerSwitchPreference powerButtonPref = new DividerSwitchPreference(root.getContext());
++                powerButtonPref.setKey(KEY_FINGERPRINT_POWER_BUTTON_PRESS);
++                powerButtonPref.setTitle(R.string.fingerprint_power_button_press_title);
++                powerButtonPref.setSummary(isPowerButtonPressEnabled() ?
++                        R.string.fingerprint_power_button_press_on_summary :
++                        R.string.fingerprint_power_button_press_off_summary);
++                powerButtonPref.setChecked(isPowerButtonPressEnabled());
++                powerButtonPref.setOnPreferenceChangeListener(this);
++                root.addPreference(powerButtonPref);
++            }
+             createFooterPreference(root);
+         }
+ 
+@@ -549,6 +570,14 @@ public class FingerprintSettings extends SubSettings {
+             final String key = preference.getKey();
+             if (KEY_FINGERPRINT_ENABLE_KEYGUARD_TOGGLE.equals(key)) {
+                 // TODO
++            } else if (KEY_FINGERPRINT_POWER_BUTTON_PRESS.equals(key)) {
++                boolean enabled = (Boolean) value;
++                result = Settings.Secure.putIntForUser(getContext().getContentResolver(),
++                             Settings.Secure.FINGERPRINT_POWER_BUTTON_PRESS,
++                             enabled ? 1 : 0, UserHandle.USER_CURRENT);
++                if (result)
++                    preference.setSummary(enabled ? R.string.fingerprint_power_button_press_on_summary
++                            : R.string.fingerprint_power_button_press_off_summary);
+             } else {
+                 Log.v(TAG, "Unknown key:" + key);
+             }
+-- 
+2.31.1
+

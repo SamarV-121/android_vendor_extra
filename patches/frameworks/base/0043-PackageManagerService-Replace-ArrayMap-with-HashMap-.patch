@@ -1,7 +1,7 @@
-From 043ec1b65121543a12ee085c72679def3753d033 Mon Sep 17 00:00:00 2001
+From 28c454b5785f333f6d1fc319ec7128eb517d63b5 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:58:24 -0700
-Subject: [PATCH 43/48] PackageManagerService: Replace ArrayMap with HashMap
+Subject: [PATCH 43/50] PackageManagerService: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of
@@ -77,7 +77,7 @@ Change-Id: Ie888a6d88390529fde7cb4ba4758058c74b1ff01
  5 files changed, 70 insertions(+), 100 deletions(-)
 
 diff --git a/services/core/java/com/android/server/pm/AppsFilter.java b/services/core/java/com/android/server/pm/AppsFilter.java
-index 10f77144..553e994f 100644
+index 10f77144e02..553e994fab7 100644
 --- a/services/core/java/com/android/server/pm/AppsFilter.java
 +++ b/services/core/java/com/android/server/pm/AppsFilter.java
 @@ -62,6 +62,7 @@ import com.android.server.pm.parsing.pkg.AndroidPackage;
@@ -269,7 +269,7 @@ index 10f77144..553e994f 100644
                  }
              }
 diff --git a/services/core/java/com/android/server/pm/InstantAppRegistry.java b/services/core/java/com/android/server/pm/InstantAppRegistry.java
-index 0eaac414..afeb654a 100644
+index 0eaac4140c1..afeb654a0cb 100644
 --- a/services/core/java/com/android/server/pm/InstantAppRegistry.java
 +++ b/services/core/java/com/android/server/pm/InstantAppRegistry.java
 @@ -691,9 +691,7 @@ class InstantAppRegistry {
@@ -295,7 +295,7 @@ index 0eaac414..afeb654a 100644
              if (ps == null || !ps.getInstantApp(userId)) {
                  continue;
 diff --git a/services/core/java/com/android/server/pm/KeySetManagerService.java b/services/core/java/com/android/server/pm/KeySetManagerService.java
-index dabcc351..37cb0936 100644
+index dabcc35103b..37cb093619a 100644
 --- a/services/core/java/com/android/server/pm/KeySetManagerService.java
 +++ b/services/core/java/com/android/server/pm/KeySetManagerService.java
 @@ -64,7 +64,7 @@ public class KeySetManagerService {
@@ -326,7 +326,7 @@ index dabcc351..37cb0936 100644
              if (packageName != null && !packageName.equals(keySetPackage)) {
                  continue;
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index 65ebb937..282deb71 100644
+index bf04cb27344..d74a42e2e16 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -758,7 +758,7 @@ public class PackageManagerService extends IPackageManager.Stub
@@ -406,7 +406,7 @@ index 65ebb937..282deb71 100644
                  final PackageSetting pkgSetting = mSettings.getPackageLPr(pkg.getPackageName());
                  if (changingPkg != null
                          && !hasString(pkg.getUsesLibraries(), changingPkg.getLibraryNames())
-@@ -20016,9 +20013,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -20017,9 +20014,7 @@ public class PackageManagerService extends IPackageManager.Stub
      /** This method takes a specific user id as well as UserHandle.USER_ALL. */
      @GuardedBy("mLock")
      private void clearIntentFilterVerificationsLPw(int userId) {
@@ -417,7 +417,7 @@ index 65ebb937..282deb71 100644
              clearIntentFilterVerificationsLPw(pkg.getPackageName(), userId, true);
          }
      }
-@@ -22776,9 +22771,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -22777,9 +22772,7 @@ public class PackageManagerService extends IPackageManager.Stub
      private List<String> collectAbsoluteCodePaths() {
          synchronized (mLock) {
              List<String> codePaths = new ArrayList<>();
@@ -428,7 +428,7 @@ index 65ebb937..282deb71 100644
                  codePaths.add(ps.codePath.getAbsolutePath());
              }
              return codePaths;
-@@ -24279,11 +24272,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -24280,11 +24273,8 @@ public class PackageManagerService extends IPackageManager.Stub
          @Override
          public PackageList getPackageList(PackageListObserver observer) {
              synchronized (mLock) {
@@ -442,7 +442,7 @@ index 65ebb937..282deb71 100644
                  final PackageList packageList = new PackageList(list, observer);
                  if (observer != null) {
                      mPackageListObservers.add(packageList);
-@@ -25012,8 +25002,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25013,8 +25003,8 @@ public class PackageManagerService extends IPackageManager.Stub
          @Override
          public void forEachPackageSetting(Consumer<PackageSetting> actionLocked) {
              synchronized (mLock) {
@@ -453,7 +453,7 @@ index 65ebb937..282deb71 100644
                  }
              }
          }
-@@ -25371,9 +25361,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25372,9 +25362,8 @@ public class PackageManagerService extends IPackageManager.Stub
  
      void forEachPackage(Consumer<AndroidPackage> actionLocked) {
          synchronized (mLock) {
@@ -465,7 +465,7 @@ index 65ebb937..282deb71 100644
              }
          }
      }
-@@ -25381,9 +25370,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25382,9 +25371,7 @@ public class PackageManagerService extends IPackageManager.Stub
      void forEachInstalledPackage(@NonNull Consumer<AndroidPackage> actionLocked,
              @UserIdInt int userId) {
          synchronized (mLock) {
@@ -477,7 +477,7 @@ index 65ebb937..282deb71 100644
                  if (setting == null || !setting.getInstalled(userId)) {
                      continue;
 diff --git a/services/core/java/com/android/server/pm/Settings.java b/services/core/java/com/android/server/pm/Settings.java
-index 755ea6e4..02efbde0 100644
+index 755ea6e43a0..02efbde0906 100644
 --- a/services/core/java/com/android/server/pm/Settings.java
 +++ b/services/core/java/com/android/server/pm/Settings.java
 @@ -137,6 +137,7 @@ import java.util.Arrays;
@@ -569,5 +569,5 @@ index 755ea6e4..02efbde0 100644
                  List<RuntimePermissionsState.PermissionState> permissions =
                          packagePermissions.get(packageName);
 -- 
-2.30.1
+2.31.1
 

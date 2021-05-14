@@ -1,7 +1,7 @@
-From 01812abeb90c58e5a9fa3dabcb7ef9313b7cb35b Mon Sep 17 00:00:00 2001
+From b168e4e6064a4c5873a33bb99040cd4a4e756035 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 08:26:47 -0700
-Subject: [PATCH 39/48] Trace: Disable debug tracing in production builds
+Subject: [PATCH 39/50] Trace: Disable debug tracing in production builds
 
 When opening and closing activities in Settings, a significant amount of
 CPU time is spent checking whether ATrace tags are enabled, as measured
@@ -95,7 +95,7 @@ Change-Id: I9b63d386c041ffd9d7ff34ecd0ec1eb95dc03b4b
  1 file changed, 4 insertions(+)
 
 diff --git a/core/java/android/os/Trace.java b/core/java/android/os/Trace.java
-index 50cc764d..22be977e 100644
+index 50cc764dd53..22be977e3d5 100644
 --- a/core/java/android/os/Trace.java
 +++ b/core/java/android/os/Trace.java
 @@ -145,6 +145,10 @@ public final class Trace {
@@ -110,5 +110,5 @@ index 50cc764d..22be977e 100644
          return (tags & traceTag) != 0;
      }
 -- 
-2.30.1
+2.31.1
 

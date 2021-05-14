@@ -1,7 +1,7 @@
-From 2447573321fb6926300d9f6fef03405a77216d07 Mon Sep 17 00:00:00 2001
+From 66747bd7716bcacb55f4aead2065c3de073e9ff8 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20Rosenkr=C3=A4nzer?= <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
-Subject: [PATCH 01/48] base: Add permission to allow an APK to fake a
+Subject: [PATCH 01/50] base: Add permission to allow an APK to fake a
  signature.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -28,7 +28,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  6 files changed, 37 insertions(+), 2 deletions(-)
 
 diff --git a/api/current.txt b/api/current.txt
-index 952ccdad..73fb59fe 100644
+index 952ccdad992..73fb59fedab 100644
 --- a/api/current.txt
 +++ b/api/current.txt
 @@ -79,6 +79,7 @@ package android {
@@ -40,7 +40,7 @@ index 952ccdad..73fb59fe 100644
      field public static final String GET_ACCOUNTS = "android.permission.GET_ACCOUNTS";
      field public static final String GET_ACCOUNTS_PRIVILEGED = "android.permission.GET_ACCOUNTS_PRIVILEGED";
 diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
-index 962d6ce7..899f317c 100644
+index 962d6ce79a4..899f317c937 100644
 --- a/core/res/AndroidManifest.xml
 +++ b/core/res/AndroidManifest.xml
 @@ -2842,6 +2842,13 @@
@@ -58,7 +58,7 @@ index 962d6ce7..899f317c 100644
           {@link android.content.pm.PackageManager#addPackageToPreferred}
           for details. -->
 diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
-index b61b26a0..6c3e80c3 100644
+index b61b26a0e7f..6c3e80c3f8b 100644
 --- a/core/res/res/values/config.xml
 +++ b/core/res/res/values/config.xml
 @@ -1654,6 +1654,8 @@
@@ -71,7 +71,7 @@ index b61b26a0..6c3e80c3 100644
  
      <!-- This string array can be overriden to enable test location providers initially. -->
 diff --git a/core/res/res/values/strings.xml b/core/res/res/values/strings.xml
-index d6ee28b9..7ec15dde 100644
+index d6ee28b93f9..7ec15ddea90 100644
 --- a/core/res/res/values/strings.xml
 +++ b/core/res/res/values/strings.xml
 @@ -847,6 +847,11 @@
@@ -87,7 +87,7 @@ index d6ee28b9..7ec15dde 100644
      <string name="permlab_statusBar">disable or modify status bar</string>
      <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
 diff --git a/non-updatable-api/current.txt b/non-updatable-api/current.txt
-index 5f15216e..c29feb9c 100644
+index 5f15216e840..c29feb9cd7b 100644
 --- a/non-updatable-api/current.txt
 +++ b/non-updatable-api/current.txt
 @@ -79,6 +79,7 @@ package android {
@@ -99,7 +99,7 @@ index 5f15216e..c29feb9c 100644
      field public static final String GET_ACCOUNTS = "android.permission.GET_ACCOUNTS";
      field public static final String GET_ACCOUNTS_PRIVILEGED = "android.permission.GET_ACCOUNTS_PRIVILEGED";
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index 1e28db75..65ebb937 100644
+index 97b67b835bc..bf04cb27344 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -4456,8 +4456,9 @@ public class PackageManagerService extends IPackageManager.Stub
@@ -140,5 +140,5 @@ index 1e28db75..65ebb937 100644
      public void checkPackageStartable(String packageName, int userId) {
          final int callingUid = Binder.getCallingUid();
 -- 
-2.30.1
+2.31.1
 

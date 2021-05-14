@@ -1,7 +1,7 @@
-From 9b9be4176048b7981b0b99160186ec1138ea9b80 Mon Sep 17 00:00:00 2001
+From 332077dd947fa3d51269955ffcca8c2d57c439c9 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 23:05:02 -0700
-Subject: [PATCH 44/48] SystemServiceRegistry: Replace ArrayMap with HashMap
+Subject: [PATCH 44/50] SystemServiceRegistry: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of
@@ -117,7 +117,7 @@ Change-Id: I2a5b23793a4fc8aa720eead3ecc7ca4589cb67da
  1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/core/java/android/app/SystemServiceRegistry.java b/core/java/android/app/SystemServiceRegistry.java
-index e599a5ce..433a0724 100644
+index e599a5ce81e..433a0724fda 100644
 --- a/core/java/android/app/SystemServiceRegistry.java
 +++ b/core/java/android/app/SystemServiceRegistry.java
 @@ -184,7 +184,6 @@ import android.telecom.TelecomManager;
@@ -151,5 +151,5 @@ index e599a5ce..433a0724 100644
      private static int sServiceCacheSize;
  
 -- 
-2.30.1
+2.31.1
 

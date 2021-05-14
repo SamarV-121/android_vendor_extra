@@ -1,7 +1,7 @@
-From c4a3518980eea8c20decea1eac85a0ca0afb7022 Mon Sep 17 00:00:00 2001
+From 7c3864f6cdeca4e7536c0e08219f5059c2e6223b Mon Sep 17 00:00:00 2001
 From: El Dainosor <eldainosor@gmail.com>
 Date: Fri, 17 Apr 2020 23:35:23 +0000
-Subject: [PATCH 23/48] TypeClock: Properly calculate the height
+Subject: [PATCH 23/50] TypeClock: Properly calculate the height
 
 As it was using the small clock all this time along.
 Let's get code for smallclock and add the dynamic height of the view
@@ -13,7 +13,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 16 insertions(+), 4 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java b/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
-index 890ba1da..c08a43bf 100644
+index 890ba1da091..c08a43bf8ef 100644
 --- a/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
 +++ b/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
 @@ -21,6 +21,7 @@ import android.graphics.Bitmap;
@@ -75,5 +75,5 @@ index 890ba1da..c08a43bf 100644
  
      @Override
 -- 
-2.30.1
+2.31.1
 

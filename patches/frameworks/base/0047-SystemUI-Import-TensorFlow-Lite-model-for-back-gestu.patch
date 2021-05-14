@@ -1,7 +1,7 @@
-From 881913bdec6b4c2a2c9a6ec65f54b9e0db195ec7 Mon Sep 17 00:00:00 2001
+From a4087b8ea3a7b0c24cec9811bfacf3a1c694ab5f Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 19:36:31 -0700
-Subject: [PATCH 47/48] SystemUI: Import TensorFlow Lite model for back gesture
+Subject: [PATCH 47/50] SystemUI: Import TensorFlow Lite model for back gesture
 
 Model extracted from redfin SPP1.210122.020.A3.
 
@@ -9262,7 +9262,7 @@ HcmV?d00001
 
 diff --git a/packages/SystemUI/assets/backgesture.vocab b/packages/SystemUI/assets/backgesture.vocab
 new file mode 100644
-index 00000000..bb140d5a
+index 00000000000..bb140d5a6f6
 --- /dev/null
 +++ b/packages/SystemUI/assets/backgesture.vocab
 @@ -0,0 +1,43000 @@
@@ -52267,5 +52267,5 @@ index 00000000..bb140d5a
 +com.austereo.triplem
 +com.aurora_alerts.auroraalerts
 -- 
-2.30.1
+2.31.1
 

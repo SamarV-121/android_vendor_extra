@@ -1,7 +1,7 @@
-From e4db1d0945fcb29c26d709c796743152fdd827d8 Mon Sep 17 00:00:00 2001
+From f18bcbec00935a13181cbde8baf0ad3fcd5ace75 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 15:55:54 -0700
-Subject: [PATCH 35/48] Revert "Pre-emptively take a snapshot when finishing an
+Subject: [PATCH 35/50] Revert "Pre-emptively take a snapshot when finishing an
  activity before changing visibility"
 
 This reverts commit 6dad90e5883db82c345a3ab592b26f0fd69fe28d.
@@ -14,7 +14,7 @@ Change-Id: Ib161679f1f3b83787f90b8ef7dcf46d246bb7c57
  1 file changed, 11 deletions(-)
 
 diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
-index 92dbfa4f..e01b685e 100644
+index 92dbfa4f173..e01b685e5b0 100644
 --- a/services/core/java/com/android/server/wm/ActivityRecord.java
 +++ b/services/core/java/com/android/server/wm/ActivityRecord.java
 @@ -315,8 +315,6 @@ import com.android.server.wm.SurfaceAnimator.AnimationType;
@@ -43,5 +43,5 @@ index 92dbfa4f..e01b685e 100644
                  setVisibility(false);
  
 -- 
-2.30.1
+2.31.1
 

@@ -1,7 +1,7 @@
-From 9ba50606469b21aeaaa06fd73ca0a1e2d3cbfe0c Mon Sep 17 00:00:00 2001
+From 2bad386de5e8fe08d2ac526ae835b1b32bf8027b Mon Sep 17 00:00:00 2001
 From: Jyotiraditya <imjyotiraditya@pm.me>
 Date: Tue, 17 Nov 2020 09:31:46 +0530
-Subject: [PATCH 1/6] Settings: Move blur toggle to Display options
+Subject: [PATCH 1/7] Settings: Move blur toggle to Display options
 
 Signed-off-by: Jyotiraditya <imjyotiraditya@pm.me>
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -136,5 +136,5 @@ index 88e0db1..7ee2edb 100644
      }
  }
 -- 
-2.30.1
+2.31.1
 

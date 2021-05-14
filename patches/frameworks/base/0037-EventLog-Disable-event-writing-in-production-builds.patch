@@ -1,7 +1,7 @@
-From 24c8a6fc5af919936929d61bb2d4e5104e3544f7 Mon Sep 17 00:00:00 2001
+From 3f131e8a9c77a88988a91447deba583b1f907fb8 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 21:45:18 -0700
-Subject: [PATCH 37/48] EventLog: Disable event writing in production builds
+Subject: [PATCH 37/50] EventLog: Disable event writing in production builds
 
 When opening and closing activities in Settings, a measurably
 significant amount of CPU time is spent writing to the EventLog, as
@@ -25,7 +25,7 @@ Change-Id: I3505c460f234d9a5038bd1f9d41ce911697ca76e
  2 files changed, 72 insertions(+), 17 deletions(-)
 
 diff --git a/core/java/android/util/EventLog.java b/core/java/android/util/EventLog.java
-index ead4e46c..5f836ab7 100644
+index ead4e46cd28..5f836ab70cd 100644
 --- a/core/java/android/util/EventLog.java
 +++ b/core/java/android/util/EventLog.java
 @@ -20,6 +20,7 @@ import android.annotation.NonNull;
@@ -166,7 +166,7 @@ index ead4e46c..5f836ab7 100644
              throws IOException;
  
 diff --git a/core/jni/android_util_EventLog.cpp b/core/jni/android_util_EventLog.cpp
-index 3b5a144a..e18aa87c 100644
+index 3b5a144a4e6..e18aa87c796 100644
 --- a/core/jni/android_util_EventLog.cpp
 +++ b/core/jni/android_util_EventLog.cpp
 @@ -69,16 +69,16 @@ static void android_util_EventLog_readEventsOnWrapping(JNIEnv* env, jobject claz
@@ -194,5 +194,5 @@ index 3b5a144a..e18aa87c 100644
        (void*) android_util_EventLog_readEventsOnWrapping
      },
 -- 
-2.30.1
+2.31.1
 

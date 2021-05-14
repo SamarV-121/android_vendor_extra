@@ -1,7 +1,7 @@
-From 822e23d8d0f9093a3086cda64621f2037a3e339a Mon Sep 17 00:00:00 2001
+From 9d48b6134970db049a438f6f0eedfee05e34c886 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:32:17 -0700
-Subject: [PATCH 38/48] statsd: Disable native stats collection service
+Subject: [PATCH 38/50] statsd: Disable native stats collection service
 
 When opening and closing activities in Settings, a measurably
 significant amount of CPU time is spent processing and logging stats
@@ -29,7 +29,7 @@ Change-Id: Ifd49c46e20ee228941d3cb470a513a791dc5fe60
  1 file changed, 1 insertion(+)
 
 diff --git a/apex/statsd/statsd.rc b/apex/statsd/statsd.rc
-index 605da2af..b8d97f1f 100644
+index 605da2af0c1..b8d97f1fbb1 100644
 --- a/apex/statsd/statsd.rc
 +++ b/apex/statsd/statsd.rc
 @@ -18,3 +18,4 @@ service statsd /apex/com.android.os.statsd/bin/statsd
@@ -38,5 +38,5 @@ index 605da2af..b8d97f1f 100644
      writepid /dev/cpuset/system-background/tasks
 +    disabled
 -- 
-2.30.1
+2.31.1
 

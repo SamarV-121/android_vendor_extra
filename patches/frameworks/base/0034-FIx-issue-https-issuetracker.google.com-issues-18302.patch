@@ -1,7 +1,7 @@
-From 11102a7235955e0758c1750142445bf79ac183bf Mon Sep 17 00:00:00 2001
+From 30e66fd10b272147d64a8cee2df15021a316dd5a Mon Sep 17 00:00:00 2001
 From: Tang Ding <tang.ding@tcl.com>
 Date: Thu, 18 Mar 2021 13:53:13 +0000
-Subject: [PATCH 34/48] FIx issue:
+Subject: [PATCH 34/50] FIx issue:
  https://issuetracker.google.com/issues/183024999
 
 There's a performance issue during continually scroll listview when listview in Fling state .
@@ -21,7 +21,7 @@ Change-Id: I2cbab9171ffbaad87a8908eef09f813cf89ad85a
  1 file changed, 1 insertion(+)
 
 diff --git a/core/java/android/widget/AbsListView.java b/core/java/android/widget/AbsListView.java
-index 16e87f8b..dd9985ac 100644
+index 16e87f8bca9..dd9985ac5f4 100644
 --- a/core/java/android/widget/AbsListView.java
 +++ b/core/java/android/widget/AbsListView.java
 @@ -4679,6 +4679,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te
@@ -33,5 +33,5 @@ index 16e87f8b..dd9985ac 100644
  
              if (PROFILE_FLINGING) {
 -- 
-2.30.1
+2.31.1
 
