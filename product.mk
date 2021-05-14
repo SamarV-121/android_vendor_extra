@@ -17,7 +17,10 @@ PRODUCT_PACKAGES += \
 
 # Debugging
 ifeq ($(WITH_DEBUGGING), true)
-PRODUCT_PACKAGES += debugging.rc
+PRODUCT_PACKAGES += \
+    debugging.rc \
+    magiskpolicy
+
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
