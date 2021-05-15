@@ -1,0 +1,2 @@
+allow logpersist system_data_root_file:dir create_dir_perms;
+allow logpersist system_data_root_file:file create_file_perms;
