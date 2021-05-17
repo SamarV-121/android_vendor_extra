@@ -1,7 +1,7 @@
-From 296e5af4ee1c6578db91389b4bd5b4e2ea5c8a22 Mon Sep 17 00:00:00 2001
+From b0257bf60e5749e6cc3f55a4dadc6f7889c06f5b Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 12 Feb 2020 11:34:33 +0100
-Subject: [PATCH 02/50] AndroidManifest: add a permission group for signature
+Subject: [PATCH 02/49] AndroidManifest: add a permission group for signature
  spoofing
 
 Needed by PackageInstaller while checking for modern permission group
@@ -17,7 +17,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  4 files changed, 17 insertions(+)
 
 diff --git a/api/current.txt b/api/current.txt
-index 73fb59fedab..17cf63d7faa 100644
+index 73fb59fedabc..17cf63d7faa2 100644
 --- a/api/current.txt
 +++ b/api/current.txt
 @@ -183,6 +183,7 @@ package android {
@@ -29,7 +29,7 @@ index 73fb59fedab..17cf63d7faa 100644
      field public static final String MICROPHONE = "android.permission-group.MICROPHONE";
      field public static final String PHONE = "android.permission-group.PHONE";
 diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
-index 899f317c937..5a654329446 100644
+index 899f317c937f..5a654329446d 100644
 --- a/core/res/AndroidManifest.xml
 +++ b/core/res/AndroidManifest.xml
 @@ -2842,9 +2842,17 @@
@@ -51,7 +51,7 @@ index 899f317c937..5a654329446 100644
          android:label="@string/permlab_fakePackageSignature"
          android:description="@string/permdesc_fakePackageSignature" />
 diff --git a/core/res/res/values/strings.xml b/core/res/res/values/strings.xml
-index 7ec15ddea90..d5b3f54afc5 100644
+index 7ec15ddea900..d5b3f54afc52 100644
 --- a/core/res/res/values/strings.xml
 +++ b/core/res/res/values/strings.xml
 @@ -851,6 +851,13 @@
@@ -69,7 +69,7 @@ index 7ec15ddea90..d5b3f54afc5 100644
      <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
      <string name="permlab_statusBar">disable or modify status bar</string>
 diff --git a/non-updatable-api/current.txt b/non-updatable-api/current.txt
-index c29feb9cd7b..57748a8090a 100644
+index c29feb9cd7ba..57748a8090a2 100644
 --- a/non-updatable-api/current.txt
 +++ b/non-updatable-api/current.txt
 @@ -183,6 +183,7 @@ package android {
@@ -81,5 +81,5 @@ index c29feb9cd7b..57748a8090a 100644
      field public static final String MICROPHONE = "android.permission-group.MICROPHONE";
      field public static final String PHONE = "android.permission-group.PHONE";
 -- 
-2.31.1
+2.25.1
 

@@ -1,0 +1,222 @@
+From 1cefc3a3572c292bcc9d77d67c8b1f6503393622 Mon Sep 17 00:00:00 2001
+From: Danny Lin <danny@kdrag0n.dev>
+Date: Thu, 29 Oct 2020 20:39:21 -0700
+Subject: [PATCH 13/49] SystemUI: Convert global actions to translucent overlay
+ with blur
+
+When blur is enabled, the glass blur scrim creates a nice visual effect
+behind the global actions overlay that makes it look better integrated
+than the default gray-on-black global actions view. The standard dark
+notification shade scrim will be used if blur is disabled.
+
+Change-Id: Icdaae8555cd76deaf476c1621d0ab1f0c00707db
+
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+Change-Id: I37817628deecbb23c2646fb97f96508727158c62
+---
+ .../drawable/control_dialog_background.xml    | 33 +++++++++++++++++++
+ packages/SystemUI/res/values-night/colors.xml |  3 ++
+ packages/SystemUI/res/values/colors.xml       | 11 ++++---
+ .../globalactions/GlobalActionsDialog.java    | 17 +++++++---
+ .../GlobalActionsPowerDialog.java             |  2 +-
+ .../NotificationShadeDepthController.kt       |  8 +----
+ 6 files changed, 56 insertions(+), 18 deletions(-)
+ create mode 100644 packages/SystemUI/res/drawable/control_dialog_background.xml
+
+diff --git a/packages/SystemUI/res/drawable/control_dialog_background.xml b/packages/SystemUI/res/drawable/control_dialog_background.xml
+new file mode 100644
+index 000000000000..1b73256ff43f
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/control_dialog_background.xml
+@@ -0,0 +1,33 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++/*
++* Copyright 2020, The Android Open Source Project
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++*
++*     http://www.apache.org/licenses/LICENSE-2.0
++*
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*/
++-->
++<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
++  <item
++      android:id="@+id/background">
++    <shape>
++      <solid android:color="@color/control_dialog_background" />
++      <corners android:radius="@dimen/control_corner_radius" />
++    </shape>
++  </item>
++  <item
++      android:id="@+id/clip_layer">
++    <clip
++        android:clipOrientation="horizontal"
++        android:drawable="@drawable/control_layer"/>
++  </item>
++</layer-list>
+diff --git a/packages/SystemUI/res/values-night/colors.xml b/packages/SystemUI/res/values-night/colors.xml
+index cb9e178de243..1b76c34ccac8 100644
+--- a/packages/SystemUI/res/values-night/colors.xml
++++ b/packages/SystemUI/res/values-night/colors.xml
+@@ -105,4 +105,7 @@
+     <!-- Color of background circle of user avatars in quick settings user switcher -->
+     <color name="qs_user_switcher_avatar_background">#3C4043</color>
+ 
++    <!-- controls -->
++    <color name="control_default_background">#19ffffff</color> <!-- 10% white -->
++
+ </resources>
+diff --git a/packages/SystemUI/res/values/colors.xml b/packages/SystemUI/res/values/colors.xml
+index 994a18110260..6df2723cd7f8 100644
+--- a/packages/SystemUI/res/values/colors.xml
++++ b/packages/SystemUI/res/values/colors.xml
+@@ -255,14 +255,15 @@
+     <color name="control_primary_text">#E6FFFFFF</color>
+     <color name="control_secondary_text">#99FFFFFF</color>
+     <color name="control_default_foreground">@color/GM2_grey_500</color>
+-    <color name="control_default_background">@color/GM2_grey_900</color>
++    <color name="control_default_background">#7f000000</color> <!-- 50% black -->
++    <color name="control_dialog_background">@color/GM2_grey_900</color>
+     <color name="control_list_popup_background">@*android:color/background_floating_material_dark</color>
+     <color name="control_spinner_dropdown">@*android:color/foreground_material_dark</color>
+     <color name="control_more_vert">@*android:color/foreground_material_dark</color>
+-    <color name="control_enabled_light_background">#413C2D</color>
+-    <color name="control_enabled_thermo_heat_background">#41312E</color>
+-    <color name="control_enabled_thermo_cool_background">#303744</color>
+-    <color name="control_enabled_default_background">#3C3D40</color>
++    <color name="control_enabled_light_background">#66fde293</color> <!-- 40% GM2 yellow 200 -->
++    <color name="control_enabled_thermo_heat_background">#66f6aea9</color> <!-- 40% GM2 red 200 -->
++    <color name="control_enabled_thermo_cool_background">#66aecbfa</color> <!-- 40% GM2 blue 200 -->
++    <color name="control_enabled_default_background">#33ffffff</color>
+     <color name="control_enabled_heat_foreground">#FF8B66</color>
+     <color name="control_enabled_default_foreground">@color/GM2_blue_300</color>
+     <color name="control_enabled_cool_foreground">@color/GM2_blue_300</color>
+diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
+index f8f94b0bff66..702569319649 100644
+--- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
++++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
+@@ -145,8 +145,10 @@ import com.android.systemui.plugins.ActivityStarter;
+ import com.android.systemui.plugins.GlobalActions.GlobalActionsManager;
+ import com.android.systemui.plugins.GlobalActionsPanelPlugin;
+ import com.android.systemui.settings.CurrentUserContextTracker;
++import com.android.systemui.statusbar.BlurUtils;
+ import com.android.systemui.statusbar.NotificationShadeDepthController;
+ import com.android.systemui.statusbar.phone.NotificationShadeWindowController;
++import com.android.systemui.statusbar.phone.ScrimController;
+ import com.android.systemui.statusbar.policy.ConfigurationController;
+ import com.android.systemui.statusbar.policy.KeyguardStateController;
+ import com.android.systemui.tuner.TunerService;
+@@ -273,6 +275,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+     private int mDialogPressDelay = DIALOG_PRESS_DELAY; // ms
+     private Handler mMainHandler;
+     private CurrentUserContextTracker mCurrentUserContextTracker;
++    private final BlurUtils mBlurUtils;
+     @VisibleForTesting
+     boolean mShowLockScreenCardsAndControls = false;
+ 
+@@ -336,7 +339,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+             UiEventLogger uiEventLogger,
+             RingerModeTracker ringerModeTracker, SysUiState sysUiState, @Main Handler handler,
+             ControlsComponent controlsComponent,
+-            CurrentUserContextTracker currentUserContextTracker) {
++            CurrentUserContextTracker currentUserContextTracker, BlurUtils blurUtils) {
+         mContext = context;
+         mWindowManagerFuncs = windowManagerFuncs;
+         mAudioManager = audioManager;
+@@ -366,7 +369,8 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+         mSysUiState = sysUiState;
+         mMainHandler = handler;
+         mCurrentUserContextTracker = currentUserContextTracker;
+-        mLineageGlobalActions = LineageGlobalActions.getInstance(mContext);
++        mBlurUtils = blurUtils;
++	mLineageGlobalActions = LineageGlobalActions.getInstance(mContext);
+ 
+         // receive broadcasts
+         IntentFilter filter = new IntentFilter();
+@@ -777,7 +781,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+                 this::getWalletViewController, mDepthController, mSysuiColorExtractor,
+                 mStatusBarService, mNotificationShadeWindowController,
+                 controlsAvailable(), uiController,
+-                mSysUiState, this::onRotate, mKeyguardShowing, mPowerAdapter, mRestartAdapter,
++                mSysUiState, this::onRotate, mKeyguardShowing, mPowerAdapter, mRestartAdapter, mBlurUtils,
+                 mUsersAdapter);
+ 
+         if (shouldShowLockMessage(dialog)) {
+@@ -2474,6 +2478,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+         private Dialog mUsersDialog;
+         private final Runnable mOnRotateCallback;
+         private final boolean mControlsAvailable;
++        private final BlurUtils mBlurUtils;
+ 
+         private ControlsUiController mControlsUiController;
+         private ViewGroup mControlsView;
+@@ -2488,7 +2493,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+                 NotificationShadeWindowController notificationShadeWindowController,
+                 boolean controlsAvailable, @Nullable ControlsUiController controlsUiController,
+                 SysUiState sysuiState, Runnable onRotateCallback, boolean keyguardShowing,
+-                MyPowerOptionsAdapter powerAdapter, MyRestartOptionsAdapter restartAdapter,
++                MyPowerOptionsAdapter powerAdapter, MyRestartOptionsAdapter restartAdapter, BlurUtils blurUtils,
+                 MyUsersAdapter usersAdapter) {
+             super(context, com.android.systemui.R.style.Theme_SystemUI_Dialog_GlobalActions);
+             mContext = context;
+@@ -2506,6 +2511,7 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+             mSysUiState = sysuiState;
+             mOnRotateCallback = onRotateCallback;
+             mKeyguardShowing = keyguardShowing;
++            mBlurUtils = blurUtils;
+             mWalletFactory = walletFactory;
+ 
+             // Window initialization
+@@ -2696,7 +2702,8 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
+             initializeWalletView();
+             if (mBackgroundDrawable == null) {
+                 mBackgroundDrawable = new ScrimDrawable();
+-                mScrimAlpha = 1.0f;
++                mScrimAlpha = mBlurUtils.supportsBlursOnWindows() ?
++                        ScrimController.BLUR_SCRIM_ALPHA : ScrimController.BUSY_SCRIM_ALPHA;
+             }
+             getWindow().setBackgroundDrawable(mBackgroundDrawable);
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java
+index caa88a372036..53ef3bba0528 100644
+--- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java
++++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java
+@@ -53,7 +53,7 @@ public class GlobalActionsPowerDialog {
+         window.setType(WindowManager.LayoutParams.TYPE_VOLUME_OVERLAY);
+         window.setTitle(""); // prevent Talkback from speaking first item name twice
+         window.setBackgroundDrawable(res.getDrawable(
+-                com.android.systemui.R.drawable.control_background, context.getTheme()));
++                com.android.systemui.R.drawable.control_dialog_background, context.getTheme()));
+         window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+ 
+         return dialog;
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
+index 0445c9879ac5..20ab40570c02 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
+@@ -174,13 +174,7 @@ class NotificationShadeDepthController @Inject constructor(
+             }
+         }
+ 
+-        // Home controls have black background, this means that we should not have blur when they
+-        // are fully visible, otherwise we'll enter Client Composition unnecessarily.
+-        var globalActionsRadius = globalActionsSpring.radius
+-        if (showingHomeControls) {
+-            globalActionsRadius = 0
+-        }
+-        var blur = max(shadeRadius.toInt(), globalActionsRadius)
++        var blur = max(shadeRadius.toInt(), globalActionsSpring.radius)
+ 
+         // Make blur be 0 if it is necessary to stop blur effect.
+         if (scrimsVisible) {
+-- 
+2.25.1
+
