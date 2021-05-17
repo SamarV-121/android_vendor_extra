@@ -1,3 +1,6 @@
+# Build system
+BUILD_BROKEN_DUP_RULES := true
+
 # Google Apps
 ifeq ($(WITH_GMS), true)
 $(call inherit-product, vendor/gapps/gapps.mk)
@@ -50,6 +53,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.biometrics.face.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.biometrics.face.xml
 endif
+
+# Fonts
+PRODUCT_COPY_FILES += \
+    vendor/extra/prebuilt/etc/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml
 
 # StichImage
 PRODUCT_PACKAGES += \
