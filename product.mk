@@ -22,7 +22,8 @@ PRODUCT_PACKAGES += \
 ifeq ($(WITH_DEBUGGING), true)
 PRODUCT_PACKAGES += \
     debugging.rc \
-    magiskpolicy
+    magiskpolicy \
+    vintf
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.adb.secure=0 \
