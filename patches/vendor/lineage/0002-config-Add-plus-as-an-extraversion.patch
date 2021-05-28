@@ -1,0 +1,27 @@
+From d781044b66ddd961669775fe75bab967d42cb92e Mon Sep 17 00:00:00 2001
+From: SamarV-121 <samarvispute121@gmail.com>
+Date: Fri, 28 May 2021 15:27:55 +0530
+Subject: [PATCH 2/2] config: Add plus as an extraversion
+
+Change-Id: I18fff842aafcaeadc2a2dd9d8758143acd89eed0
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ config/common.mk | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config/common.mk b/config/common.mk
+index 9de9de4..e80bb27 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -191,7 +191,7 @@ PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/lineage/overlay
+ DEVICE_PACKAGE_OVERLAYS += vendor/lineage/overlay/common
+
+ PRODUCT_VERSION_MAJOR = 18
+-PRODUCT_VERSION_MINOR = 1
++PRODUCT_VERSION_MINOR = 1-plus
+ PRODUCT_VERSION_MAINTENANCE := 0
+
+ ifeq ($(TARGET_VENDOR_SHOW_MAINTENANCE_VERSION),true)
+--
+2.31.1
+

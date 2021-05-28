@@ -1,4 +1,4 @@
-From ebbc6c1ffc2177358f7374681e72ef097d2b404f Mon Sep 17 00:00:00 2001
+From a3fad17bd9be0fbd2e75bd7581e209dd430e78d6 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Mon, 23 Nov 2020 14:20:20 +0000
 Subject: [PATCH 1/2] vendor: Add soong variable for
@@ -14,10 +14,10 @@ Change-Id: I5a4cfa9dfdda59b48d02b4dd5ec70c4c16511536
  2 files changed, 23 insertions(+), 1 deletion(-)
 
 diff --git a/build/soong/Android.bp b/build/soong/Android.bp
-index b62eeb7..fe7f669 100644
+index 0e8ed94..47a7b97 100644
 --- a/build/soong/Android.bp
 +++ b/build/soong/Android.bp
-@@ -268,6 +268,26 @@ soong_config_module_type {
+@@ -285,6 +285,26 @@ soong_config_module_type {
      ],
  }
  
@@ -45,7 +45,7 @@ index b62eeb7..fe7f669 100644
      name: "bootloader_message_offset_defaults",
      soong_config_variables: {
 diff --git a/config/BoardConfigSoong.mk b/config/BoardConfigSoong.mk
-index 3c68356..5ad35b0 100644
+index 7293939..2a4455d 100644
 --- a/config/BoardConfigSoong.mk
 +++ b/config/BoardConfigSoong.mk
 @@ -39,7 +39,8 @@ SOONG_CONFIG_lineageGlobalVars += \
@@ -58,7 +58,7 @@ index 3c68356..5ad35b0 100644
  
  SOONG_CONFIG_NAMESPACES += lineageNvidiaVars
  SOONG_CONFIG_lineageNvidiaVars += \
-@@ -75,6 +76,7 @@ SOONG_CONFIG_lineageQcomVars_supports_hw_fde_perf := $(TARGET_HW_DISK_ENCRYPTION
+@@ -81,6 +82,7 @@ SOONG_CONFIG_lineageQcomVars_supports_hw_fde_perf := $(TARGET_HW_DISK_ENCRYPTION
  SOONG_CONFIG_lineageQcomVars_uses_pre_uplink_features_netmgrd := $(TARGET_USES_PRE_UPLINK_FEATURES_NETMGRD)
  SOONG_CONFIG_lineageQcomVars_uses_qcom_bsp_legacy := $(TARGET_USES_QCOM_BSP_LEGACY)
  SOONG_CONFIG_lineageQcomVars_uses_qti_camera_device := $(TARGET_USES_QTI_CAMERA_DEVICE)
@@ -67,5 +67,5 @@ index 3c68356..5ad35b0 100644
  # Set default values
  BOOTLOADER_MESSAGE_OFFSET ?= 0
 -- 
-2.29.2
+2.31.1
 
