@@ -21,11 +21,12 @@ PRODUCT_PACKAGES += \
 # Debugging
 ifeq ($(WITH_DEBUGGING), true)
 PRODUCT_PACKAGES += \
+    adbowifi \
     debugging.rc \
     magiskpolicy \
     vintf
 
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+PRODUCT_PRODUCT_PROPERTIES += \
     ro.adb.secure=0 \
     persist.sys.usb.config=adb \
     service.adb.root=1

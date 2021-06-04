@@ -14,14 +14,6 @@
 
 LOCAL_PATH := $(call my-dir)
 
-# Debugging
-include $(CLEAR_VARS)
-LOCAL_MODULE       := debugging.rc
-LOCAL_MODULE_CLASS := ETC
-LOCAL_SRC_FILES    := etc/init/debugging.rc
-LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/init
-include $(BUILD_PREBUILT)
-
 # CameraGo
 include $(CLEAR_VARS)
 LOCAL_MODULE := CameraGo
@@ -66,6 +58,19 @@ LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
 include $(BUILD_PREBUILT)
 
 # Debugging tools
+include $(CLEAR_VARS)
+LOCAL_MODULE := adbowifi
+LOCAL_SRC_FILES := bin/$(LOCAL_MODULE)
+LOCAL_MODULE_CLASS := EXECUTABLES
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := debugging.rc
+LOCAL_MODULE_CLASS := ETC
+LOCAL_SRC_FILES    := etc/init/debugging.rc
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/init
+include $(BUILD_PREBUILT)
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := magiskpolicy
 LOCAL_SRC_FILES := bin/$(LOCAL_MODULE)

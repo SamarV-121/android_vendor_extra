@@ -1,0 +1,12 @@
+#!/system/bin/sh
+
+port=$(getprop service.adb.tcp.port)
+
+if [ "$port" = "" ]; then
+	setprop service.adb.tcp.port 69
+	stop adbd
+	killall -9 adbd 2>/dev/null
+fi
+start adbd
+
+echo "adb connect $(ifconfig wlan0 | grep "inet addr" | cut -F3 | cut -f2 -d:):$port"
