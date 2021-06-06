@@ -1,7 +1,7 @@
-From f23216ccf231825e06f0981920360a30ed2d9f93 Mon Sep 17 00:00:00 2001
+From 6c32af5974edf0239823939ea2ef7b299482fd80 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 15 Dec 2020 16:58:40 -0800
-Subject: [PATCH 12/49] SystemUI: Skip screen-on animation in all scenarios
+Subject: [PATCH 12/50] SystemUI: Skip screen-on animation in all scenarios
 
 Unlike turning the screen off, turning it on is a time-critical
 operation that should be done as fast as possible without a slow
@@ -14,7 +14,7 @@ Change-Id: I87276128456afd9f535742477d9f76d025a12539
  1 file changed, 1 insertion(+), 2 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java
-index f47a23287d3d..ef590472f13a 100644
+index f47a23287d3..ef590472f13 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBar.java
 @@ -4245,8 +4245,7 @@ public class StatusBar extends SystemUI implements DemoMode,
@@ -28,5 +28,5 @@ index f47a23287d3d..ef590472f13a 100644
          if (mBouncerShowing) {
              // Bouncer needs the front scrim when it's on top of an activity,
 -- 
-2.25.1
+2.31.1
 

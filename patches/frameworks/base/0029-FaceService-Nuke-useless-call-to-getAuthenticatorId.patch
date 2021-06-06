@@ -1,7 +1,7 @@
-From f8af432fc109e19c89418a60298e858e1d8569ee Mon Sep 17 00:00:00 2001
+From 8b0e4ed120d11abb972aa1497ba6c6e9e21521ec Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Mar 2021 01:58:18 -0300
-Subject: [PATCH 29/49] FaceService: Nuke useless call to getAuthenticatorId
+Subject: [PATCH 29/50] FaceService: Nuke useless call to getAuthenticatorId
 
 That value is static, so the call isn't needed. That fixes also a logspam:
 
@@ -30,7 +30,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 1 insertion(+), 5 deletions(-)
 
 diff --git a/services/core/java/com/android/server/biometrics/face/FaceService.java b/services/core/java/com/android/server/biometrics/face/FaceService.java
-index e43f4f9e3c3b..74363751c73a 100644
+index e43f4f9e3c3..74363751c73 100644
 --- a/services/core/java/com/android/server/biometrics/face/FaceService.java
 +++ b/services/core/java/com/android/server/biometrics/face/FaceService.java
 @@ -1185,11 +1185,7 @@ public class FaceService extends BiometricServiceBase {
@@ -47,5 +47,5 @@ index e43f4f9e3c3b..74363751c73a 100644
                  mCustomFaceService.callForBind(userId);
                  Slog.w(TAG, "updateActiveGroup(): Face service not started!");
 -- 
-2.25.1
+2.31.1
 

@@ -1,7 +1,7 @@
-From d470d38d4a182181139b2296c8eb4b25dca2db2c Mon Sep 17 00:00:00 2001
+From 506b42c10c343c1322dade40b5b656ff57ac62dc Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 6 Mar 2021 15:27:11 -0300
-Subject: [PATCH 28/49] Allow using face as auth method for apps
+Subject: [PATCH 28/50] Allow using face as auth method for apps
 
 Change-Id: I008370cefe9584c86e058b718e2ef79518b95eb6
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -21,7 +21,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  12 files changed, 191 insertions(+), 15 deletions(-)
 
 diff --git a/core/java/android/hardware/biometrics/IBiometricServiceReceiverInternal.aidl b/core/java/android/hardware/biometrics/IBiometricServiceReceiverInternal.aidl
-index e57abd548057..c58ba0efcc13 100644
+index e57abd54805..c58ba0efcc1 100644
 --- a/core/java/android/hardware/biometrics/IBiometricServiceReceiverInternal.aidl
 +++ b/core/java/android/hardware/biometrics/IBiometricServiceReceiverInternal.aidl
 @@ -42,6 +42,8 @@ oneway interface IBiometricServiceReceiverInternal {
@@ -34,7 +34,7 @@ index e57abd548057..c58ba0efcc13 100644
      void onSystemEvent(int event);
  }
 diff --git a/packages/SystemUI/res/layout/auth_biometric_contents.xml b/packages/SystemUI/res/layout/auth_biometric_contents.xml
-index a87c7b3fa927..b80aa480ccb2 100644
+index a87c7b3fa92..b80aa480ccb 100644
 --- a/packages/SystemUI/res/layout/auth_biometric_contents.xml
 +++ b/packages/SystemUI/res/layout/auth_biometric_contents.xml
 @@ -92,6 +92,16 @@
@@ -55,7 +55,7 @@ index a87c7b3fa927..b80aa480ccb2 100644
          <Button android:id="@+id/button_try_again"
              android:layout_width="wrap_content"
 diff --git a/packages/SystemUI/res/values/cm_strings.xml b/packages/SystemUI/res/values/cm_strings.xml
-index 6a1683e9583d..27942de8967c 100644
+index 6a1683e9583..27942de8967 100644
 --- a/packages/SystemUI/res/values/cm_strings.xml
 +++ b/packages/SystemUI/res/values/cm_strings.xml
 @@ -122,4 +122,7 @@
@@ -67,7 +67,7 @@ index 6a1683e9583d..27942de8967c 100644
 +    <string name="biometric_dialog_button_use_face">Use Face</string>
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
-index 7c25d2811793..1a6f2cf7ba2b 100644
+index 7c25d281179..1a6f2cf7ba2 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 @@ -98,6 +98,7 @@ public abstract class AuthBiometricView extends LinearLayout {
@@ -121,7 +121,7 @@ index 7c25d2811793..1a6f2cf7ba2b 100644
  
      /**
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
-index c1233fe6b9da..f8718d0dbf23 100644
+index c1233fe6b9d..f8718d0dbf2 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
 @@ -235,6 +235,9 @@ public class AuthContainerView extends LinearLayout
@@ -135,7 +135,7 @@ index c1233fe6b9da..f8718d0dbf23 100644
                      Log.e(TAG, "Unhandled action: " + action);
              }
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthController.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthController.java
-index 9f0ea3ee46ff..2dc9a1ab23fb 100644
+index 9f0ea3ee46f..2dc9a1ab23f 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthController.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthController.java
 @@ -164,6 +164,19 @@ public class AuthController extends SystemUI implements CommandQueue.Callbacks,
@@ -159,7 +159,7 @@ index 9f0ea3ee46ff..2dc9a1ab23fb 100644
      public void onSystemEvent(int event) {
          if (mReceiver == null) {
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthDialogCallback.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthDialogCallback.java
-index d3bd4fbd921c..0978b62da89a 100644
+index d3bd4fbd921..0978b62da89 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthDialogCallback.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthDialogCallback.java
 @@ -59,6 +59,11 @@ public interface AuthDialogCallback {
@@ -175,7 +175,7 @@ index d3bd4fbd921c..0978b62da89a 100644
       * See {@link android.hardware.biometrics.BiometricPrompt.Builder
       * #setReceiveSystemEvents(boolean)}
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/Utils.java b/packages/SystemUI/src/com/android/systemui/biometrics/Utils.java
-index 7d237c45c7b3..7f4ca5164804 100644
+index 7d237c45c7b..7f4ca516480 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/Utils.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/Utils.java
 @@ -23,8 +23,10 @@ import android.annotation.IntDef;
@@ -220,7 +220,7 @@ index 7d237c45c7b3..7f4ca5164804 100644
          return biometricPromptBundle.getInt(BiometricPrompt.KEY_AUTHENTICATORS_ALLOWED);
      }
 diff --git a/services/core/java/com/android/server/biometrics/AuthService.java b/services/core/java/com/android/server/biometrics/AuthService.java
-index 131267924179..a7501181316b 100644
+index 13126792417..a7501181316 100644
 --- a/services/core/java/com/android/server/biometrics/AuthService.java
 +++ b/services/core/java/com/android/server/biometrics/AuthService.java
 @@ -100,7 +100,7 @@ public class AuthService extends SystemService {
@@ -233,7 +233,7 @@ index 131267924179..a7501181316b 100644
  
          /**
 diff --git a/services/core/java/com/android/server/biometrics/BiometricService.java b/services/core/java/com/android/server/biometrics/BiometricService.java
-index 1217a507a8dc..f8883385e5ca 100644
+index 1217a507a8d..f8883385e5c 100644
 --- a/services/core/java/com/android/server/biometrics/BiometricService.java
 +++ b/services/core/java/com/android/server/biometrics/BiometricService.java
 @@ -114,6 +114,7 @@ public class BiometricService extends SystemService {
@@ -434,7 +434,7 @@ index 1217a507a8dc..f8883385e5ca 100644
                      authenticator.impl.cancelAuthenticationFromService(token, opPackageName,
                              callingUid, callingPid, callingUserId, fromClient);
 diff --git a/services/core/java/com/android/server/biometrics/Utils.java b/services/core/java/com/android/server/biometrics/Utils.java
-index c661f452820d..1a81c26d8eae 100644
+index c661f452820..1a81c26d8ea 100644
 --- a/services/core/java/com/android/server/biometrics/Utils.java
 +++ b/services/core/java/com/android/server/biometrics/Utils.java
 @@ -43,8 +43,12 @@ import android.util.Slog;
@@ -466,7 +466,7 @@ index c661f452820d..1a81c26d8eae 100644
 +    }
  }
 diff --git a/services/core/java/com/android/server/biometrics/face/CustomFaceService.java b/services/core/java/com/android/server/biometrics/face/CustomFaceService.java
-index 1a79610e33db..51f8eda40612 100644
+index 1a79610e33d..51f8eda4061 100644
 --- a/services/core/java/com/android/server/biometrics/face/CustomFaceService.java
 +++ b/services/core/java/com/android/server/biometrics/face/CustomFaceService.java
 @@ -28,6 +28,8 @@ import android.content.IntentFilter;
@@ -492,5 +492,5 @@ index 1a79610e33db..51f8eda40612 100644
      }
  
 -- 
-2.25.1
+2.31.1
 

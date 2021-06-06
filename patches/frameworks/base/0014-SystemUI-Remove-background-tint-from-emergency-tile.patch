@@ -1,7 +1,7 @@
-From 6252c717aac1712b9735ba98f858c2ea78e9ce0c Mon Sep 17 00:00:00 2001
+From f377bd1d43304178eaa203f9961e49562d61f03c Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 6 Nov 2020 13:28:56 -0800
-Subject: [PATCH 14/49] SystemUI: Remove background tint from emergency tile
+Subject: [PATCH 14/50] SystemUI: Remove background tint from emergency tile
 
 Translucent colors don't work well with tinting and our background color
 is the same for this tile anyway.
@@ -12,7 +12,7 @@ Change-Id: I08b46bb8127551ad438f2643a383c7d88ded36bd
  1 file changed, 2 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
-index 702569319649..0851858ed31e 100644
+index 70256931964..0851858ed31 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 @@ -939,8 +939,6 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,
@@ -25,5 +25,5 @@ index 702569319649..0851858ed31e 100644
                      com.android.systemui.R.color.global_actions_emergency_text);
              TextView messageView = v.findViewById(R.id.message);
 -- 
-2.25.1
+2.31.1
 

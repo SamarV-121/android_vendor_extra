@@ -1,7 +1,7 @@
-From 57a0e74d1e98d0064d464198f414535a9a605b00 Mon Sep 17 00:00:00 2001
+From 076f63305c6c9eaeda061ea2dbe6cd2992b2f7c3 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 18 Sep 2020 09:16:19 -0700
-Subject: [PATCH 19/49] NotificationShade: Make blur crossfading more gradual
+Subject: [PATCH 19/50] NotificationShade: Make blur crossfading more gradual
 
 The default value results in a sudden jump from sharp to blurred.
 
@@ -11,7 +11,7 @@ Change-Id: Ia4695b5783309c8fd260f3be95a0e314cf0d5e3d
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
-index 5bec68549c1d..cf34a5b74970 100644
+index 5bec68549c1..cf34a5b7497 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 @@ -69,7 +69,7 @@ class NotificationShadeDepthController @Inject constructor(
@@ -24,5 +24,5 @@ index 5bec68549c1d..cf34a5b74970 100644
          private const val TAG = "DepthController"
      }
 -- 
-2.25.1
+2.31.1
 

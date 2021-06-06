@@ -1,7 +1,7 @@
-From 3233b103319f9ca076a1ed7f7ba4737b653f271e Mon Sep 17 00:00:00 2001
+From 590a736814bda78e2f6eaaa1dd1c7a499b7dbc2d Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:50:26 -0700
-Subject: [PATCH 41/49] InsetsStateController: Replace ArrayMap with HashMap
+Subject: [PATCH 41/50] InsetsStateController: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of
@@ -113,7 +113,7 @@ Change-Id: Ic08d4c3e56cf10b322eabc115de441c6c5f4a898
  1 file changed, 11 insertions(+), 12 deletions(-)
 
 diff --git a/services/core/java/com/android/server/wm/InsetsStateController.java b/services/core/java/com/android/server/wm/InsetsStateController.java
-index c56457a0e5da..2b8bfbaab9ac 100644
+index c56457a0e5d..2b8bfbaab9a 100644
 --- a/services/core/java/com/android/server/wm/InsetsStateController.java
 +++ b/services/core/java/com/android/server/wm/InsetsStateController.java
 @@ -53,6 +53,8 @@ import com.android.server.protolog.common.ProtoLog;
@@ -190,5 +190,5 @@ index c56457a0e5da..2b8bfbaab9ac 100644
      }
  }
 -- 
-2.25.1
+2.31.1
 

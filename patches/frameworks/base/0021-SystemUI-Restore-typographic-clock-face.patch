@@ -1,7 +1,7 @@
-From d4be36470922bc327087ab80ca6d6474907d10a1 Mon Sep 17 00:00:00 2001
+From 0ee3f1c3d745fb51cc6eacbf3452523eb77e67ff Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 3 Nov 2020 13:17:29 -0800
-Subject: [PATCH 21/49] SystemUI: Restore typographic clock face
+Subject: [PATCH 21/50] SystemUI: Restore typographic clock face
 
 This reverts commits 583067c4e4799b0a633d8e861698c8fc2a5c7a6f and
 37fe8022174fc809ef4622f7d6c69f9bdff06913.
@@ -154,7 +154,7 @@ HcmV?d00001
 
 diff --git a/packages/SystemUI/res-keyguard/layout/type_aod_clock.xml b/packages/SystemUI/res-keyguard/layout/type_aod_clock.xml
 new file mode 100644
-index 000000000000..28ff5a253317
+index 00000000000..28ff5a25331
 --- /dev/null
 +++ b/packages/SystemUI/res-keyguard/layout/type_aod_clock.xml
 @@ -0,0 +1,23 @@
@@ -183,7 +183,7 @@ index 000000000000..28ff5a253317
 +</com.android.keyguard.clock.ClockLayout>
 diff --git a/packages/SystemUI/res-keyguard/layout/typographic_clock.xml b/packages/SystemUI/res-keyguard/layout/typographic_clock.xml
 new file mode 100644
-index 000000000000..73bb4b9a0fc9
+index 00000000000..73bb4b9a0fc
 --- /dev/null
 +++ b/packages/SystemUI/res-keyguard/layout/typographic_clock.xml
 @@ -0,0 +1,26 @@
@@ -214,7 +214,7 @@ index 000000000000..73bb4b9a0fc9
 +    android:textSize="40dp"
 +    />
 diff --git a/packages/SystemUI/res-keyguard/values/strings.xml b/packages/SystemUI/res-keyguard/values/strings.xml
-index 4b6621379b44..91df39056849 100644
+index 4b6621379b4..91df3905684 100644
 --- a/packages/SystemUI/res-keyguard/values/strings.xml
 +++ b/packages/SystemUI/res-keyguard/values/strings.xml
 @@ -318,11 +318,113 @@ number">%d</xliff:g> remaining attempt before SIM becomes permanently unusable.
@@ -332,7 +332,7 @@ index 4b6621379b44..91df39056849 100644
  
  </resources>
 diff --git a/packages/SystemUI/src/com/android/keyguard/clock/ClockLayout.java b/packages/SystemUI/src/com/android/keyguard/clock/ClockLayout.java
-index d44d89e63e8f..ccb495fcec28 100644
+index d44d89e63e8..ccb495fcec2 100644
 --- a/packages/SystemUI/src/com/android/keyguard/clock/ClockLayout.java
 +++ b/packages/SystemUI/src/com/android/keyguard/clock/ClockLayout.java
 @@ -37,6 +37,7 @@ public class ClockLayout extends FrameLayout {
@@ -364,7 +364,7 @@ index d44d89e63e8f..ccb495fcec28 100644
      }
  }
 diff --git a/packages/SystemUI/src/com/android/keyguard/clock/ClockManager.java b/packages/SystemUI/src/com/android/keyguard/clock/ClockManager.java
-index 1f75a268990c..9dcfdd48a7d1 100644
+index 1f75a268990..9dcfdd48a7d 100644
 --- a/packages/SystemUI/src/com/android/keyguard/clock/ClockManager.java
 +++ b/packages/SystemUI/src/com/android/keyguard/clock/ClockManager.java
 @@ -152,6 +152,7 @@ public final class ClockManager {
@@ -377,7 +377,7 @@ index 1f75a268990c..9dcfdd48a7d1 100644
          DisplayMetrics dm = res.getDisplayMetrics();
 diff --git a/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java b/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
 new file mode 100644
-index 000000000000..890ba1da0911
+index 00000000000..890ba1da091
 --- /dev/null
 +++ b/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
 @@ -0,0 +1,211 @@
@@ -594,7 +594,7 @@ index 000000000000..890ba1da0911
 +}
 diff --git a/packages/SystemUI/src/com/android/keyguard/clock/TypographicClock.java b/packages/SystemUI/src/com/android/keyguard/clock/TypographicClock.java
 new file mode 100644
-index 000000000000..c84c598498d0
+index 00000000000..c84c598498d
 --- /dev/null
 +++ b/packages/SystemUI/src/com/android/keyguard/clock/TypographicClock.java
 @@ -0,0 +1,130 @@
@@ -729,5 +729,5 @@ index 000000000000..c84c598498d0
 +    }
 +}
 -- 
-2.25.1
+2.31.1
 

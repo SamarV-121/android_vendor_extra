@@ -1,7 +1,7 @@
-From 4609b6f5365bcd18af5913260cb5e6baf95ee935 Mon Sep 17 00:00:00 2001
+From c5a010a03ad85bc1720fa77b28253cb5152540b1 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Mon, 8 Mar 2021 10:28:18 -0300
-Subject: [PATCH 30/49] AuthBiometricFingerprintView: Fix indicator text color
+Subject: [PATCH 30/50] AuthBiometricFingerprintView: Fix indicator text color
  on dark theme
 
 Congrats Google
@@ -13,7 +13,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
-index 176e9e6b1c9b..bdfac4a047bb 100644
+index 176e9e6b1c9..bdfac4a047b 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
 @@ -78,7 +78,8 @@ public class AuthBiometricFingerprintView extends AuthBiometricView {
@@ -27,5 +27,5 @@ index 176e9e6b1c9b..bdfac4a047bb 100644
  
      private void updateIcon(int lastState, int newState) {
 -- 
-2.25.1
+2.31.1
 

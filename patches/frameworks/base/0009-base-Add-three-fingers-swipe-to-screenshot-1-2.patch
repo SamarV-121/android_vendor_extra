@@ -1,7 +1,7 @@
-From 5ca8d187314cb61322b788176ee92500a247db77 Mon Sep 17 00:00:00 2001
+From 8f9df9d3b04faaceab779b7c9bd27e4d05450608 Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Sun, 9 Aug 2015 01:23:33 +0800
-Subject: [PATCH 09/49] base: Add three-fingers-swipe to screenshot [1/2]
+Subject: [PATCH 09/50] base: Add three-fingers-swipe to screenshot [1/2]
 
 The feature is ported from Oppo ColorOS.
 With the options on, users can swipe down
@@ -20,7 +20,7 @@ Signed-off-by: Sujit Roy <kumarsujitroy@gmail.com>
  create mode 100644 services/core/java/com/android/server/policy/OPGesturesListener.java
 
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 190db1b145aa..50c48bd9d2b8 100755
+index 190db1b145a..50c48bd9d2b 100755
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -4473,6 +4473,12 @@ public final class Settings {
@@ -38,7 +38,7 @@ index 190db1b145aa..50c48bd9d2b8 100755
           * if ACCELEROMETER_ROTATION is enabled.
 diff --git a/services/core/java/com/android/server/policy/OPGesturesListener.java b/services/core/java/com/android/server/policy/OPGesturesListener.java
 new file mode 100644
-index 000000000000..e4af1a03466a
+index 00000000000..e4af1a03466
 --- /dev/null
 +++ b/services/core/java/com/android/server/policy/OPGesturesListener.java
 @@ -0,0 +1,154 @@
@@ -197,7 +197,7 @@ index 000000000000..e4af1a03466a
 +    }
 +}
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 4f03054d5e4e..b792d978bf2d 100644
+index 4f03054d5e4..b792d978bf2 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -656,6 +656,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -280,5 +280,5 @@ index 4f03054d5e4e..b792d978bf2d 100644
              boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
                      Settings.Secure.WAKE_GESTURE_ENABLED, 0,
 -- 
-2.25.1
+2.31.1
 

@@ -1,7 +1,7 @@
-From b1ca791b2267890be35260e0348cf1174b387a14 Mon Sep 17 00:00:00 2001
+From 653df71f98ca5916346b790ba0b20840fd3e06b6 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 29 Oct 2020 20:36:31 -0700
-Subject: [PATCH 06/49] graphics: Adjust ripple animation for immediate
+Subject: [PATCH 06/50] graphics: Adjust ripple animation for immediate
  feedback
 
 Lack of immediate feedback when interacting with UI elements that use
@@ -19,7 +19,7 @@ Change-Id: I6585cced2b3f0a6dbf89a4dd8ff6a3326321a166
  1 file changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/graphics/java/android/graphics/drawable/RippleForeground.java b/graphics/java/android/graphics/drawable/RippleForeground.java
-index 0f376957c8ff..10c66ae8f745 100644
+index 0f376957c8f..10c66ae8f74 100644
 --- a/graphics/java/android/graphics/drawable/RippleForeground.java
 +++ b/graphics/java/android/graphics/drawable/RippleForeground.java
 @@ -44,13 +44,13 @@ class RippleForeground extends RippleComponent {
@@ -42,5 +42,5 @@ index 0f376957c8ff..10c66ae8f745 100644
      // Parent-relative values for starting position.
      private float mStartingX;
 -- 
-2.25.1
+2.31.1
 
