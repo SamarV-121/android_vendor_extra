@@ -1,7 +1,7 @@
-From 8ed45ce724ffcefbfdf99bd2c3d6003e7f0d4da3 Mon Sep 17 00:00:00 2001
+From ec3b52b4ac6284b4536d6d42977a21e706e10df4 Mon Sep 17 00:00:00 2001
 From: Tang Ding <tang.ding@tcl.com>
 Date: Thu, 18 Mar 2021 13:53:13 +0000
-Subject: [PATCH 33/50] FIx issue:
+Subject: [PATCH 32/49] FIx issue:
  https://issuetracker.google.com/issues/183024999
 
 There's a performance issue during continually scroll listview when listview in Fling state .

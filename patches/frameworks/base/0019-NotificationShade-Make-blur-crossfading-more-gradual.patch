@@ -1,7 +1,7 @@
-From 076f63305c6c9eaeda061ea2dbe6cd2992b2f7c3 Mon Sep 17 00:00:00 2001
+From 973c3fc2e09622a7650cbb082ec1847c54557a14 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 18 Sep 2020 09:16:19 -0700
-Subject: [PATCH 19/50] NotificationShade: Make blur crossfading more gradual
+Subject: [PATCH 19/49] NotificationShade: Make blur crossfading more gradual
 
 The default value results in a sudden jump from sharp to blurred.
 

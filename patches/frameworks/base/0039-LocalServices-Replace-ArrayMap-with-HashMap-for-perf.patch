@@ -1,7 +1,7 @@
-From 858a73e640318afcb79f398f68314f6ecb545e80 Mon Sep 17 00:00:00 2001
+From 99290f35dc1b65075b7896eff331864e26a07a70 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:39:55 -0700
-Subject: [PATCH 40/50] LocalServices: Replace ArrayMap with HashMap for
+Subject: [PATCH 39/49] LocalServices: Replace ArrayMap with HashMap for
  performance
 
 When opening and closing activities in Settings, a significant amount of

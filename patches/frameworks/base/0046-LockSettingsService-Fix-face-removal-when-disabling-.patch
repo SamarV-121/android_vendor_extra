@@ -1,7 +1,7 @@
-From 73ce76169cc3af31a8fc5ff4e840aa95d7d4acb2 Mon Sep 17 00:00:00 2001
+From f23933a1f7ce9034960750e8c156e4e857b3713e Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 27 Mar 2021 20:48:48 -0300
-Subject: [PATCH 47/50] LockSettingsService: Fix face removal when disabling
+Subject: [PATCH 46/49] LockSettingsService: Fix face removal when disabling
  security
 
 Change-Id: I291e73b292263784893e1a2d4fc21145acfec9bd

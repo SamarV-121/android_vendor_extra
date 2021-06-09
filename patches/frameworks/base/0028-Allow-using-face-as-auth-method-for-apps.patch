@@ -1,7 +1,7 @@
-From 506b42c10c343c1322dade40b5b656ff57ac62dc Mon Sep 17 00:00:00 2001
+From ad1be0fc84bf69c00236c8a2149cee44341a9f20 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 6 Mar 2021 15:27:11 -0300
-Subject: [PATCH 28/50] Allow using face as auth method for apps
+Subject: [PATCH 28/49] Allow using face as auth method for apps
 
 Change-Id: I008370cefe9584c86e058b718e2ef79518b95eb6
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -67,7 +67,7 @@ index 6a1683e9583..27942de8967 100644
 +    <string name="biometric_dialog_button_use_face">Use Face</string>
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
-index 7c25d281179..1a6f2cf7ba2 100644
+index f9c6d32d1d1..a1982bfbb1e 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 @@ -98,6 +98,7 @@ public abstract class AuthBiometricView extends LinearLayout {

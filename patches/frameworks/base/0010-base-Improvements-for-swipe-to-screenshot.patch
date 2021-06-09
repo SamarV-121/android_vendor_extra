@@ -1,7 +1,7 @@
-From 0a19078990f57b4eb81cd64c05c6c3bff076634d Mon Sep 17 00:00:00 2001
+From fc55426e5b273f1c548822a1fc0d860a16238289 Mon Sep 17 00:00:00 2001
 From: Henrique Silva <jhenrique09.mcz@hotmail.com>
 Date: Tue, 7 May 2019 13:29:38 -0300
-Subject: [PATCH 10/50] base: Improvements for swipe to screenshot
+Subject: [PATCH 10/49] base: Improvements for swipe to screenshot
 
 * Cancel touch events when tap with three fingers
 
@@ -60,10 +60,10 @@ index 18e9ef0e4d0..381364beca2 100644
          mSendNextFrameToWm = false;
          if (mNextReportConsumeBLAST) {
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index 3f4878e3802..8c7ef623d1c 100644
+index 0ae9cc279e6..5c229593353 100644
 --- a/services/core/java/com/android/server/am/ActivityManagerService.java
 +++ b/services/core/java/com/android/server/am/ActivityManagerService.java
-@@ -1672,6 +1672,10 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -1680,6 +1680,10 @@ public class ActivityManagerService extends IActivityManager.Stub
      private ParcelFileDescriptor[] mLifeMonitorFds;
  
      static final HostingRecord sNullHostingRecord = new HostingRecord(null);
@@ -74,7 +74,7 @@ index 3f4878e3802..8c7ef623d1c 100644
      /**
       * Used to notify activity lifecycle events.
       */
-@@ -2547,6 +2551,7 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -2555,6 +2559,7 @@ public class ActivityManagerService extends IActivityManager.Stub
          mProcStartHandler = null;
          mHiddenApiBlacklist = null;
          mFactoryTest = FACTORY_TEST_OFF;
@@ -82,7 +82,7 @@ index 3f4878e3802..8c7ef623d1c 100644
          mUgmInternal = LocalServices.getService(UriGrantsManagerInternal.class);
          mInternal = new LocalService();
          mPendingStartActivityUids = new PendingStartActivityUids(mContext);
-@@ -2706,6 +2711,8 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -2714,6 +2719,8 @@ public class ActivityManagerService extends IActivityManager.Stub
              Slog.w(TAG, "Setting background thread cpuset failed");
          }
  
@@ -91,7 +91,7 @@ index 3f4878e3802..8c7ef623d1c 100644
          mInternal = new LocalService();
          mPendingStartActivityUids = new PendingStartActivityUids(mContext);
      }
-@@ -9508,6 +9515,7 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -9517,6 +9524,7 @@ public class ActivityManagerService extends IActivityManager.Stub
              mWaitForNetworkTimeoutMs = waitForNetworkTimeoutMs;
              mPssDeferralTime = pssDeferralMs;
          }
@@ -99,7 +99,7 @@ index 3f4878e3802..8c7ef623d1c 100644
      }
  
      /**
-@@ -20373,4 +20381,37 @@ public class ActivityManagerService extends IActivityManager.Stub
+@@ -20420,4 +20428,37 @@ public class ActivityManagerService extends IActivityManager.Stub
              throw new SecurityException("Caller uid " + callerUid + " cannot set freezer state ");
          }
      }

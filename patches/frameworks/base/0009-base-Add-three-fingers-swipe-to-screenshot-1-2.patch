@@ -1,7 +1,7 @@
-From 8f9df9d3b04faaceab779b7c9bd27e4d05450608 Mon Sep 17 00:00:00 2001
+From 88e51122a8f1d32f3e3efac1744a6fd8f0d38de6 Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Sun, 9 Aug 2015 01:23:33 +0800
-Subject: [PATCH 09/50] base: Add three-fingers-swipe to screenshot [1/2]
+Subject: [PATCH 09/49] base: Add three-fingers-swipe to screenshot [1/2]
 
 The feature is ported from Oppo ColorOS.
 With the options on, users can swipe down
@@ -197,7 +197,7 @@ index 00000000000..e4af1a03466
 +    }
 +}
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 4f03054d5e4..b792d978bf2 100644
+index 2400a540b07..d5dc4b4d0a3 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -656,6 +656,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {

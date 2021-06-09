@@ -1,7 +1,7 @@
-From 1bdcad9d5c0f1f9ad7b3bb87b1750b8609eaa0cf Mon Sep 17 00:00:00 2001
+From bb356df7120329f338042240a64b8c7796a5299d Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 6 Nov 2020 12:52:59 -0800
-Subject: [PATCH 18/50] SystemUI: Disable blur wakeup animation
+Subject: [PATCH 18/49] SystemUI: Disable blur wakeup animation
 
 This animation looks distracting and prevents the user from seeing
 anything during the unlock animation.

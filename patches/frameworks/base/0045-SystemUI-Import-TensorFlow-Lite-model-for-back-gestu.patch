@@ -1,7 +1,7 @@
-From b52a3ae61f427a83a897bc1e38b6198b740b6287 Mon Sep 17 00:00:00 2001
+From 225f04a55f1a5910c6d09dbbeb9741ebb736f38c Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 19:36:31 -0700
-Subject: [PATCH 46/50] SystemUI: Import TensorFlow Lite model for back gesture
+Subject: [PATCH 45/49] SystemUI: Import TensorFlow Lite model for back gesture
 
 Model extracted from redfin SPP1.210122.020.A3.
 

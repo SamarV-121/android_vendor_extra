@@ -1,7 +1,7 @@
-From 7b8f6046b004be5bcf606cf715da8d77afbbf61d Mon Sep 17 00:00:00 2001
+From ecbac5aed5cef25f9e829ada8839ef747045b35b Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:58:24 -0700
-Subject: [PATCH 42/50] PackageManagerService: Replace ArrayMap with HashMap
+Subject: [PATCH 41/49] PackageManagerService: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of
@@ -326,7 +326,7 @@ index dabcc35103b..37cb093619a 100644
              if (packageName != null && !packageName.equals(keySetPackage)) {
                  continue;
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index bf04cb27344..d74a42e2e16 100644
+index a97a48b606d..dc42c6b997b 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -758,7 +758,7 @@ public class PackageManagerService extends IPackageManager.Stub
@@ -383,7 +383,7 @@ index bf04cb27344..d74a42e2e16 100644
                      if ((ps.pkgFlags & ApplicationInfo.FLAG_SYSTEM) != 0) {
                          continue;
                      }
-@@ -5682,10 +5682,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -5680,10 +5680,7 @@ public class PackageManagerService extends IPackageManager.Stub
      private List<VersionedPackage> getPackagesUsingSharedLibraryLPr(
              SharedLibraryInfo libInfo, int flags, int userId) {
          List<VersionedPackage> versionedPackages = null;
@@ -395,7 +395,7 @@ index bf04cb27344..d74a42e2e16 100644
              if (ps == null) {
                  continue;
              }
-@@ -10799,8 +10796,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -10816,8 +10813,8 @@ public class PackageManagerService extends IPackageManager.Stub
                      ? changingPkgPair.first : null;
              final PackageSetting changingPkgSetting = changingPkgPair != null
                      ? changingPkgPair.second : null;
@@ -406,7 +406,7 @@ index bf04cb27344..d74a42e2e16 100644
                  final PackageSetting pkgSetting = mSettings.getPackageLPr(pkg.getPackageName());
                  if (changingPkg != null
                          && !hasString(pkg.getUsesLibraries(), changingPkg.getLibraryNames())
-@@ -20017,9 +20014,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -20034,9 +20031,7 @@ public class PackageManagerService extends IPackageManager.Stub
      /** This method takes a specific user id as well as UserHandle.USER_ALL. */
      @GuardedBy("mLock")
      private void clearIntentFilterVerificationsLPw(int userId) {
@@ -417,7 +417,7 @@ index bf04cb27344..d74a42e2e16 100644
              clearIntentFilterVerificationsLPw(pkg.getPackageName(), userId, true);
          }
      }
-@@ -22777,9 +22772,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -22794,9 +22789,7 @@ public class PackageManagerService extends IPackageManager.Stub
      private List<String> collectAbsoluteCodePaths() {
          synchronized (mLock) {
              List<String> codePaths = new ArrayList<>();
@@ -428,7 +428,7 @@ index bf04cb27344..d74a42e2e16 100644
                  codePaths.add(ps.codePath.getAbsolutePath());
              }
              return codePaths;
-@@ -24280,11 +24273,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -24297,11 +24290,8 @@ public class PackageManagerService extends IPackageManager.Stub
          @Override
          public PackageList getPackageList(PackageListObserver observer) {
              synchronized (mLock) {
@@ -442,7 +442,7 @@ index bf04cb27344..d74a42e2e16 100644
                  final PackageList packageList = new PackageList(list, observer);
                  if (observer != null) {
                      mPackageListObservers.add(packageList);
-@@ -25013,8 +25003,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25030,8 +25020,8 @@ public class PackageManagerService extends IPackageManager.Stub
          @Override
          public void forEachPackageSetting(Consumer<PackageSetting> actionLocked) {
              synchronized (mLock) {
@@ -453,7 +453,7 @@ index bf04cb27344..d74a42e2e16 100644
                  }
              }
          }
-@@ -25372,9 +25362,8 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25389,9 +25379,8 @@ public class PackageManagerService extends IPackageManager.Stub
  
      void forEachPackage(Consumer<AndroidPackage> actionLocked) {
          synchronized (mLock) {
@@ -465,7 +465,7 @@ index bf04cb27344..d74a42e2e16 100644
              }
          }
      }
-@@ -25382,9 +25371,7 @@ public class PackageManagerService extends IPackageManager.Stub
+@@ -25399,9 +25388,7 @@ public class PackageManagerService extends IPackageManager.Stub
      void forEachInstalledPackage(@NonNull Consumer<AndroidPackage> actionLocked,
              @UserIdInt int userId) {
          synchronized (mLock) {

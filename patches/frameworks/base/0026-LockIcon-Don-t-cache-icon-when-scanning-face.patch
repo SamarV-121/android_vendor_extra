@@ -1,7 +1,7 @@
-From ab349326899f8ed316f71da06679dc1f0abcaaaa Mon Sep 17 00:00:00 2001
+From b67af4257ea47b995e7b3b0b320b9b312dcea41c Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Mon, 8 Feb 2021 16:11:45 -0300
-Subject: [PATCH 26/50] LockIcon: Don't cache icon when scanning face
+Subject: [PATCH 26/49] LockIcon: Don't cache icon when scanning face
 
 Change-Id: I739773e8ac717b782ea8d1f93c3c0bc137d7efa5
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>

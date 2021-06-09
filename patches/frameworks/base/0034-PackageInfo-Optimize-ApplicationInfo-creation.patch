@@ -1,7 +1,7 @@
-From be63957abfcab01519512b392d36643c7c324b6d Mon Sep 17 00:00:00 2001
+From 073c06eba0f077625ff1092f297e4fe9e063894f Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:00:16 -0700
-Subject: [PATCH 35/50] PackageInfo: Optimize ApplicationInfo creation
+Subject: [PATCH 34/49] PackageInfo: Optimize ApplicationInfo creation
 
 When opening and closing activities in Settings, a significant amount of
 CPU time is spent in ART interface method call trampolines, as reported
@@ -202,10 +202,10 @@ index e4507483c08..7632878c320 100644
              if (resizeableActivity) {
                  privateFlags |= ApplicationInfo.PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE;
 diff --git a/core/java/android/content/pm/parsing/ParsingPackageImpl.java b/core/java/android/content/pm/parsing/ParsingPackageImpl.java
-index f932bc250e2..ab3ff03573b 100644
+index 2da93ca3401..4009289e883 100644
 --- a/core/java/android/content/pm/parsing/ParsingPackageImpl.java
 +++ b/core/java/android/content/pm/parsing/ParsingPackageImpl.java
-@@ -367,53 +367,53 @@ public class ParsingPackageImpl implements ParsingPackage, Parcelable {
+@@ -369,53 +369,53 @@ public class ParsingPackageImpl implements ParsingPackage, Parcelable {
      @DataClass.ParcelWith(ForInternedString.class)
      private String zygotePreloadName;
  
