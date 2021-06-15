@@ -1,0 +1,82 @@
+From 65fed35677dc16ca9beec2f8238c3efb4f826146 Mon Sep 17 00:00:00 2001
+From: Thecrazyskull <anaskarbila@gmail.com>
+Date: Fri, 10 Feb 2017 09:38:50 -0500
+Subject: [PATCH] Trebuchet: double tap on home screen to turn off screen
+
+Change-Id: I554c005d5e523aca0842c78a353686e86af1a7f2
+---
+ Android.mk                                            |  1 +
+ AndroidManifest-common.xml                            |  1 +
+ .../launcher3/touch/WorkspaceTouchListener.java       | 11 +++++++++++
+ 3 files changed, 13 insertions(+)
+
+diff --git a/Android.mk b/Android.mk
+index e3daddc..ab0f0b9 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -191,6 +191,7 @@ else
+   LOCAL_MIN_SDK_VERSION := 26
+ endif
+ LOCAL_PACKAGE_NAME := TrebuchetQuickStep
++LOCAL_CERTIFICATE := platform
+ LOCAL_PRIVILEGED_MODULE := true
+ LOCAL_SYSTEM_EXT_MODULE := true
+ LOCAL_OVERRIDES_PACKAGES := Home Launcher2 Launcher3 Launcher3QuickStep
+diff --git a/AndroidManifest-common.xml b/AndroidManifest-common.xml
+index 2ba068f..a4365e7 100644
+--- a/AndroidManifest-common.xml
++++ b/AndroidManifest-common.xml
+@@ -46,6 +46,7 @@
+     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
+     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
++    <uses-permission android:name="android.permission.DEVICE_POWER" />
+ 
+     <!-- TODO(b/150802536): Enabled only for ENABLE_FIXED_ROTATION_TRANSFORM feature flag -->
+     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>
+diff --git a/src/com/android/launcher3/touch/WorkspaceTouchListener.java b/src/com/android/launcher3/touch/WorkspaceTouchListener.java
+index 4fa658e..96955dc 100644
+--- a/src/com/android/launcher3/touch/WorkspaceTouchListener.java
++++ b/src/com/android/launcher3/touch/WorkspaceTouchListener.java
+@@ -24,8 +24,10 @@ import static android.view.MotionEvent.ACTION_UP;
+ import static com.android.launcher3.LauncherState.NORMAL;
+ import static com.android.launcher3.logging.StatsLogManager.LauncherEvent.LAUNCHER_WORKSPACE_LONGPRESS;
+ 
++import android.content.Context;
+ import android.graphics.PointF;
+ import android.graphics.Rect;
++import android.os.PowerManager;
+ import android.view.GestureDetector;
+ import android.view.HapticFeedbackConstants;
+ import android.view.MotionEvent;
+@@ -68,6 +70,8 @@ public class WorkspaceTouchListener extends GestureDetector.SimpleOnGestureListe
+ 
+     private int mLongPressState = STATE_CANCELLED;
+ 
++    private final PowerManager mPm;
++
+     private final GestureDetector mGestureDetector;
+ 
+     public WorkspaceTouchListener(Launcher launcher, Workspace workspace) {
+@@ -76,6 +80,7 @@ public class WorkspaceTouchListener extends GestureDetector.SimpleOnGestureListe
+         // Use twice the touch slop as we are looking for long press which is more
+         // likely to cause movement.
+         mTouchSlop = 2 * ViewConfiguration.get(launcher).getScaledTouchSlop();
++        mPm = (PowerManager) workspace.getContext().getSystemService(Context.POWER_SERVICE);
+         mGestureDetector = new GestureDetector(workspace.getContext(), this);
+     }
+ 
+@@ -181,4 +186,10 @@ public class WorkspaceTouchListener extends GestureDetector.SimpleOnGestureListe
+             }
+         }
+     }
++
++    @Override
++    public boolean onDoubleTap(MotionEvent event) {
++        mPm.goToSleep(event.getEventTime());
++        return true;
++    }
+ }
+-- 
+2.31.1
+
