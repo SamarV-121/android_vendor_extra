@@ -1,0 +1,112 @@
+From 56a2c7a3f0dbb4413752982645fc003a68e4c7fa Mon Sep 17 00:00:00 2001
+From: Danny Lin <danny@kdrag0n.dev>
+Date: Mon, 5 Apr 2021 23:34:35 -0700
+Subject: [PATCH 05/10] Update Soong blueprint for jemalloc 5.2.1
+
+Change-Id: Ie4dfe4cf9a3905914a685ec6761628e405512a9a
+---
+ Android.bp | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/Android.bp b/Android.bp
+index 2cfe241c..1dea6020 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -18,6 +18,7 @@ common_cflags = [
+     "-D_GNU_SOURCE",
+     "-D_REENTRANT",
+     "-Wall",
++    "-Wextra",
+     "-Wshorten-64-to-32",
+     "-Wsign-compare",
+     "-Wundef",
+@@ -122,7 +123,7 @@ lib_src_files = [
+     "src/extent_dss.c",
+     "src/extent_mmap.c",
+     "src/hash.c",
+-    "src/hooks.c",
++    "src/hook.c",
+     "src/large.c",
+     "src/log.c",
+     "src/malloc_io.c",
+@@ -133,9 +134,12 @@ lib_src_files = [
+     "src/prng.c",
+     "src/prof.c",
+     "src/rtree.c",
++    "src/safety_check.c",
+     "src/stats.c",
++    "src/sc.c",
+     "src/sz.c",
+     "src/tcache.c",
++    "src/test_hooks.c",
+     "src/ticker.c",
+     "src/tsd.c",
+     "src/witness.c",
+@@ -228,14 +232,18 @@ unit_tests = [
+     "test/unit/background_thread_enable.c",
+     "test/unit/base.c",
+     "test/unit/bitmap.c",
++    "test/unit/bit_util.c",
++    "test/unit/binshard.c",
+     "test/unit/ckh.c",
+     "test/unit/decay.c",
+     "test/unit/div.c",
+     "test/unit/emitter.c",
+     "test/unit/extent_quantize.c",
++    "test/unit/extent_util.c",
+     "test/unit/fork.c",
+     "test/unit/hash.c",
+-    "test/unit/hooks.c",
++    "test/unit/hook.c",
++    "test/unit/huge.c",
+     "test/unit/junk.c",
+     "test/unit/junk_alloc.c",
+     "test/unit/junk_free.c",
+@@ -253,6 +261,7 @@ unit_tests = [
+     "test/unit/prof_active.c",
+     "test/unit/prof_gdump.c",
+     "test/unit/prof_idump.c",
++    "test/unit/prof_log.c",
+     "test/unit/prof_reset.c",
+     "test/unit/prof_tctx.c",
+     "test/unit/prof_thread_name.c",
+@@ -261,13 +270,17 @@ unit_tests = [
+     "test/unit/rb.c",
+     "test/unit/retained.c",
+     "test/unit/rtree.c",
++    "test/unit/safety_check.c",
++    "test/unit/seq.c",
+     "test/unit/SFMT.c",
++    "test/unit/sc.c",
+     "test/unit/size_classes.c",
+     "test/unit/slab.c",
+     "test/unit/smoothstep.c",
+     "test/unit/spin.c",
+     "test/unit/stats.c",
+     "test/unit/stats_print.c",
++    "test/unit/test_hooks.c",
+     "test/unit/ticker.c",
+     "test/unit/nstime.c",
+     "test/unit/tsd.c",
+@@ -334,15 +347,18 @@ integration_tests = [
+     "test/integration/aligned_alloc.c",
+     "test/integration/allocated.c",
+     "test/integration/extent.c",
++    "test/integration/malloc.c",
+     "test/integration/mallocx.c",
+     "test/integration/MALLOCX_ARENA.c",
+     "test/integration/overflow.c",
+     "test/integration/posix_memalign.c",
+     "test/integration/rallocx.c",
+     "test/integration/sdallocx.c",
++    "test/integration/slab_sizes.c",
+     "test/integration/thread_arena.c",
+     "test/integration/xallocx.c",
+     "test/integration/cpp/basic.cpp",
++    "test/integration/smallocx.c",
+ ]
+ 
+ cc_test {
+-- 
+2.31.1
+

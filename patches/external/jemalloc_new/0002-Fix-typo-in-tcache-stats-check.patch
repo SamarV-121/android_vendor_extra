@@ -1,0 +1,26 @@
+From 97aaae5638462a31f70ef6d3c646c23efe2034b9 Mon Sep 17 00:00:00 2001
+From: Danny Lin <danny@kdrag0n.dev>
+Date: Sat, 20 Mar 2021 22:27:28 -0700
+Subject: [PATCH 02/10] Fix typo in tcache stats check
+
+Change-Id: I1682acb9b57f6de4bacd4c69d55b21a96cc09d5b
+---
+ include/jemalloc/internal/tcache_inlines.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/jemalloc/internal/tcache_inlines.h b/include/jemalloc/internal/tcache_inlines.h
+index 0cca1224..ed81fc41 100644
+--- a/include/jemalloc/internal/tcache_inlines.h
++++ b/include/jemalloc/internal/tcache_inlines.h
+@@ -150,7 +150,7 @@ tcache_alloc_large(tsd_t *tsd, arena_t *arena, tcache_t *tcache, size_t size,
+ 			memset(ret, 0, usize);
+ 		}
+ 
+-#if defined(ANDROID_ENABLE_TCACHE_STATUS)
++#if defined(ANDROID_ENABLE_TCACHE_STATS)
+ 		if (config_stats) {
+ 			bin->tstats.nrequests++;
+ 		}
+-- 
+2.31.1
+

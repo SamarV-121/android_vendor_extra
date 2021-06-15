@@ -1,0 +1,48 @@
+From c0c93afd70d11b3db44e8a9c8402ed7844b5c75f Mon Sep 17 00:00:00 2001
+From: Park Ju Hyung <qkrwngud825@gmail.com>
+Date: Mon, 14 Oct 2019 05:54:33 +0900
+Subject: [PATCH 07/10] jemalloc: disable config parsing altogether
+
+This is never used on Android.
+
+Remove it for faster initialization and lighter libc.so.
+
+Signed-off-by: Park Ju Hyung <qkrwngud825@gmail.com>
+Change-Id: I1c4a6fa69ef8c986a0caf5369ef71efeff1c6ef3
+---
+ src/jemalloc.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/jemalloc.c b/src/jemalloc.c
+index a5f7bad6..cc916497 100644
+--- a/src/jemalloc.c
++++ b/src/jemalloc.c
+@@ -1017,6 +1017,7 @@ obtain_malloc_conf(unsigned which_source, char buf[PATH_MAX + 1]) {
+ 	return ret;
+ }
+ 
++#if 0
+ static void
+ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
+     bool initial_call, const char *opts_cache[MALLOC_CONF_NSOURCES],
+@@ -1443,7 +1444,7 @@ malloc_conf_init(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS]) {
+ 	malloc_conf_init_helper(sc_data, bin_shard_sizes, false, opts_cache,
+ 	    NULL);
+ }
+-
++#endif
+ #undef MALLOC_CONF_NSOURCES
+ 
+ static bool
+@@ -1499,7 +1500,7 @@ malloc_init_hard_a0_locked() {
+ 	if (config_prof) {
+ 		prof_boot0();
+ 	}
+-	malloc_conf_init(&sc_data, bin_shard_sizes);
++	// malloc_conf_init(&sc_data, bin_shard_sizes);
+ 	sz_boot(&sc_data);
+ 	bin_boot(&sc_data, bin_shard_sizes);
+ 
+-- 
+2.31.1
+

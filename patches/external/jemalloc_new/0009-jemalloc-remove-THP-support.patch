@@ -1,0 +1,1033 @@
+From 2b7021ba5d66fbbd2cc3a153997fb2c7f53f398f Mon Sep 17 00:00:00 2001
+From: Park Ju Hyung <qkrwngud825@gmail.com>
+Date: Mon, 14 Oct 2019 06:19:00 +0900
+Subject: [PATCH 09/10] jemalloc: remove THP support
+
+This is not explored on Android properly and no one should use it until
+proper scientific testing.
+
+Moreover, THP is broken with all recent Qualcomm devices due to
+speculative page faults.
+
+Signed-off-by: Park Ju Hyung <qkrwngud825@gmail.com>
+Change-Id: Ic1a2b9f17cef4b73d32102a4ae8704cc4654307b
+---
+ Android.bp                                    |  1 -
+ include/jemalloc/internal/arena_stats.h       |  1 -
+ include/jemalloc/internal/base_externs.h      |  5 +-
+ include/jemalloc/internal/base_inlines.h      |  4 -
+ include/jemalloc/internal/base_structs.h      |  4 -
+ include/jemalloc/internal/base_types.h        | 26 -----
+ include/jemalloc/internal/ctl.h               |  1 -
+ .../internal/jemalloc_internal_defs.h         |  8 +-
+ .../internal/jemalloc_internal_defs.h.in      |  6 --
+ .../internal/jemalloc_internal_defs_host.h    |  6 --
+ include/jemalloc/internal/pages.h             | 15 ---
+ include/jemalloc/internal/private_namespace.h |  6 --
+ .../jemalloc/internal/private_namespace_jet.h |  6 --
+ src/arena.c                                   |  5 +-
+ src/base.c                                    | 98 +------------------
+ src/ctl.c                                     | 19 ----
+ src/extent.c                                  |  6 +-
+ src/jemalloc.c                                | 38 -------
+ src/pages.c                                   | 80 ---------------
+ src/stats.c                                   | 14 +--
+ test/unit/base.c                              | 24 ++---
+ test/unit/mallctl.c                           |  2 -
+ test/unit/pages.c                             | 29 ------
+ 23 files changed, 17 insertions(+), 387 deletions(-)
+ delete mode 100644 test/unit/pages.c
+
+diff --git a/Android.bp b/Android.bp
+index 1dea6020..85768202 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -254,7 +254,6 @@ unit_tests = [
+     "test/unit/mq.c",
+     "test/unit/mtx.c",
+     "test/unit/pack.c",
+-    "test/unit/pages.c",
+     "test/unit/ph.c",
+     "test/unit/prng.c",
+     "test/unit/prof_accum.c",
+diff --git a/include/jemalloc/internal/arena_stats.h b/include/jemalloc/internal/arena_stats.h
+index 23949ed9..50ec76a0 100644
+--- a/include/jemalloc/internal/arena_stats.h
++++ b/include/jemalloc/internal/arena_stats.h
+@@ -103,7 +103,6 @@ struct arena_stats_s {
+ 	atomic_zu_t		base; /* Derived. */
+ 	atomic_zu_t		internal;
+ 	atomic_zu_t		resident; /* Derived. */
+-	atomic_zu_t		metadata_thp;
+ 
+ 	atomic_zu_t		allocated_large; /* Derived. */
+ 	arena_stats_u64_t	nmalloc_large; /* Derived. */
+diff --git a/include/jemalloc/internal/base_externs.h b/include/jemalloc/internal/base_externs.h
+index 7b705c9b..a4fd5ac7 100644
+--- a/include/jemalloc/internal/base_externs.h
++++ b/include/jemalloc/internal/base_externs.h
+@@ -1,9 +1,6 @@
+ #ifndef JEMALLOC_INTERNAL_BASE_EXTERNS_H
+ #define JEMALLOC_INTERNAL_BASE_EXTERNS_H
+ 
+-extern metadata_thp_mode_t opt_metadata_thp;
+-extern const char *metadata_thp_mode_names[];
+-
+ base_t *b0get(void);
+ base_t *base_new(tsdn_t *tsdn, unsigned ind, extent_hooks_t *extent_hooks);
+ void base_delete(tsdn_t *tsdn, base_t *base);
+@@ -13,7 +10,7 @@ extent_hooks_t *base_extent_hooks_set(base_t *base,
+ void *base_alloc(tsdn_t *tsdn, base_t *base, size_t size, size_t alignment);
+ extent_t *base_alloc_extent(tsdn_t *tsdn, base_t *base);
+ void base_stats_get(tsdn_t *tsdn, base_t *base, size_t *allocated,
+-    size_t *resident, size_t *mapped, size_t *n_thp);
++    size_t *resident, size_t *mapped);
+ void base_prefork(tsdn_t *tsdn, base_t *base);
+ void base_postfork_parent(tsdn_t *tsdn, base_t *base);
+ void base_postfork_child(tsdn_t *tsdn, base_t *base);
+diff --git a/include/jemalloc/internal/base_inlines.h b/include/jemalloc/internal/base_inlines.h
+index aec0e2e1..931560bf 100644
+--- a/include/jemalloc/internal/base_inlines.h
++++ b/include/jemalloc/internal/base_inlines.h
+@@ -6,8 +6,4 @@ base_ind_get(const base_t *base) {
+ 	return base->ind;
+ }
+ 
+-static inline bool
+-metadata_thp_enabled(void) {
+-	return (opt_metadata_thp != metadata_thp_disabled);
+-}
+ #endif /* JEMALLOC_INTERNAL_BASE_INLINES_H */
+diff --git a/include/jemalloc/internal/base_structs.h b/include/jemalloc/internal/base_structs.h
+index 07f214eb..0d729546 100644
+--- a/include/jemalloc/internal/base_structs.h
++++ b/include/jemalloc/internal/base_structs.h
+@@ -30,8 +30,6 @@ struct base_s {
+ 	/* Protects base_alloc() and base_stats_get() operations. */
+ 	malloc_mutex_t	mtx;
+ 
+-	/* Using THP when true (metadata_thp auto mode). */
+-	bool		auto_thp_switched;
+ 	/*
+ 	 * Most recent size class in the series of increasingly large base
+ 	 * extents.  Logarithmic spacing between subsequent allocations ensures
+@@ -52,8 +50,6 @@ struct base_s {
+ 	size_t		allocated;
+ 	size_t		resident;
+ 	size_t		mapped;
+-	/* Number of THP regions touched. */
+-	size_t		n_thp;
+ };
+ 
+ #endif /* JEMALLOC_INTERNAL_BASE_STRUCTS_H */
+diff --git a/include/jemalloc/internal/base_types.h b/include/jemalloc/internal/base_types.h
+index b6db77df..be7ee825 100644
+--- a/include/jemalloc/internal/base_types.h
++++ b/include/jemalloc/internal/base_types.h
+@@ -4,30 +4,4 @@
+ typedef struct base_block_s base_block_t;
+ typedef struct base_s base_t;
+ 
+-#define METADATA_THP_DEFAULT metadata_thp_disabled
+-
+-/*
+- * In auto mode, arenas switch to huge pages for the base allocator on the
+- * second base block.  a0 switches to thp on the 5th block (after 20 megabytes
+- * of metadata), since more metadata (e.g. rtree nodes) come from a0's base.
+- */
+-
+-#define BASE_AUTO_THP_THRESHOLD    2
+-#define BASE_AUTO_THP_THRESHOLD_A0 5
+-
+-typedef enum {
+-	metadata_thp_disabled   = 0,
+-	/*
+-	 * Lazily enable hugepage for metadata. To avoid high RSS caused by THP
+-	 * + low usage arena (i.e. THP becomes a significant percentage), the
+-	 * "auto" option only starts using THP after a base allocator used up
+-	 * the first THP region.  Starting from the second hugepage (in a single
+-	 * arena), "auto" behaves the same as "always", i.e. madvise hugepage
+-	 * right away.
+-	 */
+-	metadata_thp_auto       = 1,
+-	metadata_thp_always     = 2,
+-	metadata_thp_mode_limit = 3
+-} metadata_thp_mode_t;
+-
+ #endif /* JEMALLOC_INTERNAL_BASE_TYPES_H */
+diff --git a/include/jemalloc/internal/ctl.h b/include/jemalloc/internal/ctl.h
+index 1d1aacc6..3aaf5579 100644
+--- a/include/jemalloc/internal/ctl.h
++++ b/include/jemalloc/internal/ctl.h
+@@ -51,7 +51,6 @@ typedef struct ctl_stats_s {
+ 	size_t allocated;
+ 	size_t active;
+ 	size_t metadata;
+-	size_t metadata_thp;
+ 	size_t resident;
+ 	size_t mapped;
+ 	size_t retained;
+diff --git a/include/jemalloc/internal/jemalloc_internal_defs.h b/include/jemalloc/internal/jemalloc_internal_defs.h
+index 4ab84453..4b9dfa4e 100644
+--- a/include/jemalloc/internal/jemalloc_internal_defs.h
++++ b/include/jemalloc/internal/jemalloc_internal_defs.h
+@@ -291,7 +291,7 @@
+  * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
+  * arguments to madvise(2).
+  */
+-#define JEMALLOC_HAVE_MADVISE_HUGE 
++/* #undef JEMALLOC_HAVE_MADVISE_HUGE */
+ 
+ /*
+  * Methods for purging unused pages differ between operating systems.
+@@ -319,12 +319,6 @@
+  */
+ #define JEMALLOC_MADVISE_DONTDUMP 
+ 
+-/*
+- * Defined if transparent huge pages (THPs) are supported via the
+- * MADV_[NO]HUGEPAGE arguments to madvise(2), and THP support is enabled.
+- */
+-/* #undef JEMALLOC_THP */
+-
+ /* Define if operating system has alloca.h header. */
+ #define JEMALLOC_HAS_ALLOCA_H 1
+ 
+diff --git a/include/jemalloc/internal/jemalloc_internal_defs.h.in b/include/jemalloc/internal/jemalloc_internal_defs.h.in
+index c442a219..a0c7eec3 100644
+--- a/include/jemalloc/internal/jemalloc_internal_defs.h.in
++++ b/include/jemalloc/internal/jemalloc_internal_defs.h.in
+@@ -290,12 +290,6 @@
+  */
+ #undef JEMALLOC_MADVISE_DONTDUMP
+ 
+-/*
+- * Defined if transparent huge pages (THPs) are supported via the
+- * MADV_[NO]HUGEPAGE arguments to madvise(2), and THP support is enabled.
+- */
+-#undef JEMALLOC_THP
+-
+ /* Define if operating system has alloca.h header. */
+ #undef JEMALLOC_HAS_ALLOCA_H
+ 
+diff --git a/include/jemalloc/internal/jemalloc_internal_defs_host.h b/include/jemalloc/internal/jemalloc_internal_defs_host.h
+index 38f91bc2..7cdb6521 100644
+--- a/include/jemalloc/internal/jemalloc_internal_defs_host.h
++++ b/include/jemalloc/internal/jemalloc_internal_defs_host.h
+@@ -302,12 +302,6 @@
+  */
+ /* #undef JEMALLOC_MADVISE_DONTDUMP */
+ 
+-/*
+- * Defined if transparent huge pages (THPs) are supported via the
+- * MADV_[NO]HUGEPAGE arguments to madvise(2), and THP support is enabled.
+- */
+-/* #undef JEMALLOC_THP */
+-
+ /* Define if operating system has alloca.h header. */
+ #define JEMALLOC_HAS_ALLOCA_H 1
+ 
+diff --git a/include/jemalloc/internal/pages.h b/include/jemalloc/internal/pages.h
+index 7dae633a..224b3013 100644
+--- a/include/jemalloc/internal/pages.h
++++ b/include/jemalloc/internal/pages.h
+@@ -58,20 +58,6 @@ static const bool pages_can_purge_forced =
+ #endif
+     ;
+ 
+-typedef enum {
+-	thp_mode_default       = 0, /* Do not change hugepage settings. */
+-	thp_mode_always        = 1, /* Always set MADV_HUGEPAGE. */
+-	thp_mode_never         = 2, /* Always set MADV_NOHUGEPAGE. */
+-
+-	thp_mode_names_limit   = 3, /* Used for option processing. */
+-	thp_mode_not_supported = 3  /* No THP support detected. */
+-} thp_mode_t;
+-
+-#define THP_MODE_DEFAULT thp_mode_default
+-extern thp_mode_t opt_thp;
+-extern thp_mode_t init_system_thp_mode; /* Initial system wide state. */
+-extern const char *thp_mode_names[];
+-
+ void *pages_map(void *addr, size_t size, size_t alignment, bool *commit);
+ void pages_unmap(void *addr, size_t size);
+ bool pages_commit(void *addr, size_t size);
+@@ -83,6 +69,5 @@ bool pages_nohuge(void *addr, size_t size);
+ bool pages_dontdump(void *addr, size_t size);
+ bool pages_dodump(void *addr, size_t size);
+ bool pages_boot(void);
+-void pages_set_thp_state (void *ptr, size_t size);
+ 
+ #endif /* JEMALLOC_INTERNAL_PAGES_EXTERNS_H */
+diff --git a/include/jemalloc/internal/private_namespace.h b/include/jemalloc/internal/private_namespace.h
+index 8744f167..17d1475f 100644
+--- a/include/jemalloc/internal/private_namespace.h
++++ b/include/jemalloc/internal/private_namespace.h
+@@ -116,8 +116,6 @@
+ #define base_postfork_parent JEMALLOC_N(base_postfork_parent)
+ #define base_prefork JEMALLOC_N(base_prefork)
+ #define base_stats_get JEMALLOC_N(base_stats_get)
+-#define metadata_thp_mode_names JEMALLOC_N(metadata_thp_mode_names)
+-#define opt_metadata_thp JEMALLOC_N(opt_metadata_thp)
+ #define bin_infos JEMALLOC_N(bin_infos)
+ #define bin_init JEMALLOC_N(bin_init)
+ #define bin_postfork_child JEMALLOC_N(bin_postfork_child)
+@@ -251,8 +249,6 @@
+ #define nstime_sec JEMALLOC_N(nstime_sec)
+ #define nstime_subtract JEMALLOC_N(nstime_subtract)
+ #define nstime_update JEMALLOC_N(nstime_update)
+-#define init_system_thp_mode JEMALLOC_N(init_system_thp_mode)
+-#define opt_thp JEMALLOC_N(opt_thp)
+ #define pages_boot JEMALLOC_N(pages_boot)
+ #define pages_commit JEMALLOC_N(pages_commit)
+ #define pages_decommit JEMALLOC_N(pages_decommit)
+@@ -263,9 +259,7 @@
+ #define pages_nohuge JEMALLOC_N(pages_nohuge)
+ #define pages_purge_forced JEMALLOC_N(pages_purge_forced)
+ #define pages_purge_lazy JEMALLOC_N(pages_purge_lazy)
+-#define pages_set_thp_state JEMALLOC_N(pages_set_thp_state)
+ #define pages_unmap JEMALLOC_N(pages_unmap)
+-#define thp_mode_names JEMALLOC_N(thp_mode_names)
+ #define bt2gctx_mtx JEMALLOC_N(bt2gctx_mtx)
+ #define bt_init JEMALLOC_N(bt_init)
+ #define lg_prof_sample JEMALLOC_N(lg_prof_sample)
+diff --git a/include/jemalloc/internal/private_namespace_jet.h b/include/jemalloc/internal/private_namespace_jet.h
+index c745f6ea..fce9a813 100644
+--- a/include/jemalloc/internal/private_namespace_jet.h
++++ b/include/jemalloc/internal/private_namespace_jet.h
+@@ -117,8 +117,6 @@
+ #define base_postfork_parent JEMALLOC_N(base_postfork_parent)
+ #define base_prefork JEMALLOC_N(base_prefork)
+ #define base_stats_get JEMALLOC_N(base_stats_get)
+-#define metadata_thp_mode_names JEMALLOC_N(metadata_thp_mode_names)
+-#define opt_metadata_thp JEMALLOC_N(opt_metadata_thp)
+ #define bin_infos JEMALLOC_N(bin_infos)
+ #define bin_init JEMALLOC_N(bin_init)
+ #define bin_postfork_child JEMALLOC_N(bin_postfork_child)
+@@ -254,8 +252,6 @@
+ #define nstime_sec JEMALLOC_N(nstime_sec)
+ #define nstime_subtract JEMALLOC_N(nstime_subtract)
+ #define nstime_update JEMALLOC_N(nstime_update)
+-#define init_system_thp_mode JEMALLOC_N(init_system_thp_mode)
+-#define opt_thp JEMALLOC_N(opt_thp)
+ #define pages_boot JEMALLOC_N(pages_boot)
+ #define pages_commit JEMALLOC_N(pages_commit)
+ #define pages_decommit JEMALLOC_N(pages_decommit)
+@@ -266,9 +262,7 @@
+ #define pages_nohuge JEMALLOC_N(pages_nohuge)
+ #define pages_purge_forced JEMALLOC_N(pages_purge_forced)
+ #define pages_purge_lazy JEMALLOC_N(pages_purge_lazy)
+-#define pages_set_thp_state JEMALLOC_N(pages_set_thp_state)
+ #define pages_unmap JEMALLOC_N(pages_unmap)
+-#define thp_mode_names JEMALLOC_N(thp_mode_names)
+ #define bt2gctx_mtx JEMALLOC_N(bt2gctx_mtx)
+ #define bt_init JEMALLOC_N(bt_init)
+ #define lg_prof_sample JEMALLOC_N(lg_prof_sample)
+diff --git a/src/arena.c b/src/arena.c
+index 54842421..8b138c29 100644
+--- a/src/arena.c
++++ b/src/arena.c
+@@ -90,9 +90,9 @@ arena_stats_merge(tsdn_t *tsdn, arena_t *arena, unsigned *nthreads,
+ 	arena_basic_stats_merge(tsdn, arena, nthreads, dss, dirty_decay_ms,
+ 	    muzzy_decay_ms, nactive, ndirty, nmuzzy);
+ 
+-	size_t base_allocated, base_resident, base_mapped, metadata_thp;
++	size_t base_allocated, base_resident, base_mapped;
+ 	base_stats_get(tsdn, arena->base, &base_allocated, &base_resident,
+-	    &base_mapped, &metadata_thp);
++	    &base_mapped);
+ 
+ 	arena_stats_lock(tsdn, &arena->stats);
+ 
+@@ -127,7 +127,6 @@ arena_stats_merge(tsdn_t *tsdn, arena_t *arena, unsigned *nthreads,
+ 
+ 	arena_stats_accum_zu(&astats->base, base_allocated);
+ 	arena_stats_accum_zu(&astats->internal, arena_internal_get(arena));
+-	arena_stats_accum_zu(&astats->metadata_thp, metadata_thp);
+ 	arena_stats_accum_zu(&astats->resident, base_resident +
+ 	    (((atomic_load_zu(&arena->nactive, ATOMIC_RELAXED) +
+ 	    extents_npages_get(&arena->extents_dirty) +
+diff --git a/src/base.c b/src/base.c
+index f3c61661..421f295a 100644
+--- a/src/base.c
++++ b/src/base.c
+@@ -12,22 +12,8 @@
+ 
+ static base_t *b0;
+ 
+-metadata_thp_mode_t opt_metadata_thp = METADATA_THP_DEFAULT;
+-
+-const char *metadata_thp_mode_names[] = {
+-	"disabled",
+-	"auto",
+-	"always"
+-};
+-
+ /******************************************************************************/
+ 
+-static inline bool
+-metadata_thp_madvise(void) {
+-	return (metadata_thp_enabled() &&
+-	    (init_system_thp_mode == thp_mode_default));
+-}
+-
+ static void *
+ base_map(tsdn_t *tsdn, extent_hooks_t *extent_hooks, unsigned ind, size_t size) {
+ 	void *addr;
+@@ -107,12 +93,7 @@ base_unmap(tsdn_t *tsdn, extent_hooks_t *extent_hooks, unsigned ind, void *addr,
+ 		post_reentrancy(tsd);
+ 	}
+ label_done:
+-	if (metadata_thp_madvise()) {
+-		/* Set NOHUGEPAGE after unmap to avoid kernel defrag. */
+-		assert(((uintptr_t)addr & HUGEPAGE_MASK) == 0 &&
+-		    (size & HUGEPAGE_MASK) == 0);
+-		pages_nohuge(addr, size);
+-	}
++	return;
+ }
+ 
+ static void
+@@ -140,42 +121,6 @@ base_get_num_blocks(base_t *base, bool with_new_block) {
+ 	return n_blocks;
+ }
+ 
+-static void
+-base_auto_thp_switch(tsdn_t *tsdn, base_t *base) {
+-	assert(opt_metadata_thp == metadata_thp_auto);
+-	malloc_mutex_assert_owner(tsdn, &base->mtx);
+-	if (base->auto_thp_switched) {
+-		return;
+-	}
+-	/* Called when adding a new block. */
+-	bool should_switch;
+-	if (base_ind_get(base) != 0) {
+-		should_switch = (base_get_num_blocks(base, true) ==
+-		    BASE_AUTO_THP_THRESHOLD);
+-	} else {
+-		should_switch = (base_get_num_blocks(base, true) ==
+-		    BASE_AUTO_THP_THRESHOLD_A0);
+-	}
+-	if (!should_switch) {
+-		return;
+-	}
+-
+-	base->auto_thp_switched = true;
+-	assert(!config_stats || base->n_thp == 0);
+-	/* Make the initial blocks THP lazily. */
+-	base_block_t *block = base->blocks;
+-	while (block != NULL) {
+-		assert((block->size & HUGEPAGE_MASK) == 0);
+-		pages_huge(block, block->size);
+-		if (config_stats) {
+-			base->n_thp += HUGEPAGE_CEILING(block->size -
+-			    extent_bsize_get(&block->extent)) >> LG_HUGEPAGE;
+-		}
+-		block = block->next;
+-		assert(block == NULL || (base_ind_get(base) == 0));
+-	}
+-}
+-
+ static void *
+ base_extent_bump_alloc_helper(extent_t *extent, size_t *gap_size, size_t size,
+     size_t alignment) {
+@@ -218,13 +163,6 @@ base_extent_bump_alloc_post(base_t *base, extent_t *extent, size_t gap_size,
+ 		    PAGE_CEILING((uintptr_t)addr - gap_size);
+ 		assert(base->allocated <= base->resident);
+ 		assert(base->resident <= base->mapped);
+-		if (metadata_thp_madvise() && (opt_metadata_thp ==
+-		    metadata_thp_always || base->auto_thp_switched)) {
+-			base->n_thp += (HUGEPAGE_CEILING((uintptr_t)addr + size)
+-			    - HUGEPAGE_CEILING((uintptr_t)addr - gap_size)) >>
+-			    LG_HUGEPAGE;
+-			assert(base->mapped >= base->n_thp << LG_HUGEPAGE);
+-		}
+ 	}
+ }
+ 
+@@ -273,24 +211,6 @@ base_block_alloc(tsdn_t *tsdn, base_t *base, extent_hooks_t *extent_hooks,
+ 		return NULL;
+ 	}
+ 
+-	if (metadata_thp_madvise()) {
+-		void *addr = (void *)block;
+-		assert(((uintptr_t)addr & HUGEPAGE_MASK) == 0 &&
+-		    (block_size & HUGEPAGE_MASK) == 0);
+-		if (opt_metadata_thp == metadata_thp_always) {
+-			pages_huge(addr, block_size);
+-		} else if (opt_metadata_thp == metadata_thp_auto &&
+-		    base != NULL) {
+-			/* base != NULL indicates this is not a new base. */
+-			malloc_mutex_lock(tsdn, &base->mtx);
+-			base_auto_thp_switch(tsdn, base);
+-			if (base->auto_thp_switched) {
+-				pages_huge(addr, block_size);
+-			}
+-			malloc_mutex_unlock(tsdn, &base->mtx);
+-		}
+-	}
+-
+ 	*pind_last = sz_psz2ind(block_size);
+ 	block->size = block_size;
+ 	block->next = NULL;
+@@ -327,16 +247,8 @@ base_extent_alloc(tsdn_t *tsdn, base_t *base, size_t size, size_t alignment) {
+ 		base->allocated += sizeof(base_block_t);
+ 		base->resident += PAGE_CEILING(sizeof(base_block_t));
+ 		base->mapped += block->size;
+-		if (metadata_thp_madvise() &&
+-		    !(opt_metadata_thp == metadata_thp_auto
+-		      && !base->auto_thp_switched)) {
+-			assert(base->n_thp > 0);
+-			base->n_thp += HUGEPAGE_CEILING(sizeof(base_block_t)) >>
+-			    LG_HUGEPAGE;
+-		}
+ 		assert(base->allocated <= base->resident);
+ 		assert(base->resident <= base->mapped);
+-		assert(base->n_thp << LG_HUGEPAGE <= base->mapped);
+ 	}
+ 	return &block->extent;
+ }
+@@ -371,7 +283,6 @@ base_new(tsdn_t *tsdn, unsigned ind, extent_hooks_t *extent_hooks) {
+ 	base->pind_last = pind_last;
+ 	base->extent_sn_next = extent_sn_next;
+ 	base->blocks = block;
+-	base->auto_thp_switched = false;
+ 	for (szind_t i = 0; i < SC_NSIZES; i++) {
+ 		extent_heap_new(&base->avail[i]);
+ 	}
+@@ -379,12 +290,8 @@ base_new(tsdn_t *tsdn, unsigned ind, extent_hooks_t *extent_hooks) {
+ 		base->allocated = sizeof(base_block_t);
+ 		base->resident = PAGE_CEILING(sizeof(base_block_t));
+ 		base->mapped = block->size;
+-		base->n_thp = (opt_metadata_thp == metadata_thp_always) &&
+-		    metadata_thp_madvise() ? HUGEPAGE_CEILING(sizeof(base_block_t))
+-		    >> LG_HUGEPAGE : 0;
+ 		assert(base->allocated <= base->resident);
+ 		assert(base->resident <= base->mapped);
+-		assert(base->n_thp << LG_HUGEPAGE <= base->mapped);
+ 	}
+ 	base_extent_bump_alloc_post(base, &block->extent, gap_size, base,
+ 	    base_size);
+@@ -479,7 +386,7 @@ base_alloc_extent(tsdn_t *tsdn, base_t *base) {
+ 
+ void
+ base_stats_get(tsdn_t *tsdn, base_t *base, size_t *allocated, size_t *resident,
+-    size_t *mapped, size_t *n_thp) {
++    size_t *mapped) {
+ 	cassert(config_stats);
+ 
+ 	malloc_mutex_lock(tsdn, &base->mtx);
+@@ -488,7 +395,6 @@ base_stats_get(tsdn_t *tsdn, base_t *base, size_t *allocated, size_t *resident,
+ 	*allocated = base->allocated;
+ 	*resident = base->resident;
+ 	*mapped = base->mapped;
+-	*n_thp = base->n_thp;
+ 	malloc_mutex_unlock(tsdn, &base->mtx);
+ }
+ 
+diff --git a/src/ctl.c b/src/ctl.c
+index 48afaa61..05ed617c 100644
+--- a/src/ctl.c
++++ b/src/ctl.c
+@@ -82,7 +82,6 @@ CTL_PROTO(config_xmalloc)
+ CTL_PROTO(opt_abort)
+ CTL_PROTO(opt_abort_conf)
+ CTL_PROTO(opt_confirm_conf)
+-CTL_PROTO(opt_metadata_thp)
+ CTL_PROTO(opt_retain)
+ CTL_PROTO(opt_dss)
+ CTL_PROTO(opt_narenas)
+@@ -99,7 +98,6 @@ CTL_PROTO(opt_zero)
+ CTL_PROTO(opt_utrace)
+ CTL_PROTO(opt_xmalloc)
+ CTL_PROTO(opt_tcache)
+-CTL_PROTO(opt_thp)
+ CTL_PROTO(opt_lg_extent_max_active_fit)
+ CTL_PROTO(opt_lg_tcache_max)
+ CTL_PROTO(opt_prof)
+@@ -207,7 +205,6 @@ CTL_PROTO(stats_arenas_i_muzzy_nmadvise)
+ CTL_PROTO(stats_arenas_i_muzzy_purged)
+ CTL_PROTO(stats_arenas_i_base)
+ CTL_PROTO(stats_arenas_i_internal)
+-CTL_PROTO(stats_arenas_i_metadata_thp)
+ CTL_PROTO(stats_arenas_i_tcache_bytes)
+ CTL_PROTO(stats_arenas_i_resident)
+ CTL_PROTO(stats_arenas_i_abandoned_vm)
+@@ -218,7 +215,6 @@ CTL_PROTO(stats_background_thread_num_threads)
+ CTL_PROTO(stats_background_thread_num_runs)
+ CTL_PROTO(stats_background_thread_run_interval)
+ CTL_PROTO(stats_metadata)
+-CTL_PROTO(stats_metadata_thp)
+ CTL_PROTO(stats_resident)
+ CTL_PROTO(stats_mapped)
+ CTL_PROTO(stats_retained)
+@@ -309,7 +305,6 @@ static const ctl_named_node_t opt_node[] = {
+ 	{NAME("abort"),		CTL(opt_abort)},
+ 	{NAME("abort_conf"),	CTL(opt_abort_conf)},
+ 	{NAME("confirm_conf"),	CTL(opt_confirm_conf)},
+-	{NAME("metadata_thp"),	CTL(opt_metadata_thp)},
+ 	{NAME("retain"),	CTL(opt_retain)},
+ 	{NAME("dss"),		CTL(opt_dss)},
+ 	{NAME("narenas"),	CTL(opt_narenas)},
+@@ -326,7 +321,6 @@ static const ctl_named_node_t opt_node[] = {
+ 	{NAME("utrace"),	CTL(opt_utrace)},
+ 	{NAME("xmalloc"),	CTL(opt_xmalloc)},
+ 	{NAME("tcache"),	CTL(opt_tcache)},
+-	{NAME("thp"),		CTL(opt_thp)},
+ 	{NAME("lg_extent_max_active_fit"), CTL(opt_lg_extent_max_active_fit)},
+ 	{NAME("lg_tcache_max"),	CTL(opt_lg_tcache_max)},
+ 	{NAME("prof"),		CTL(opt_prof)},
+@@ -541,7 +535,6 @@ static const ctl_named_node_t stats_arenas_i_node[] = {
+ 	{NAME("muzzy_purged"),	CTL(stats_arenas_i_muzzy_purged)},
+ 	{NAME("base"),		CTL(stats_arenas_i_base)},
+ 	{NAME("internal"),	CTL(stats_arenas_i_internal)},
+-	{NAME("metadata_thp"),	CTL(stats_arenas_i_metadata_thp)},
+ 	{NAME("tcache_bytes"),	CTL(stats_arenas_i_tcache_bytes)},
+ 	{NAME("resident"),	CTL(stats_arenas_i_resident)},
+ 	{NAME("abandoned_vm"),	CTL(stats_arenas_i_abandoned_vm)},
+@@ -582,7 +575,6 @@ static const ctl_named_node_t stats_node[] = {
+ 	{NAME("allocated"),	CTL(stats_allocated)},
+ 	{NAME("active"),	CTL(stats_active)},
+ 	{NAME("metadata"),	CTL(stats_metadata)},
+-	{NAME("metadata_thp"),	CTL(stats_metadata_thp)},
+ 	{NAME("resident"),	CTL(stats_resident)},
+ 	{NAME("mapped"),	CTL(stats_mapped)},
+ 	{NAME("retained"),	CTL(stats_retained)},
+@@ -884,8 +876,6 @@ MUTEX_PROF_ARENA_MUTEXES
+ 			    &astats->astats.internal);
+ 			accum_atomic_zu(&sdstats->astats.resident,
+ 			    &astats->astats.resident);
+-			accum_atomic_zu(&sdstats->astats.metadata_thp,
+-			    &astats->astats.metadata_thp);
+ 		} else {
+ 			assert(atomic_load_zu(
+ 			    &astats->astats.internal, ATOMIC_RELAXED) == 0);
+@@ -1076,8 +1066,6 @@ ctl_refresh(tsdn_t *tsdn) {
+ 		    &ctl_sarena->astats->astats.base, ATOMIC_RELAXED) +
+ 		    atomic_load_zu(&ctl_sarena->astats->astats.internal,
+ 			ATOMIC_RELAXED);
+-		ctl_stats->metadata_thp = atomic_load_zu(
+-		    &ctl_sarena->astats->astats.metadata_thp, ATOMIC_RELAXED);
+ 		ctl_stats->resident = atomic_load_zu(
+ 		    &ctl_sarena->astats->astats.resident, ATOMIC_RELAXED);
+ 		ctl_stats->mapped = atomic_load_zu(
+@@ -1762,8 +1750,6 @@ CTL_RO_CONFIG_GEN(config_xmalloc, bool)
+ CTL_RO_NL_GEN(opt_abort, opt_abort, bool)
+ CTL_RO_NL_GEN(opt_abort_conf, opt_abort_conf, bool)
+ CTL_RO_NL_GEN(opt_confirm_conf, opt_confirm_conf, bool)
+-CTL_RO_NL_GEN(opt_metadata_thp, metadata_thp_mode_names[opt_metadata_thp],
+-    const char *)
+ CTL_RO_NL_GEN(opt_retain, opt_retain, bool)
+ CTL_RO_NL_GEN(opt_dss, opt_dss, const char *)
+ CTL_RO_NL_GEN(opt_narenas, opt_narenas, unsigned)
+@@ -1781,7 +1767,6 @@ CTL_RO_NL_CGEN(config_fill, opt_zero, opt_zero, bool)
+ CTL_RO_NL_CGEN(config_utrace, opt_utrace, opt_utrace, bool)
+ CTL_RO_NL_CGEN(config_xmalloc, opt_xmalloc, opt_xmalloc, bool)
+ CTL_RO_NL_GEN(opt_tcache, opt_tcache, bool)
+-CTL_RO_NL_GEN(opt_thp, thp_mode_names[opt_thp], const char *)
+ CTL_RO_NL_GEN(opt_lg_extent_max_active_fit, opt_lg_extent_max_active_fit,
+     size_t)
+ CTL_RO_NL_GEN(opt_lg_tcache_max, opt_lg_tcache_max, ssize_t)
+@@ -2806,7 +2791,6 @@ prof_log_stop_ctl(tsd_t *tsd, const size_t *mib, size_t miblen, void *oldp,
+ CTL_RO_CGEN(config_stats, stats_allocated, ctl_stats->allocated, size_t)
+ CTL_RO_CGEN(config_stats, stats_active, ctl_stats->active, size_t)
+ CTL_RO_CGEN(config_stats, stats_metadata, ctl_stats->metadata, size_t)
+-CTL_RO_CGEN(config_stats, stats_metadata_thp, ctl_stats->metadata_thp, size_t)
+ CTL_RO_CGEN(config_stats, stats_resident, ctl_stats->resident, size_t)
+ CTL_RO_CGEN(config_stats, stats_mapped, ctl_stats->mapped, size_t)
+ CTL_RO_CGEN(config_stats, stats_retained, ctl_stats->retained, size_t)
+@@ -2866,9 +2850,6 @@ CTL_RO_CGEN(config_stats, stats_arenas_i_base,
+ CTL_RO_CGEN(config_stats, stats_arenas_i_internal,
+     atomic_load_zu(&arenas_i(mib[2])->astats->astats.internal, ATOMIC_RELAXED),
+     size_t)
+-CTL_RO_CGEN(config_stats, stats_arenas_i_metadata_thp,
+-    atomic_load_zu(&arenas_i(mib[2])->astats->astats.metadata_thp,
+-    ATOMIC_RELAXED), size_t)
+ CTL_RO_CGEN(config_stats, stats_arenas_i_tcache_bytes,
+     atomic_load_zu(&arenas_i(mib[2])->astats->astats.tcache_bytes,
+     ATOMIC_RELAXED), size_t)
+diff --git a/src/extent.c b/src/extent.c
+index 9237f903..9cbeb400 100644
+--- a/src/extent.c
++++ b/src/extent.c
+@@ -1116,8 +1116,7 @@ extent_need_manual_zero(arena_t *arena) {
+ 	 * default extent hooks installed (in which case the purge semantics may
+ 	 * change); or 2) transparent huge pages enabled.
+ 	 */
+-	return (!arena_has_default_hooks(arena) ||
+-		(opt_thp == thp_mode_always));
++	return !arena_has_default_hooks(arena);
+ }
+ 
+ /*
+@@ -1241,9 +1240,6 @@ extent_alloc_default_impl(tsdn_t *tsdn, arena_t *arena, void *new_addr,
+ 	void *ret = extent_alloc_core(tsdn, arena, new_addr, size, alignment, zero,
+ 	    commit, (dss_prec_t)atomic_load_u(&arena->dss_prec,
+ 	    ATOMIC_RELAXED));
+-	if (have_madvise_huge && ret) {
+-		pages_set_thp_state(ret, size);
+-	}
+ 	return ret;
+ }
+ 
+diff --git a/src/jemalloc.c b/src/jemalloc.c
+index cc916497..4c94568d 100644
+--- a/src/jemalloc.c
++++ b/src/jemalloc.c
+@@ -1172,23 +1172,6 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
+ 
+ 			CONF_HANDLE_BOOL(opt_abort, "abort")
+ 			CONF_HANDLE_BOOL(opt_abort_conf, "abort_conf")
+-			if (strncmp("metadata_thp", k, klen) == 0) {
+-				int i;
+-				bool match = false;
+-				for (i = 0; i < metadata_thp_mode_limit; i++) {
+-					if (strncmp(metadata_thp_mode_names[i],
+-					    v, vlen) == 0) {
+-						opt_metadata_thp = i;
+-						match = true;
+-						break;
+-					}
+-				}
+-				if (!match) {
+-					CONF_ERROR("Invalid conf value",
+-					    k, klen, v, vlen);
+-				}
+-				CONF_CONTINUE;
+-			}
+ 			CONF_HANDLE_BOOL(opt_retain, "retain")
+ 			if (strncmp("dss", k, klen) == 0) {
+ 				int i;
+@@ -1388,27 +1371,6 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
+ 					CONF_CONTINUE;
+ 				}
+ 			}
+-			if (CONF_MATCH("thp")) {
+-				bool match = false;
+-				for (int i = 0; i < thp_mode_names_limit; i++) {
+-					if (strncmp(thp_mode_names[i],v, vlen)
+-					    == 0) {
+-						if (!have_madvise_huge) {
+-							CONF_ERROR(
+-							    "No THP support",
+-							    k, klen, v, vlen);
+-						}
+-						opt_thp = i;
+-						match = true;
+-						break;
+-					}
+-				}
+-				if (!match) {
+-					CONF_ERROR("Invalid conf value",
+-					    k, klen, v, vlen);
+-				}
+-				CONF_CONTINUE;
+-			}
+ 			CONF_ERROR("Invalid conf pair", k, klen, v, vlen);
+ #undef CONF_ERROR
+ #undef CONF_CONTINUE
+diff --git a/src/pages.c b/src/pages.c
+index 2125d17f..555c359c 100644
+--- a/src/pages.c
++++ b/src/pages.c
+@@ -35,15 +35,6 @@ static int	mmap_flags;
+ #endif
+ static bool	os_overcommits;
+ 
+-const char *thp_mode_names[] = {
+-	"default",
+-	"always",
+-	"never",
+-	"not supported"
+-};
+-thp_mode_t opt_thp = THP_MODE_DEFAULT;
+-thp_mode_t init_system_thp_mode;
+-
+ /* Runtime support for lazy purge. Irrelevant when !pages_can_purge_lazy. */
+ static bool pages_can_purge_lazy_runtime = true;
+ 
+@@ -540,75 +531,6 @@ os_overcommits_proc(void) {
+ }
+ #endif
+ 
+-void
+-pages_set_thp_state (void *ptr, size_t size) {
+-	if (opt_thp == thp_mode_default || opt_thp == init_system_thp_mode) {
+-		return;
+-	}
+-	assert(opt_thp != thp_mode_not_supported &&
+-	    init_system_thp_mode != thp_mode_not_supported);
+-
+-	if (opt_thp == thp_mode_always
+-	    && init_system_thp_mode != thp_mode_never) {
+-		assert(init_system_thp_mode == thp_mode_default);
+-		pages_huge_unaligned(ptr, size);
+-	} else if (opt_thp == thp_mode_never) {
+-		assert(init_system_thp_mode == thp_mode_default ||
+-		    init_system_thp_mode == thp_mode_always);
+-		pages_nohuge_unaligned(ptr, size);
+-	}
+-}
+-
+-static void
+-init_thp_state(void) {
+-	if (!have_madvise_huge) {
+-		if (metadata_thp_enabled() && opt_abort) {
+-			malloc_write("<jemalloc>: no MADV_HUGEPAGE support\n");
+-			abort();
+-		}
+-		goto label_error;
+-	}
+-
+-	static const char sys_state_madvise[] = "always [madvise] never\n";
+-	static const char sys_state_always[] = "[always] madvise never\n";
+-	static const char sys_state_never[] = "always madvise [never]\n";
+-	char buf[sizeof(sys_state_madvise)];
+-
+-#if defined(JEMALLOC_USE_SYSCALL) && defined(SYS_open)
+-	int fd = (int)syscall(SYS_open,
+-	    "/sys/kernel/mm/transparent_hugepage/enabled", O_RDONLY);
+-#else
+-	int fd = open("/sys/kernel/mm/transparent_hugepage/enabled", O_RDONLY);
+-#endif
+-	if (fd == -1) {
+-		goto label_error;
+-	}
+-
+-	ssize_t nread = malloc_read_fd(fd, &buf, sizeof(buf));
+-#if defined(JEMALLOC_USE_SYSCALL) && defined(SYS_close)
+-	syscall(SYS_close, fd);
+-#else
+-	close(fd);
+-#endif
+-
+-        if (nread < 0) {
+-		goto label_error; 
+-        }
+-
+-	if (strncmp(buf, sys_state_madvise, (size_t)nread) == 0) {
+-		init_system_thp_mode = thp_mode_default;
+-	} else if (strncmp(buf, sys_state_always, (size_t)nread) == 0) {
+-		init_system_thp_mode = thp_mode_always;
+-	} else if (strncmp(buf, sys_state_never, (size_t)nread) == 0) {
+-		init_system_thp_mode = thp_mode_never;
+-	} else {
+-		goto label_error;
+-	}
+-	return;
+-label_error:
+-	opt_thp = init_system_thp_mode = thp_mode_not_supported;
+-}
+-
+ bool
+ pages_boot(void) {
+ 	os_page = os_page_detect();
+@@ -644,8 +566,6 @@ pages_boot(void) {
+ 
+ #endif  /* __ANDROID__ */
+ 
+-	init_thp_state();
+-
+ #ifdef __FreeBSD__
+ 	/*
+ 	 * FreeBSD doesn't need the check; madvise(2) is known to work.
+diff --git a/src/stats.c b/src/stats.c
+index 118e05d2..bfe02a49 100644
+--- a/src/stats.c
++++ b/src/stats.c
+@@ -664,7 +664,7 @@ stats_arena_print(emitter_t *emitter, unsigned i, bool bins, bool large,
+ 	const char *dss;
+ 	ssize_t dirty_decay_ms, muzzy_decay_ms;
+ 	size_t page, pactive, pdirty, pmuzzy, mapped, retained;
+-	size_t base, internal, resident, metadata_thp, extent_avail;
++	size_t base, internal, resident, extent_avail;
+ 	uint64_t dirty_npurge, dirty_nmadvise, dirty_purged;
+ 	uint64_t muzzy_npurge, muzzy_nmadvise, muzzy_purged;
+ 	size_t small_allocated;
+@@ -960,7 +960,6 @@ stats_arena_print(emitter_t *emitter, unsigned i, bool bins, bool large,
+ 	GET_AND_EMIT_MEM_STAT(retained)
+ 	GET_AND_EMIT_MEM_STAT(base)
+ 	GET_AND_EMIT_MEM_STAT(internal)
+-	GET_AND_EMIT_MEM_STAT(metadata_thp)
+ 	GET_AND_EMIT_MEM_STAT(tcache_bytes)
+ 	GET_AND_EMIT_MEM_STAT(resident)
+ 	GET_AND_EMIT_MEM_STAT(abandoned_vm)
+@@ -1072,7 +1071,6 @@ stats_general_print(emitter_t *emitter) {
+ 	OPT_WRITE_UNSIGNED("narenas")
+ 	OPT_WRITE_CHAR_P("percpu_arena")
+ 	OPT_WRITE_SIZE_T("oversize_threshold")
+-	OPT_WRITE_CHAR_P("metadata_thp")
+ 	OPT_WRITE_BOOL_MUTABLE("background_thread", "background_thread")
+ 	OPT_WRITE_SSIZE_T_MUTABLE("dirty_decay_ms", "arenas.dirty_decay_ms")
+ 	OPT_WRITE_SSIZE_T_MUTABLE("muzzy_decay_ms", "arenas.muzzy_decay_ms")
+@@ -1083,7 +1081,6 @@ stats_general_print(emitter_t *emitter) {
+ 	OPT_WRITE_BOOL("xmalloc")
+ 	OPT_WRITE_BOOL("tcache")
+ 	OPT_WRITE_SSIZE_T("lg_tcache_max")
+-	OPT_WRITE_CHAR_P("thp")
+ 	OPT_WRITE_BOOL("prof")
+ 	OPT_WRITE_CHAR_P("prof_prefix")
+ 	OPT_WRITE_BOOL_MUTABLE("prof_active", "prof.active")
+@@ -1236,7 +1233,7 @@ stats_print_helper(emitter_t *emitter, bool merged, bool destroyed,
+ 	 * These should be deleted.  We keep them around for a while, to aid in
+ 	 * the transition to the emitter code.
+ 	 */
+-	size_t allocated, active, metadata, metadata_thp, resident, mapped,
++	size_t allocated, active, metadata, resident, mapped,
+ 	    retained;
+ 	size_t num_background_threads;
+ 	uint64_t background_thread_num_runs, background_thread_run_interval;
+@@ -1244,7 +1241,6 @@ stats_print_helper(emitter_t *emitter, bool merged, bool destroyed,
+ 	CTL_GET("stats.allocated", &allocated, size_t);
+ 	CTL_GET("stats.active", &active, size_t);
+ 	CTL_GET("stats.metadata", &metadata, size_t);
+-	CTL_GET("stats.metadata_thp", &metadata_thp, size_t);
+ 	CTL_GET("stats.resident", &resident, size_t);
+ 	CTL_GET("stats.mapped", &mapped, size_t);
+ 	CTL_GET("stats.retained", &retained, size_t);
+@@ -1267,15 +1263,13 @@ stats_print_helper(emitter_t *emitter, bool merged, bool destroyed,
+ 	emitter_json_kv(emitter, "allocated", emitter_type_size, &allocated);
+ 	emitter_json_kv(emitter, "active", emitter_type_size, &active);
+ 	emitter_json_kv(emitter, "metadata", emitter_type_size, &metadata);
+-	emitter_json_kv(emitter, "metadata_thp", emitter_type_size,
+-	    &metadata_thp);
+ 	emitter_json_kv(emitter, "resident", emitter_type_size, &resident);
+ 	emitter_json_kv(emitter, "mapped", emitter_type_size, &mapped);
+ 	emitter_json_kv(emitter, "retained", emitter_type_size, &retained);
+ 
+ 	emitter_table_printf(emitter, "Allocated: %zu, active: %zu, "
+-	    "metadata: %zu (n_thp %zu), resident: %zu, mapped: %zu, "
+-	    "retained: %zu\n", allocated, active, metadata, metadata_thp,
++	    "metadata: %zu, resident: %zu, mapped: %zu, "
++	    "retained: %zu\n", allocated, active, metadata,
+ 	    resident, mapped, retained);
+ 
+ 	/* Background thread stats. */
+diff --git a/test/unit/base.c b/test/unit/base.c
+index 6b792cf2..7fa24ac0 100644
+--- a/test/unit/base.c
++++ b/test/unit/base.c
+@@ -28,28 +28,22 @@ static extent_hooks_t hooks_not_null = {
+ 
+ TEST_BEGIN(test_base_hooks_default) {
+ 	base_t *base;
+-	size_t allocated0, allocated1, resident, mapped, n_thp;
++	size_t allocated0, allocated1, resident, mapped;
+ 
+ 	tsdn_t *tsdn = tsd_tsdn(tsd_fetch());
+ 	base = base_new(tsdn, 0, (extent_hooks_t *)&extent_hooks_default);
+ 
+ 	if (config_stats) {
+-		base_stats_get(tsdn, base, &allocated0, &resident, &mapped,
+-		    &n_thp);
++		base_stats_get(tsdn, base, &allocated0, &resident, &mapped);
+ 		assert_zu_ge(allocated0, sizeof(base_t),
+ 		    "Base header should count as allocated");
+-		if (opt_metadata_thp == metadata_thp_always) {
+-			assert_zu_gt(n_thp, 0,
+-			    "Base should have 1 THP at least.");
+-		}
+ 	}
+ 
+ 	assert_ptr_not_null(base_alloc(tsdn, base, 42, 1),
+ 	    "Unexpected base_alloc() failure");
+ 
+ 	if (config_stats) {
+-		base_stats_get(tsdn, base, &allocated1, &resident, &mapped,
+-		    &n_thp);
++		base_stats_get(tsdn, base, &allocated1, &resident, &mapped);
+ 		assert_zu_ge(allocated1 - allocated0, 42,
+ 		    "At least 42 bytes were allocated by base_alloc()");
+ 	}
+@@ -61,7 +55,7 @@ TEST_END
+ TEST_BEGIN(test_base_hooks_null) {
+ 	extent_hooks_t hooks_orig;
+ 	base_t *base;
+-	size_t allocated0, allocated1, resident, mapped, n_thp;
++	size_t allocated0, allocated1, resident, mapped;
+ 
+ 	extent_hooks_prep();
+ 	try_dalloc = false;
+@@ -77,22 +71,16 @@ TEST_BEGIN(test_base_hooks_null) {
+ 	assert_ptr_not_null(base, "Unexpected base_new() failure");
+ 
+ 	if (config_stats) {
+-		base_stats_get(tsdn, base, &allocated0, &resident, &mapped,
+-		    &n_thp);
++		base_stats_get(tsdn, base, &allocated0, &resident, &mapped);
+ 		assert_zu_ge(allocated0, sizeof(base_t),
+ 		    "Base header should count as allocated");
+-		if (opt_metadata_thp == metadata_thp_always) {
+-			assert_zu_gt(n_thp, 0,
+-			    "Base should have 1 THP at least.");
+-		}
+ 	}
+ 
+ 	assert_ptr_not_null(base_alloc(tsdn, base, 42, 1),
+ 	    "Unexpected base_alloc() failure");
+ 
+ 	if (config_stats) {
+-		base_stats_get(tsdn, base, &allocated1, &resident, &mapped,
+-		    &n_thp);
++		base_stats_get(tsdn, base, &allocated1, &resident, &mapped);
+ 		assert_zu_ge(allocated1 - allocated0, 42,
+ 		    "At least 42 bytes were allocated by base_alloc()");
+ 	}
+diff --git a/test/unit/mallctl.c b/test/unit/mallctl.c
+index 3a75ac04..64572cc9 100644
+--- a/test/unit/mallctl.c
++++ b/test/unit/mallctl.c
+@@ -160,7 +160,6 @@ TEST_BEGIN(test_mallctl_opt) {
+ 	TEST_MALLCTL_OPT(bool, abort, always);
+ 	TEST_MALLCTL_OPT(bool, abort_conf, always);
+ 	TEST_MALLCTL_OPT(bool, confirm_conf, always);
+-	TEST_MALLCTL_OPT(const char *, metadata_thp, always);
+ 	TEST_MALLCTL_OPT(bool, retain, always);
+ 	TEST_MALLCTL_OPT(const char *, dss, always);
+ 	TEST_MALLCTL_OPT(unsigned, narenas, always);
+@@ -177,7 +176,6 @@ TEST_BEGIN(test_mallctl_opt) {
+ 	TEST_MALLCTL_OPT(bool, tcache, always);
+ 	TEST_MALLCTL_OPT(size_t, lg_extent_max_active_fit, always);
+ 	TEST_MALLCTL_OPT(size_t, lg_tcache_max, always);
+-	TEST_MALLCTL_OPT(const char *, thp, always);
+ 	TEST_MALLCTL_OPT(bool, prof, prof);
+ 	TEST_MALLCTL_OPT(const char *, prof_prefix, prof);
+ 	TEST_MALLCTL_OPT(bool, prof_active, prof);
+diff --git a/test/unit/pages.c b/test/unit/pages.c
+deleted file mode 100644
+index ee729eec..00000000
+--- a/test/unit/pages.c
++++ /dev/null
+@@ -1,29 +0,0 @@
+-#include "test/jemalloc_test.h"
+-
+-TEST_BEGIN(test_pages_huge) {
+-	size_t alloc_size;
+-	bool commit;
+-	void *pages, *hugepage;
+-
+-	alloc_size = HUGEPAGE * 2 - PAGE;
+-	commit = true;
+-	pages = pages_map(NULL, alloc_size, PAGE, &commit);
+-	assert_ptr_not_null(pages, "Unexpected pages_map() error");
+-
+-	if (init_system_thp_mode == thp_mode_default) {
+-	    hugepage = (void *)(ALIGNMENT_CEILING((uintptr_t)pages, HUGEPAGE));
+-	    assert_b_ne(pages_huge(hugepage, HUGEPAGE), have_madvise_huge,
+-	        "Unexpected pages_huge() result");
+-	    assert_false(pages_nohuge(hugepage, HUGEPAGE),
+-	        "Unexpected pages_nohuge() result");
+-	}
+-
+-	pages_unmap(pages, alloc_size);
+-}
+-TEST_END
+-
+-int
+-main(void) {
+-	return test(
+-	    test_pages_huge);
+-}
+-- 
+2.31.1
+

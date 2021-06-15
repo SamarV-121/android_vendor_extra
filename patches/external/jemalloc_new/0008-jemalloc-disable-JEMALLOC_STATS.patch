@@ -1,0 +1,27 @@
+From 0137a9053a45533f578ac643d7e6c7e903d8fdae Mon Sep 17 00:00:00 2001
+From: Park Ju Hyung <qkrwngud825@gmail.com>
+Date: Mon, 14 Oct 2019 06:07:10 +0900
+Subject: [PATCH 08/10] jemalloc: disable JEMALLOC_STATS
+
+Signed-off-by: Park Ju Hyung <qkrwngud825@gmail.com>
+Change-Id: Ie69921ef8d9c3dc901849f2c7a40c2bda230b9aa
+---
+ include/jemalloc/internal/jemalloc_internal_defs.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/jemalloc/internal/jemalloc_internal_defs.h b/include/jemalloc/internal/jemalloc_internal_defs.h
+index 4dee8e74..4ab84453 100644
+--- a/include/jemalloc/internal/jemalloc_internal_defs.h
++++ b/include/jemalloc/internal/jemalloc_internal_defs.h
+@@ -151,7 +151,7 @@
+ /* #undef JEMALLOC_DEBUG */
+ 
+ /* JEMALLOC_STATS enables statistics calculation. */
+-#define JEMALLOC_STATS 
++/* #undef JEMALLOC_STATS */
+ 
+ /* JEMALLOC_EXPERIMENTAL_SMALLOCX_API enables experimental smallocx API. */
+ /* #undef JEMALLOC_EXPERIMENTAL_SMALLOCX_API */
+-- 
+2.31.1
+
