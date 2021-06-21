@@ -1,4 +1,4 @@
-From 53524dae54173dd8eb419f5335071bfc9de0cad9 Mon Sep 17 00:00:00 2001
+From 3d28c6820ed453996401cab718519162c819d109 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 3 Nov 2020 13:17:29 -0800
 Subject: [PATCH 21/49] SystemUI: Restore typographic clock face

@@ -1,4 +1,4 @@
-From b95b84dcfe32c2ebda2670fa04e800ed1d761605 Mon Sep 17 00:00:00 2001
+From 8390fa1e1afb65a4b7dfe29d559dbd9ffccc85d1 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 15 Dec 2020 16:58:40 -0800
 Subject: [PATCH 12/49] SystemUI: Skip screen-on animation in all scenarios

@@ -1,4 +1,4 @@
-From e5fe58d21c4cea866c3db72ea9fd033500f855eb Mon Sep 17 00:00:00 2001
+From 392fed9d134f535ef8cb5a9fc844e6949d89e7cc Mon Sep 17 00:00:00 2001
 From: Cosmin Tanislav <demonsingur@gmail.com>
 Date: Sun, 16 Aug 2020 19:45:00 +0200
 Subject: [PATCH 47/49] base: Allow unlocking fingerprint only on power button
@@ -392,7 +392,7 @@ index 5b51aa6e72a..b303026f3a2 100644
          JSONObject dump = new JSONObject();
          try {
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index e478ef2a204..e0cef8c86de 100644
+index 516b1bf50f1..f9258f437ea 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -213,6 +213,7 @@ import com.android.server.ExtconUEventObserver;
@@ -441,7 +441,7 @@ index e478ef2a204..e0cef8c86de 100644
          // Before we actually go to sleep, we check the last wakeup reason.
          // If the device very recently woke up from a gesture (like user lifting their device)
          // then ignore the sleep instruction. This is because users have developed
-@@ -3019,6 +3030,21 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -3021,6 +3032,21 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              WindowManager.LayoutParams.TYPE_SYSTEM_ERROR,
          };
  
@@ -463,7 +463,7 @@ index e478ef2a204..e0cef8c86de 100644
      // TODO(b/117479243): handle it in InputPolicy
      /** {@inheritDoc} */
      @Override
-@@ -4522,6 +4548,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -4540,6 +4566,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              }
  
              case KeyEvent.KEYCODE_POWER: {
@@ -473,7 +473,7 @@ index e478ef2a204..e0cef8c86de 100644
                  EventLogTags.writeInterceptPower(
                          KeyEvent.actionToString(event.getAction()),
                          mPowerKeyHandled ? 1 : 0, mPowerKeyPressCounter);
-@@ -5235,6 +5264,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -5253,6 +5282,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
      }
  
      private void wakeUpFromPowerKey(long eventTime) {

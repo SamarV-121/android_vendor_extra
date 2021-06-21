@@ -1,4 +1,4 @@
-From 88e51122a8f1d32f3e3efac1744a6fd8f0d38de6 Mon Sep 17 00:00:00 2001
+From 0066481f2c73177d4ca9b6dea4ed4325be3b62f0 Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Sun, 9 Aug 2015 01:23:33 +0800
 Subject: [PATCH 09/49] base: Add three-fingers-swipe to screenshot [1/2]
@@ -197,7 +197,7 @@ index 00000000000..e4af1a03466
 +    }
 +}
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 2400a540b07..d5dc4b4d0a3 100644
+index 2e58c98da57..7fc3205c26e 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -656,6 +656,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -227,7 +227,7 @@ index 2400a540b07..d5dc4b4d0a3 100644
              updateSettings();
          }
  
-@@ -2052,6 +2056,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2054,6 +2058,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          }
  
          mHandler = new PolicyHandler();
@@ -240,7 +240,7 @@ index 2400a540b07..d5dc4b4d0a3 100644
          mWakeGestureListener = new MyWakeGestureListener(mContext, mHandler);
          mSettingsObserver = new SettingsObserver(mHandler);
  
-@@ -2209,6 +2219,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2211,6 +2221,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              finishedGoingToSleep(WindowManagerPolicy.OFF_BECAUSE_OF_USER);
          }
  
@@ -248,7 +248,7 @@ index 2400a540b07..d5dc4b4d0a3 100644
          mWindowManagerInternal.registerAppTransitionListener(new AppTransitionListener() {
              @Override
              public int onAppTransitionStartingLocked(int transit, long duration,
-@@ -2275,6 +2286,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2277,6 +2288,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          context.registerReceiver(torchReceiver, filter);
      }
  
@@ -267,7 +267,7 @@ index 2400a540b07..d5dc4b4d0a3 100644
      private void updateKeyAssignments() {
          int activeHardwareKeys = mDeviceHardwareKeys;
  
-@@ -2448,6 +2471,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2450,6 +2473,11 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                      LineageSettings.System.CLICK_PARTIAL_SCREENSHOT, 0,
                      UserHandle.USER_CURRENT) == 1;
  

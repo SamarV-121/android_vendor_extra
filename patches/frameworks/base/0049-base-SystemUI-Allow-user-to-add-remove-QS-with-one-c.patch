@@ -1,4 +1,4 @@
-From d6eccd535c0368678234c0e0812e69b7a983f847 Mon Sep 17 00:00:00 2001
+From 5012aeb192fbe791e01229d0d01f338eb3b57a9c Mon Sep 17 00:00:00 2001
 From: Andrzej Ressel <jereksel@gmail.com>
 Date: Wed, 9 Aug 2017 00:11:16 +0200
 Subject: [PATCH 49/49] base: SystemUI: Allow user to add/remove QS with one

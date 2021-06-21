@@ -1,4 +1,4 @@
-From 073c06eba0f077625ff1092f297e4fe9e063894f Mon Sep 17 00:00:00 2001
+From 5ab33f3b2a24f6633d488f386ebba8216a7b3cf9 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:00:16 -0700
 Subject: [PATCH 34/49] PackageInfo: Optimize ApplicationInfo creation

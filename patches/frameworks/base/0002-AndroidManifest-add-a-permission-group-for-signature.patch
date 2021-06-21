@@ -1,4 +1,4 @@
-From fecfea62eca925a9df48cb98ee36086f38911ccd Mon Sep 17 00:00:00 2001
+From 1b8359e65fa47e16581a0597773925858e706fa5 Mon Sep 17 00:00:00 2001
 From: Vachounet <vachounet@live.fr>
 Date: Wed, 12 Feb 2020 11:34:33 +0100
 Subject: [PATCH 02/49] AndroidManifest: add a permission group for signature

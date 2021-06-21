@@ -1,4 +1,4 @@
-From ad1be0fc84bf69c00236c8a2149cee44341a9f20 Mon Sep 17 00:00:00 2001
+From 89339a7ba20ff6220f15f474a7fadf0e37c1d4bd Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 6 Mar 2021 15:27:11 -0300
 Subject: [PATCH 28/49] Allow using face as auth method for apps
@@ -55,13 +55,13 @@ index a87c7b3fa92..b80aa480ccb 100644
          <Button android:id="@+id/button_try_again"
              android:layout_width="wrap_content"
 diff --git a/packages/SystemUI/res/values/cm_strings.xml b/packages/SystemUI/res/values/cm_strings.xml
-index 6a1683e9583..27942de8967 100644
+index f376ee72547..650f41cb52b 100644
 --- a/packages/SystemUI/res/values/cm_strings.xml
 +++ b/packages/SystemUI/res/values/cm_strings.xml
-@@ -122,4 +122,7 @@
-     <!-- Label for current user in power menu options dialog -->
-     <string name="global_action_current_user">Current</string>
-     <string name="global_action_users">Users</string>
+@@ -131,4 +131,7 @@
+ 
+     <!-- Notify use that they are in Lock-to-app (for devices without navbar)-->
+     <string name="screen_pinning_toast_no_navbar">To unpin this screen, touch &amp; hold Back button</string>
 +
 +    <!-- Biometric Dialog - Use Face -->
 +    <string name="biometric_dialog_button_use_face">Use Face</string>

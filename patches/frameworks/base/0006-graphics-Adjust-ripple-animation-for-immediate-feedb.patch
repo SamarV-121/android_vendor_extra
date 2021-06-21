@@ -1,4 +1,4 @@
-From ff244cd9770ac193b91c10e1e54c387a8d472831 Mon Sep 17 00:00:00 2001
+From 339810bdc828aa5a19cc46d974597ab1963f13c1 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 29 Oct 2020 20:36:31 -0700
 Subject: [PATCH 06/49] graphics: Adjust ripple animation for immediate

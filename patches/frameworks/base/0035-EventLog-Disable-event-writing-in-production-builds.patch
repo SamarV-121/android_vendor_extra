@@ -1,4 +1,4 @@
-From f7fb8df3c5f35c4783e8cdf7a7c7d53b2485b98a Mon Sep 17 00:00:00 2001
+From 94074a8117d6d8d90cce472be61617dc2630b11b Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 21:45:18 -0700
 Subject: [PATCH 35/49] EventLog: Disable event writing in production builds

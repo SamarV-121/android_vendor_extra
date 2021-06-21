@@ -1,4 +1,4 @@
-From 18d0b75aa41a8d4aba047232a181b26c3ac4a9e1 Mon Sep 17 00:00:00 2001
+From daf843a18219f2315542e4f89e0874d21ce1bd5b Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Mar 2021 01:58:18 -0300
 Subject: [PATCH 29/49] FaceService: Nuke useless call to getAuthenticatorId

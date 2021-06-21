@@ -1,4 +1,4 @@
-From bd2112988bfe5aaa0798b7fff0942d41bbaa2c66 Mon Sep 17 00:00:00 2001
+From 73eaec1fe33ec3b50dc6e373948386e3ccd2d96d Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 28 Mar 2020 12:51:07 -0300
 Subject: [PATCH 30/49] SystemUI: Allow listening for face only on pin/pass

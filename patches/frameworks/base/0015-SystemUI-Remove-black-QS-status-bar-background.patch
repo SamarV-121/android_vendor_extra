@@ -1,4 +1,4 @@
-From 66c2fb780fe859d36a496f10113481c846def7af Mon Sep 17 00:00:00 2001
+From 1e20dcc041d7c65258c1061626ceb4697ca2bf12 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Oct 2020 13:24:11 -0700
 Subject: [PATCH 15/49] SystemUI: Remove black QS status bar background

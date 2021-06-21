@@ -1,4 +1,4 @@
-From bb4a3f2cea33e1fbe2d793041857578ab6ed50c7 Mon Sep 17 00:00:00 2001
+From 65e4f46bd26bd71b75306492ad9e6ba6b9a15324 Mon Sep 17 00:00:00 2001
 From: El Dainosor <eldainosor@gmail.com>
 Date: Fri, 17 Apr 2020 23:35:23 +0000
 Subject: [PATCH 22/49] TypeClock: Properly calculate the height
