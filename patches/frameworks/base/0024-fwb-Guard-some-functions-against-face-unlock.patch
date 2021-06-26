@@ -1,7 +1,7 @@
 From 84906ccddca4e9c1761e90aaa106b0c0368da571 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 27 Mar 2020 22:48:17 -0300
-Subject: [PATCH 24/49] fwb: Guard some functions against face unlock
+Subject: [PATCH 24/52] fwb: Guard some functions against face unlock
 
 Change-Id: I26d6f6d9ead884aff361236d2e5aa202d90704ba
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>

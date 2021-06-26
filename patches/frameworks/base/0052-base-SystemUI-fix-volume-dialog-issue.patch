@@ -1,0 +1,43 @@
+From efea2624dd597b3abeeb807c10809dea8c4e14c6 Mon Sep 17 00:00:00 2001
+From: cjybyjk <cjybyjk@zjnu.edu.cn>
+Date: Thu, 21 Jan 2021 14:28:35 +0800
+Subject: [PATCH 52/52] base: SystemUI: fix volume dialog issue
+
+When user turn on per-app volume control
+and sets the display size to the minimum,
+the volume dialog will have an issue of display like this:
+https://ftp.bmp.ovh/imgs/2021/01/b821ad72f3152133.jpg
+
+Signed-off-by: cjybyjk <cjybyjk@zjnu.edu.cn>
+Change-Id: I51b52161ddfd4b50ddb962f788d86f65aedd2342
+---
+ .../src/com/android/systemui/volume/VolumeDialogImpl.java  | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
+index bbeea810770..5412ef4acc7 100644
+--- a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
+@@ -639,16 +639,15 @@ public class VolumeDialogImpl implements VolumeDialog,
+         if (!isNotificationVolumeLinked()) {
+             setVisOrGone(AudioManager.STREAM_NOTIFICATION, expand);
+         }
+-        if (expand) {
+-            updateAppRows();
+-        }
++        updateAppRows(expand);
+     }
+ 
+-    private void updateAppRows() {
++    private void updateAppRows(boolean expand) {
+         for (int i = mAppRows.size() - 1; i >= 0; i--) {
+             final VolumeRow row = mAppRows.get(i);
+             removeAppRow(row);
+         }
++        if (!expand) return;
+         List<AppTrackData> trackDatas = mController.getAudioManager().listAppTrackDatas();
+         for (AppTrackData data : trackDatas) {
+             if (data.isActive()) {
+-- 
+2.31.1
+

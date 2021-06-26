@@ -1,7 +1,7 @@
 From 0066481f2c73177d4ca9b6dea4ed4325be3b62f0 Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Sun, 9 Aug 2015 01:23:33 +0800
-Subject: [PATCH 09/49] base: Add three-fingers-swipe to screenshot [1/2]
+Subject: [PATCH 09/52] base: Add three-fingers-swipe to screenshot [1/2]
 
 The feature is ported from Oppo ColorOS.
 With the options on, users can swipe down

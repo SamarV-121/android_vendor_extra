@@ -1,7 +1,7 @@
 From 8674b7e62dae24cb26590795c0613313095377f2 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 08:26:47 -0700
-Subject: [PATCH 37/49] Trace: Disable debug tracing in production builds
+Subject: [PATCH 37/52] Trace: Disable debug tracing in production builds
 
 When opening and closing activities in Settings, a significant amount of
 CPU time is spent checking whether ATrace tags are enabled, as measured

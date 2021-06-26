@@ -1,0 +1,37 @@
+From 042b0ed167f7a533015892476a81660f63f3e887 Mon Sep 17 00:00:00 2001
+From: cjybyjk <cjybyjk@zjnu.edu.cn>
+Date: Mon, 7 Sep 2020 13:09:17 +0800
+Subject: [PATCH 6/6] audio: list only actived tracks
+
+After the audio of an app is interrupted (such as an incoming call arrived when playing music), this app may not appear in the volume controller before force stop it.
+This commit fixed the problem
+
+Signed-off-by: cjybyjk <cjybyjk@zjnu.edu.cn>
+Change-Id: Iaaadeb2db462eeb696011364df85dcac14cc847a
+---
+ services/audioflinger/Threads.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/services/audioflinger/Threads.cpp b/services/audioflinger/Threads.cpp
+index 419a7cb..4431486 100644
+--- a/services/audioflinger/Threads.cpp
++++ b/services/audioflinger/Threads.cpp
+@@ -2410,13 +2410,13 @@ ssize_t AudioFlinger::PlaybackThread::Tracks<T>::remove(const sp<T> &track)
+ void AudioFlinger::PlaybackThread::listAppTrackDatas(std::set<AppTrackData> &cup)
+ {
+     Mutex::Autolock _l(mLock);
+-    for (sp<Track> track : mTracks) {
++    for (sp<Track> track : mActiveTracks) {
+         if (!track->getPackageName().isEmpty()) {
+             AppTrackData av;
+             strcpy(av.packageName, track->getPackageName().c_str());
+             av.muted = track->isAppMuted();
+             av.volume = track->getAppVolume();
+-            av.active = mActiveTracks.indexOf(track) >= 0;
++            av.active = true;
+             cup.insert(av);
+         }
+     }
+-- 
+2.31.1
+

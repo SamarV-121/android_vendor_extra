@@ -1,7 +1,7 @@
 From 94074a8117d6d8d90cce472be61617dc2630b11b Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 21:45:18 -0700
-Subject: [PATCH 35/49] EventLog: Disable event writing in production builds
+Subject: [PATCH 35/52] EventLog: Disable event writing in production builds
 
 When opening and closing activities in Settings, a measurably
 significant amount of CPU time is spent writing to the EventLog, as

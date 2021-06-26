@@ -1,7 +1,7 @@
 From dc5932cfd4f9d7acdea9e6c0f0cf19580e803657 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 15:30:33 -0700
-Subject: [PATCH 43/49] LayoutInflater: Opportunistically create views directly
+Subject: [PATCH 43/52] LayoutInflater: Opportunistically create views directly
  for performance
 
 When opening and closing activities in Settings, a significant amount of
