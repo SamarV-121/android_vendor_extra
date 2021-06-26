@@ -1,7 +1,7 @@
-From eb813ed94f4287830f3e9d052bf9dd8404ec9f6f Mon Sep 17 00:00:00 2001
+From 743b8a53a80e078734a386a720f65f9c394ce929 Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Tue, 13 Apr 2021 16:20:12 +0530
-Subject: [PATCH 7/7] Settings: Power button press to unlock with fingerprint
+Subject: [PATCH 07/10] Settings: Power button press to unlock with fingerprint
  [2/2]
 
  * this is for devices that have fingerprint sensor embedded
@@ -17,10 +17,10 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  2 files changed, 35 insertions(+), 1 deletion(-)
 
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index f77d67c..ea2a673 100644
+index cc41847..3fc5eb7 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -177,4 +177,9 @@
+@@ -174,4 +174,9 @@
      <string name="security_dashboard_summary_face_and_fingerprint">Screen lock, fingerprint, face unlock</string>
      <string name="face_redo_confirm_btn">Redo</string>
      <string name="face_redo_warning_msg">Do you want to remove the existing face scan and create a new one?</string>

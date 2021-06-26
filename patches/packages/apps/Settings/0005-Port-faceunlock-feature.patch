@@ -1,7 +1,7 @@
-From 9e569c30d6637bb1358649e65d6a4f6e2d02a99a Mon Sep 17 00:00:00 2001
+From d466954840299718d1c8baf866c798404ed128b0 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Feb 2021 21:14:30 -0300
-Subject: [PATCH 5/7] Port faceunlock feature
+Subject: [PATCH 05/10] Port faceunlock feature
 
 From motorola/nio_retcn/nio:11/RRN31.Q1-20-17-1/1cbc0:user/release-keys
 
@@ -162,10 +162,10 @@ index 98459f0..0000000
 -</LinearLayout>
 \ No newline at end of file
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index 0b8baca..960b715 100644
+index 4b3ee3f..6265740 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -170,4 +170,13 @@
+@@ -167,4 +167,13 @@
      <!-- Three-fingers-swipe to screenshot -->
      <string name="three_finger_gesture">Swipe to screenshot</string>
      <string name="three_finger_gesture_summary">Swipe down with three fingers to take a screenshot</string>

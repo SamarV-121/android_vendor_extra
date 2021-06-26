@@ -1,7 +1,7 @@
 From ba9cff264f94c75d166623f33b2852ad40bf4d4b Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 15:55:54 -0700
-Subject: [PATCH 33/52] Revert "Pre-emptively take a snapshot when finishing an
+Subject: [PATCH 33/57] Revert "Pre-emptively take a snapshot when finishing an
  activity before changing visibility"
 
 This reverts commit 6dad90e5883db82c345a3ab592b26f0fd69fe28d.

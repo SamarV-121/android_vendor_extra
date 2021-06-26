@@ -1,7 +1,7 @@
-From 5d74ba2132571b2e936039c8d34467e3fa454bb3 Mon Sep 17 00:00:00 2001
+From 58fee9c99dbc3d39a146a525696a43013b4506a3 Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Thu, 7 Nov 2019 19:06:00 +0100
-Subject: [PATCH 4/7] Settings: Add three-fingers-swipe to screenshot [2/2]
+Subject: [PATCH 04/10] Settings: Add three-fingers-swipe to screenshot [2/2]
 
 * Thanks Sahul Krishan for the beautiful animation
 
@@ -26572,10 +26572,10 @@ literal 0
 HcmV?d00001
 
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index 649f91b..0b8baca 100644
+index 630fb00..4b3ee3f 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -166,4 +166,8 @@
+@@ -163,4 +163,8 @@
      <!-- Fingerprint unlock keystore -->
      <string name="fp_unlock_keystore_title">Fingerprint unlock</string>
      <string name="fp_unlock_keystore_summary">Unlock device with fingerprint after reboot without PIN/Password/Pattern\nNote: at your own risk!</string>

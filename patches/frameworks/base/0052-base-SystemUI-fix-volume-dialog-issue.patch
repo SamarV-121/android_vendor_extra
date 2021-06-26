@@ -1,7 +1,7 @@
 From efea2624dd597b3abeeb807c10809dea8c4e14c6 Mon Sep 17 00:00:00 2001
 From: cjybyjk <cjybyjk@zjnu.edu.cn>
 Date: Thu, 21 Jan 2021 14:28:35 +0800
-Subject: [PATCH 52/52] base: SystemUI: fix volume dialog issue
+Subject: [PATCH 52/57] base: SystemUI: fix volume dialog issue
 
 When user turn on per-app volume control
 and sets the display size to the minimum,

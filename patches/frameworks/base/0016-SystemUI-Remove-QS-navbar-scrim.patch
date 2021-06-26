@@ -1,7 +1,7 @@
 From 9c5cd9c7af6d112257d054f099c474b8d122f6a9 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 25 Sep 2020 14:30:21 -0700
-Subject: [PATCH 16/52] SystemUI: Remove QS navbar scrim
+Subject: [PATCH 16/57] SystemUI: Remove QS navbar scrim
 
 In the age of flat material design, this scrim looks outdated and
 out-of-place. It's also quite ugly in the QS edit screen, where it

@@ -1,0 +1,199 @@
+From de787280e1f2f9bd8ffd729ec6f183f97e225388 Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhsv09@gmail.com>
+Date: Tue, 15 Jun 2021 19:37:18 -0300
+Subject: [PATCH 56/57] AppLock: Update tasks snapshot when needed
+
+* After 15 seconds timeout or when device is locked
+
+Change-Id: I29eb4bc3912ceda9958439c4fc79bded2b124ae8
+---
+ .../com/android/server/wm/ActivityRecord.java |  2 +-
+ .../core/java/com/android/server/wm/Task.java |  9 ++++
+ .../android/server/wm/TaskSnapshotCache.java  | 14 ++++--
+ .../server/wm/TaskSnapshotController.java     | 45 ++++++++++++++++++-
+ 4 files changed, 65 insertions(+), 5 deletions(-)
+
+diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
+index a256aab8ffe..31d260ac345 100644
+--- a/services/core/java/com/android/server/wm/ActivityRecord.java
++++ b/services/core/java/com/android/server/wm/ActivityRecord.java
+@@ -4392,7 +4392,7 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+      */
+     boolean shouldUseAppThemeSnapshot() {
+         return mDisablePreviewScreenshots || forAllWindows(WindowState::isSecureLocked,
+-                true /* topToBottom */) || getIsAppLocked();
++                true /* topToBottom */);
+     }
+ 
+     /**
+diff --git a/services/core/java/com/android/server/wm/Task.java b/services/core/java/com/android/server/wm/Task.java
+index b19b8c1ce10..708bb81ec4d 100644
+--- a/services/core/java/com/android/server/wm/Task.java
++++ b/services/core/java/com/android/server/wm/Task.java
+@@ -307,6 +307,9 @@ class Task extends WindowContainer<WindowContainer> {
+     String mCallingPackage;
+     String mCallingFeatureId;
+ 
++    // Package name
++    String mPackageName;
++
+     private final Rect mTmpStableBounds = new Rect();
+     private final Rect mTmpNonDecorBounds = new Rect();
+     private final Rect mTmpBounds = new Rect();
+@@ -932,6 +935,9 @@ class Task extends WindowContainer<WindowContainer> {
+         mCallingUid = r.launchedFromUid;
+         mCallingPackage = r.launchedFromPackage;
+         mCallingFeatureId = r.launchedFromFeatureId;
++        if(info != null){
++            mPackageName = info.packageName;
++        }
+         setIntent(intent != null ? intent : r.intent, info != null ? info : r.info);
+         setLockTaskAuth(r);
+ 
+@@ -946,6 +952,9 @@ class Task extends WindowContainer<WindowContainer> {
+ 
+     /** Sets the original intent, _without_ updating the calling uid or package. */
+     private void setIntent(Intent _intent, ActivityInfo info) {
++        if(info != null){
++            mPackageName = info.packageName;
++        }
+         final boolean isLeaf = isLeafTask();
+         if (intent == null) {
+             mNeverRelinquishIdentity =
+diff --git a/services/core/java/com/android/server/wm/TaskSnapshotCache.java b/services/core/java/com/android/server/wm/TaskSnapshotCache.java
+index 0edfaa8b970..69a3e81a163 100644
+--- a/services/core/java/com/android/server/wm/TaskSnapshotCache.java
++++ b/services/core/java/com/android/server/wm/TaskSnapshotCache.java
+@@ -39,6 +39,10 @@ class TaskSnapshotCache {
+         mLoader = loader;
+     }
+ 
++    ArrayMap<Integer, CacheEntry> getRunningCache() {
++        return mRunningCache;
++    }
++
+     void clearRunningCache() {
+         mRunningCache.clear();
+     }
+@@ -50,7 +54,7 @@ class TaskSnapshotCache {
+         }
+         final ActivityRecord top = task.getTopMostActivity();
+         mAppTaskMap.put(top, task.mTaskId);
+-        mRunningCache.put(task.mTaskId, new CacheEntry(snapshot, top));
++        mRunningCache.put(task.mTaskId, new CacheEntry(snapshot, top, task));
+     }
+ 
+     /**
+@@ -129,7 +133,7 @@ class TaskSnapshotCache {
+         }
+     }
+ 
+-    private static final class CacheEntry {
++    protected static final class CacheEntry {
+ 
+         /** The snapshot. */
+         final TaskSnapshot snapshot;
+@@ -137,9 +141,13 @@ class TaskSnapshotCache {
+         /** The app token that was on top of the task when the snapshot was taken */
+         final ActivityRecord topApp;
+ 
+-        CacheEntry(TaskSnapshot snapshot, ActivityRecord topApp) {
++        /** The task */
++        final Task task;
++
++        CacheEntry(TaskSnapshot snapshot, ActivityRecord topApp, Task task) {
+             this.snapshot = snapshot;
+             this.topApp = topApp;
++            this.task = task;
+         }
+     }
+ }
+diff --git a/services/core/java/com/android/server/wm/TaskSnapshotController.java b/services/core/java/com/android/server/wm/TaskSnapshotController.java
+index 3c0cb17af60..a569a7729ba 100644
+--- a/services/core/java/com/android/server/wm/TaskSnapshotController.java
++++ b/services/core/java/com/android/server/wm/TaskSnapshotController.java
+@@ -25,6 +25,8 @@ import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
+ import android.annotation.NonNull;
+ import android.annotation.Nullable;
+ import android.app.ActivityManager.TaskSnapshot;
++import android.app.AppLockManager;
++import android.app.AppLockManager.AppLockCallback;
+ import android.content.pm.PackageManager;
+ import android.graphics.Bitmap;
+ import android.graphics.GraphicBuffer;
+@@ -56,6 +58,9 @@ import com.android.server.wm.utils.InsetUtils;
+ import com.google.android.collect.Sets;
+ 
+ import java.io.PrintWriter;
++import java.util.Arrays;
++import java.util.Iterator;
++import java.util.Map;
+ 
+ /**
+  * When an app token becomes invisible, we take a snapshot (bitmap) of the corresponding task and
+@@ -120,6 +125,30 @@ class TaskSnapshotController {
+      */
+     private final boolean mIsRunningOnWear;
+ 
++    // AppLock
++    AppLockManager mAppLockManager;
++
++    private final AppLockCallback mAppLockCallback = new AppLockCallback() {
++        @Override
++        public void onAppStateChanged(String pkg) {
++            if (isAppLocked(pkg) && !isAppOpened(pkg)){
++                updateTaskSnapshot(pkg);
++            }
++        }
++    };
++
++    void updateTaskSnapshot(String packageName) {
++        final Iterator<Map.Entry<Integer, TaskSnapshotCache.CacheEntry>> it = mCache.getRunningCache().entrySet().iterator();
++        while (it.hasNext()) {
++            Map.Entry<Integer, TaskSnapshotCache.CacheEntry> entry = it.next();
++            int taskId = entry.getKey();
++            Task task = entry.getValue().task;
++            if (task.mPackageName != null && task.mPackageName.equals(packageName)){
++                snapshotTasks(new ArraySet<>(Arrays.asList(task)));
++            }
++        }
++    }
++
+     TaskSnapshotController(WindowManagerService service) {
+         mService = service;
+         mPersister = new TaskSnapshotPersister(mService, Environment::getDataSystemCeDirectory);
+@@ -135,8 +164,20 @@ class TaskSnapshotController {
+                 com.android.internal.R.dimen.config_highResTaskSnapshotScale);
+     }
+ 
++    boolean isAppLocked(String packageName) {
++        if (mAppLockManager == null || packageName == null) return false;
++        return mAppLockManager.isAppLocked(packageName);
++    }
++
++    boolean isAppOpened(String packageName) {
++        if (mAppLockManager == null || packageName == null) return true;
++        return mAppLockManager.isAppOpen(packageName);
++    }
++
+     void systemReady() {
+         mPersister.start();
++        mAppLockManager = mService.mContext.getSystemService(AppLockManager.class);
++        mAppLockManager.addAppLockCallback(mAppLockCallback);
+     }
+ 
+     void onTransitionStarting(DisplayContent displayContent) {
+@@ -183,7 +224,9 @@ class TaskSnapshotController {
+             final Task task = tasks.valueAt(i);
+             final TaskSnapshot snapshot;
+             final boolean snapshotHome = allowSnapshotHome && task.isActivityTypeHome();
+-            if (snapshotHome) {
++            if (task.mPackageName != null && isAppLocked(task.mPackageName) && !isAppOpened(task.mPackageName)){
++                snapshot = drawAppThemeSnapshot(task);
++            }else if (snapshotHome) {
+                 snapshot = snapshotTask(task);
+             } else {
+                 switch (getSnapshotMode(task)) {
+-- 
+2.31.1
+

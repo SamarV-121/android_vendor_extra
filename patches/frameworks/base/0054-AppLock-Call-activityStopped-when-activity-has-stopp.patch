@@ -1,0 +1,30 @@
+From 434169e9050ad134bb6ad58ea40ccd6ff1d9a18c Mon Sep 17 00:00:00 2001
+From: Rituj Beniwal <ritujbeniwal@gmail.com>
+Date: Wed, 7 Apr 2021 20:14:24 +0530
+Subject: [PATCH 54/57] AppLock: Call activityStopped when activity has stopped
+
+* Fixes 15 second auto-lock timer, when app is stopped while moving to recents
+
+Signed-off-by: Rituj Beniwal <ritujbeniwal@gmail.com>
+Change-Id: Ieb1152e6f87bf9f5e1a4c756ec299769505097a8
+---
+ .../java/com/android/server/wm/ActivityTaskManagerService.java | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
+index 5d45573e3e5..236654967e1 100644
+--- a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
++++ b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
+@@ -1898,6 +1898,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+             Trace.traceBegin(TRACE_TAG_WINDOW_MANAGER, "activityStopped");
+             r = ActivityRecord.isInStackLocked(token);
+             if (r != null) {
++                if (isAppLocked(r.packageName)) {
++                    mAppLockService.activityStopped(r.packageName, r.intent);
++                }
+                 if (r.attachedToProcess()
+                         && r.isState(ActivityStack.ActivityState.RESTARTING_PROCESS)) {
+                     // The activity was requested to restart from
+-- 
+2.31.1
+

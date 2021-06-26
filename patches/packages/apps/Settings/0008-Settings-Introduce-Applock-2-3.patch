@@ -1,0 +1,2318 @@
+From 3f54522fca1ef31d36c2114282229917d0fa0ed7 Mon Sep 17 00:00:00 2001
+From: rituj <ritujbeniwal@gmail.com>
+Date: Wed, 6 May 2020 01:47:53 -0400
+Subject: [PATCH 08/10] Settings: Introduce Applock [2/3]
+
+* Co-authored by "Chris Crump<chris@cypheros.co>"
+* Includes applock 1.1 and more
+
+Signed-off-by: rituj <ritujbeniwal@gmail.com>
+Change-Id: Ic8bb812148c7a17cbecdeedd3560493bdf576bae
+---
+ AndroidManifest.xml                           |  13 +
+ res/drawable/applock_lock_anim.xml            | 329 +++++++++++++
+ res/drawable/applock_unlock_anim.xml          | 305 ++++++++++++
+ res/drawable/button_app_lock.xml              |  36 ++
+ res/drawable/ic_applock_locked.xml            |  72 +++
+ res/drawable/ic_applock_unlocked.xml          |  72 +++
+ res/layout/preference_applock.xml             | 116 +++++
+ res/layout/preference_widget_applock.xml      |  24 +
+ res/menu/applock_menu.xml                     |  24 +
+ res/values/cm_strings.xml                     |  20 +
+ res/xml/security_dashboard_settings.xml       |   6 +
+ res/xml/security_settings_applock.xml         |  48 ++
+ src/com/android/settings/Settings.java        |   1 +
+ src/com/android/settings/Utils.java           |   5 +
+ ...DrawOverlayDetailPreferenceController.java |  20 +-
+ .../appinfo/DrawOverlayDetails.java           |   6 +-
+ .../ManageApplications.java                   |  23 +-
+ .../core/gateway/SettingsGateway.java         |   2 +
+ .../settings/security/SecuritySettings.java   |   2 +
+ ...evelSecurityEntryPreferenceController.java |  17 +-
+ .../security/applock/AppLockInfo.java         |  67 +++
+ .../applock/AppLockPreferenceController.java  |  75 +++
+ .../security/applock/AppLockSettings.java     | 447 ++++++++++++++++++
+ .../security/applock/AppLockViewModel.java    |  95 ++++
+ .../settings/widget/AppLockPreference.java    | 123 +++++
+ 25 files changed, 1939 insertions(+), 9 deletions(-)
+ create mode 100644 res/drawable/applock_lock_anim.xml
+ create mode 100644 res/drawable/applock_unlock_anim.xml
+ create mode 100644 res/drawable/button_app_lock.xml
+ create mode 100644 res/drawable/ic_applock_locked.xml
+ create mode 100644 res/drawable/ic_applock_unlocked.xml
+ create mode 100644 res/layout/preference_applock.xml
+ create mode 100644 res/layout/preference_widget_applock.xml
+ create mode 100644 res/menu/applock_menu.xml
+ create mode 100644 res/xml/security_settings_applock.xml
+ create mode 100644 src/com/android/settings/security/applock/AppLockInfo.java
+ create mode 100644 src/com/android/settings/security/applock/AppLockPreferenceController.java
+ create mode 100644 src/com/android/settings/security/applock/AppLockSettings.java
+ create mode 100644 src/com/android/settings/security/applock/AppLockViewModel.java
+ create mode 100644 src/com/android/settings/widget/AppLockPreference.java
+
+diff --git a/AndroidManifest.xml b/AndroidManifest.xml
+index b06435e..80eebc3 100644
+--- a/AndroidManifest.xml
++++ b/AndroidManifest.xml
+@@ -470,6 +470,19 @@
+                        android:value="com.android.settings.biometrics.fingerprint.FingerprintSettings$FingerprintSettingsFragment" />
+         </activity>
+ 
++        <activity android:name="Settings$AppLockSettingsActivity"
++                  android:label="@string/applock_title"
++                  android:icon="@drawable/ic_fingerprint_header">
++            <intent-filter>
++                <action android:name="android.settings.APPLOCK_SETTINGS" />
++                <category android:name="android.intent.category.DEFAULT" />
++            </intent-filter>
++            <meta-data android:name="com.android.settings.FRAGMENT_CLASS"
++                       android:value="com.android.settings.security.applock.AppLockSettings$AppLockSettingsFragment" />
++        </activity>
++
++        <activity android:name=".security.applock.AppLockSettings" android:exported="false"/>
++
+         <activity android:name=".bluetooth.DevicePickerActivity"
+                 android:label="@string/device_picker"
+                 android:configChanges="orientation|keyboardHidden|screenSize"
+diff --git a/res/drawable/applock_lock_anim.xml b/res/drawable/applock_lock_anim.xml
+new file mode 100644
+index 0000000..14059e2
+--- /dev/null
++++ b/res/drawable/applock_lock_anim.xml
+@@ -0,0 +1,329 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++  ~ Copyright (C) 2019 The Android Open Source Project
++  ~
++  ~ Licensed under the Apache License, Version 2.0 (the "License");
++  ~ you may not use this file except in compliance with the License.
++  ~ You may obtain a copy of the License at
++  ~
++  ~      http://www.apache.org/licenses/LICENSE-2.0
++  ~
++  ~ Unless required by applicable law or agreed to in writing, software
++  ~ distributed under the License is distributed on an "AS IS" BASIS,
++  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++  ~ See the License for the specific language governing permissions and
++  ~ limitations under the License
++ -->
++<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:aapt="http://schemas.android.com/aapt"
++    android:drawable="@drawable/ic_applock_locked">
++
++    <target android:name="_R_G_L_2_G_T_1">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="400"
++                    android:propertyName="translateY"
++                    android:startOffset="0"
++                    android:valueFrom="23.993"
++                    android:valueTo="23.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="67"
++                    android:propertyName="translateY"
++                    android:startOffset="400"
++                    android:valueFrom="23.993"
++                    android:valueTo="25.368"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.58,0 0.549,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="83"
++                    android:propertyName="translateY"
++                    android:startOffset="467"
++                    android:valueFrom="25.368"
++                    android:valueTo="23.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.388,0 0.228,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_1_G">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="450"
++                    android:propertyName="scaleX"
++                    android:startOffset="0"
++                    android:valueFrom="1"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="450"
++                    android:propertyName="scaleY"
++                    android:startOffset="0"
++                    android:valueFrom="1"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="67"
++                    android:propertyName="scaleX"
++                    android:startOffset="450"
++                    android:valueFrom="1"
++                    android:valueTo="1.1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="67"
++                    android:propertyName="scaleY"
++                    android:startOffset="450"
++                    android:valueFrom="1"
++                    android:valueTo="1.1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="183"
++                    android:propertyName="scaleX"
++                    android:startOffset="517"
++                    android:valueFrom="1.1"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="183"
++                    android:propertyName="scaleY"
++                    android:startOffset="517"
++                    android:valueFrom="1.1"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_1_G_N_4_T_1">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="400"
++                    android:propertyName="translateY"
++                    android:startOffset="0"
++                    android:valueFrom="23.993"
++                    android:valueTo="23.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="67"
++                    android:propertyName="translateY"
++                    android:startOffset="400"
++                    android:valueFrom="23.993"
++                    android:valueTo="25.368"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.58,0 0.549,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="83"
++                    android:propertyName="translateY"
++                    android:startOffset="467"
++                    android:valueFrom="25.368"
++                    android:valueTo="23.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.388,0 0.228,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_0_G_D_0_P_0">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="317"
++                    android:propertyName="pathData"
++                    android:startOffset="0"
++                    android:valueFrom="M14.33 14.33 C14.33,14.33 14.32,9.42 14.32,9.42 C14.32,7.4 15.67,5.01 18.65,5 C21.76,4.99 23.07,7.37 23.05,9.47 C23.05,9.47 23.06,9.77 23.06,9.77 "
++                    android:valueTo="M14.33 14.33 C14.33,14.33 14.29,6.17 14.29,6.17 C14.29,3.59 12.2,1.5 9.63,1.5 C7.05,1.5 4.96,3.59 4.96,6.17 C4.96,6.17 4.96,7.33 4.96,7.33 "
++                    android:valueType="pathType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.692,0 0.298,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="133"
++                    android:propertyName="pathData"
++                    android:startOffset="317"
++                    android:valueFrom="M14.33 14.33 C14.33,14.33 14.29,6.17 14.29,6.17 C14.29,3.59 12.2,1.5 9.63,1.5 C7.05,1.5 4.96,3.59 4.96,6.17 C4.96,6.17 4.96,7.33 4.96,7.33 "
++                    android:valueTo="M14.33 14.33 C14.33,14.33 14.33,9.67 14.33,9.67 C14.33,7.09 12.24,5 9.67,5 C7.09,5 5,7.09 5,9.67 C5,9.67 5,14.33 5,14.33 "
++                    android:valueType="pathType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.561,0 0.44,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="strokeColor"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/colorForeground"
++                    android:valueTo="?android:attr/colorAccent"
++                    android:valueType="colorType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="strokeAlpha"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/secondaryContentAlpha"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_0_G_N_4_T_1">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="400"
++                    android:propertyName="translateY"
++                    android:startOffset="0"
++                    android:valueFrom="23.993"
++                    android:valueTo="23.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="67"
++                    android:propertyName="translateY"
++                    android:startOffset="400"
++                    android:valueFrom="23.993"
++                    android:valueTo="25.368"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.58,0 0.549,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="83"
++                    android:propertyName="translateY"
++                    android:startOffset="467"
++                    android:valueFrom="25.368"
++                    android:valueTo="23.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.388,0 0.228,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_1_G_D_0_P_0">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:propertyName="fillColor"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/colorForeground"
++                    android:valueTo="?android:attr/colorAccent"
++                    android:valueType="colorType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="fillAlpha"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/secondaryContentAlpha"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_2_G_D_0_P_0">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:propertyName="strokeColor"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/colorForeground"
++                    android:valueTo="?android:attr/colorAccent"
++                    android:valueType="colorType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="strokeAlpha"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/secondaryContentAlpha"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="time_group">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="717"
++                    android:propertyName="translateX"
++                    android:startOffset="0"
++                    android:valueFrom="0"
++                    android:valueTo="1"
++                    android:valueType="floatType" />
++            </set>
++        </aapt:attr>
++    </target>
++</animated-vector>
+diff --git a/res/drawable/applock_unlock_anim.xml b/res/drawable/applock_unlock_anim.xml
+new file mode 100644
+index 0000000..4594b65
+--- /dev/null
++++ b/res/drawable/applock_unlock_anim.xml
+@@ -0,0 +1,305 @@
++<!-- Copyright (C) 2019 The Android Open Source Project
++
++     Licensed under the Apache License, Version 2.0 (the "License");
++     you may not use this file except in compliance with the License.
++     You may obtain a copy of the License at
++
++          http://www.apache.org/licenses/LICENSE-2.0
++
++     Unless required by applicable law or agreed to in writing, software
++     distributed under the License is distributed on an "AS IS" BASIS,
++     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++     See the License for the specific language governing permissions and
++     limitations under the License.
++-->
++<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:aapt="http://schemas.android.com/aapt"
++    android:drawable="@drawable/ic_applock_unlocked">
++
++    <target android:name="_R_G_L_2_G_T_1">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="133"
++                    android:propertyName="translateY"
++                    android:startOffset="0"
++                    android:valueFrom="24.993"
++                    android:valueTo="22.493"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.378,0 0.622,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="133"
++                    android:propertyName="translateY"
++                    android:startOffset="133"
++                    android:valueFrom="22.493"
++                    android:valueTo="25.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.41,0 0.616,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="100"
++                    android:propertyName="translateY"
++                    android:startOffset="267"
++                    android:valueFrom="25.993"
++                    android:valueTo="24.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.427,0 0.508,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_1_G">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="100"
++                    android:propertyName="scaleX"
++                    android:startOffset="0"
++                    android:valueFrom="1"
++                    android:valueTo="0.8200000000000001"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.418,0 0.565,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="100"
++                    android:propertyName="scaleY"
++                    android:startOffset="0"
++                    android:valueFrom="1"
++                    android:valueTo="0.8200000000000001"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.418,0 0.565,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="283"
++                    android:propertyName="scaleX"
++                    android:startOffset="100"
++                    android:valueFrom="0.8200000000000001"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.535,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="283"
++                    android:propertyName="scaleY"
++                    android:startOffset="100"
++                    android:valueFrom="0.8200000000000001"
++                    android:valueTo="1"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.333,0 0.535,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_1_G_N_4_T_1">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="133"
++                    android:propertyName="translateY"
++                    android:startOffset="0"
++                    android:valueFrom="24.993"
++                    android:valueTo="22.493"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.378,0 0.622,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="133"
++                    android:propertyName="translateY"
++                    android:startOffset="133"
++                    android:valueFrom="22.493"
++                    android:valueTo="25.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.41,0 0.616,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="100"
++                    android:propertyName="translateY"
++                    android:startOffset="267"
++                    android:valueFrom="25.993"
++                    android:valueTo="24.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.427,0 0.508,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_0_G_D_0_P_0">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="67"
++                    android:propertyName="pathData"
++                    android:startOffset="0"
++                    android:valueFrom="M14.33 14.33 C14.33,14.33 14.33,9.67 14.33,9.67 C14.33,7.09 12.24,5 9.67,5 C7.09,5 5,7.09 5,9.67 C5,9.67 5,14.33 5,14.33 "
++                    android:valueTo="M14.33 14.33 C14.33,14.33 14.29,6.17 14.29,6.17 C14.29,3.59 12.2,1.5 9.63,1.5 C7.05,1.5 4.96,3.59 4.96,6.17 C4.96,6.17 4.96,7.33 4.96,7.33 "
++                    android:valueType="pathType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.56,0 0.439,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="183"
++                    android:propertyName="pathData"
++                    android:startOffset="67"
++                    android:valueFrom="M14.33 14.33 C14.33,14.33 14.29,6.17 14.29,6.17 C14.29,3.59 12.2,1.5 9.63,1.5 C7.05,1.5 4.96,3.59 4.96,6.17 C4.96,6.17 4.96,7.33 4.96,7.33 "
++                    android:valueTo="M14.33 14.33 C14.33,14.33 14.32,9.42 14.32,9.42 C14.32,7.4 15.67,5.01 18.65,5 C21.76,4.99 23.07,7.37 23.05,9.47 C23.05,9.47 23.06,9.77 23.06,9.77 "
++                    android:valueType="pathType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.702,0 0.308,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="strokeColor"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/colorAccent"
++                    android:valueTo="?android:attr/colorForeground"
++                    android:valueType="colorType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="strokeAlpha"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="1"
++                    android:valueTo="?android:attr/secondaryContentAlpha"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_0_G_N_4_T_1">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="133"
++                    android:propertyName="translateY"
++                    android:startOffset="0"
++                    android:valueFrom="24.993"
++                    android:valueTo="22.493"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.378,0 0.622,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="133"
++                    android:propertyName="translateY"
++                    android:startOffset="133"
++                    android:valueFrom="22.493"
++                    android:valueTo="25.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.41,0 0.616,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:duration="100"
++                    android:propertyName="translateY"
++                    android:startOffset="267"
++                    android:valueFrom="25.993"
++                    android:valueTo="24.993"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.427,0 0.508,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_1_G_D_0_P_0">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:propertyName="fillColor"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/colorAccent"
++                    android:valueTo="?android:attr/colorForeground"
++                    android:valueType="colorType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="fillAlpha"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="1"
++                    android:valueTo="?android:attr/secondaryContentAlpha"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="_R_G_L_2_G_D_0_P_0">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:propertyName="strokeColor"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="?android:attr/colorAccent"
++                    android:valueTo="?android:attr/colorForeground"
++                    android:valueType="colorType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++                <objectAnimator
++                    android:propertyName="strokeAlpha"
++                    android:duration="400"
++                    android:startOffset="0"
++                    android:valueFrom="1"
++                    android:valueTo="?android:attr/secondaryContentAlpha"
++                    android:valueType="floatType">
++                    <aapt:attr name="android:interpolator">
++                        <pathInterpolator android:pathData="M 0.0,0.0 c0.167,0 0.667,1 1.0,1.0" />
++                    </aapt:attr>
++                </objectAnimator>
++            </set>
++        </aapt:attr>
++    </target>
++    <target android:name="time_group">
++        <aapt:attr name="android:animation">
++            <set android:ordering="together">
++                <objectAnimator
++                    android:duration="983"
++                    android:propertyName="translateX"
++                    android:startOffset="0"
++                    android:valueFrom="0"
++                    android:valueTo="1"
++                    android:valueType="floatType" />
++            </set>
++        </aapt:attr>
++    </target>
++</animated-vector>
+diff --git a/res/drawable/button_app_lock.xml b/res/drawable/button_app_lock.xml
+new file mode 100644
+index 0000000..a117e76
+--- /dev/null
++++ b/res/drawable/button_app_lock.xml
+@@ -0,0 +1,36 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     Copyright (C) 2019 Paranoid Android
++
++     Licensed under the Apache License, Version 2.0 (the "License");
++     you may not use this file except in compliance with the License.
++     You may obtain a copy of the License at
++
++          http://www.apache.org/licenses/LICENSE-2.0
++
++     Unless required by applicable law or agreed to in writing, software
++     distributed under the License is distributed on an "AS IS" BASIS,
++     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++     See the License for the specific language governing permissions and
++     limitations under the License.
++-->
++<animated-selector xmlns:android="http://schemas.android.com/apk/res/android">
++    <item
++        android:id="@+id/locked"
++        android:state_checked="true"
++        android:drawable="@drawable/ic_applock_locked" />
++    <item
++        android:id="@+id/unlocked"
++        android:state_checked="false"
++        android:drawable="@drawable/ic_applock_unlocked" />
++
++    <transition
++        android:drawable="@drawable/applock_unlock_anim"
++        android:fromId="@id/locked"
++        android:toId="@id/unlocked" />
++
++    <transition
++        android:drawable="@drawable/applock_lock_anim"
++        android:fromId="@+id/unlocked"
++        android:toId="@+id/locked" />
++</animated-selector>
+diff --git a/res/drawable/ic_applock_locked.xml b/res/drawable/ic_applock_locked.xml
+new file mode 100644
+index 0000000..ffeeedb
+--- /dev/null
++++ b/res/drawable/ic_applock_locked.xml
+@@ -0,0 +1,72 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="28dp"
++    android:height="33dp"
++    android:viewportWidth="32"
++    android:viewportHeight="42">
++    <group android:name="_R_G">
++        <group
++            android:name="_R_G_L_2_G_T_1"
++            android:translateX="16"
++            android:translateY="24.993">
++            <group
++                android:name="_R_G_L_2_G"
++                android:translateX="-14.333"
++                android:translateY="-13">
++                <path
++                    android:name="_R_G_L_2_G_D_0_P_0"
++                    android:pathData=" M22.33 21 C22.33,21 6.33,21 6.33,21 C5.6,21 5,20.4 5,19.67 C5,19.67 5,6.33 5,6.33 C5,5.6 5.6,5 6.33,5 C6.33,5 22.33,5 22.33,5 C23.07,5 23.67,5.6 23.67,6.33 C23.67,6.33 23.67,19.67 23.67,19.67 C23.67,20.4 23.07,21 22.33,21c "
++                    android:strokeWidth="2"
++                    android:strokeAlpha="1"
++                    android:strokeColor="?android:attr/colorAccent"/>
++            </group>
++        </group>
++        <group
++            android:name="_R_G_L_1_G_N_4_T_1"
++            android:translateX="16"
++            android:translateY="24.993">
++            <group
++                android:name="_R_G_L_1_G_N_4_T_0"
++                android:translateX="-14.333"
++                android:translateY="-13">
++                <group
++                    android:name="_R_G_L_1_G"
++                    android:pivotX="2.75"
++                    android:pivotY="2.75"
++                    android:scaleX="1"
++                    android:scaleY="1"
++                    android:translateX="11.583"
++                    android:translateY="10.257">
++                    <path
++                        android:name="_R_G_L_1_G_D_0_P_0"
++                        android:fillAlpha="1"
++                        android:fillColor="?android:attr/colorAccent"
++                        android:fillType="nonZero"
++                        android:pathData=" M2.75 0.25 C4.13,0.25 5.25,1.37 5.25,2.75 C5.25,4.13 4.13,5.25 2.75,5.25 C1.37,5.25 0.25,4.13 0.25,2.75 C0.25,1.37 1.37,0.25 2.75,0.25c " />
++                </group>
++            </group>
++        </group>
++        <group
++            android:name="_R_G_L_0_G_N_4_T_1"
++            android:translateX="16"
++            android:translateY="24.993">
++            <group
++                android:name="_R_G_L_0_G_N_4_T_0"
++                android:translateX="-14.333"
++                android:translateY="-13">
++                <group
++                    android:name="_R_G_L_0_G"
++                    android:translateX="4.666"
++                    android:translateY="-9.327">
++                    <path
++                        android:name="_R_G_L_0_G_D_0_P_0"
++                        android:pathData=" M14.33 14.33 C14.33,14.33 14.33,9.67 14.33,9.67 C14.33,7.09 12.24,5 9.67,5 C7.09,5 5,7.09 5,9.67 C5,9.67 5,14.33 5,14.33 "
++                        android:strokeWidth="2"
++                        android:strokeAlpha="1"
++                        android:strokeColor="?android:attr/colorAccent"/>
++                </group>
++            </group>
++        </group>
++    </group>
++    <group android:name="time_group" />
++</vector>
+\ No newline at end of file
+diff --git a/res/drawable/ic_applock_unlocked.xml b/res/drawable/ic_applock_unlocked.xml
+new file mode 100644
+index 0000000..3d53da6
+--- /dev/null
++++ b/res/drawable/ic_applock_unlocked.xml
+@@ -0,0 +1,72 @@
++<?xml version="1.0" encoding="utf-8"?>
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="28dp"
++    android:height="33dp"
++    android:viewportWidth="32"
++    android:viewportHeight="40">
++    <group android:name="_R_G">
++        <group
++            android:name="_R_G_L_2_G_T_1"
++            android:translateX="16"
++            android:translateY="23.993">
++            <group
++                android:name="_R_G_L_2_G"
++                android:translateX="-14.333"
++                android:translateY="-13">
++                <path
++                    android:name="_R_G_L_2_G_D_0_P_0"
++                    android:pathData=" M22.33 21 C22.33,21 6.33,21 6.33,21 C5.6,21 5,20.4 5,19.67 C5,19.67 5,6.33 5,6.33 C5,5.6 5.6,5 6.33,5 C6.33,5 22.33,5 22.33,5 C23.07,5 23.67,5.6 23.67,6.33 C23.67,6.33 23.67,19.67 23.67,19.67 C23.67,20.4 23.07,21 22.33,21c "
++                    android:strokeWidth="2"
++                    android:strokeAlpha="?android:attr/secondaryContentAlpha"
++                    android:strokeColor="?android:attr/colorForeground" />
++            </group>
++        </group>
++        <group
++            android:name="_R_G_L_1_G_N_4_T_1"
++            android:translateX="16"
++            android:translateY="23.993">
++            <group
++                android:name="_R_G_L_1_G_N_4_T_0"
++                android:translateX="-14.333"
++                android:translateY="-13">
++                <group
++                    android:name="_R_G_L_1_G"
++                    android:pivotX="2.75"
++                    android:pivotY="2.75"
++                    android:scaleX="1"
++                    android:scaleY="1"
++                    android:translateX="11.583"
++                    android:translateY="10.257">
++                    <path
++                        android:name="_R_G_L_1_G_D_0_P_0"
++                        android:fillAlpha="?android:attr/secondaryContentAlpha"
++                        android:fillColor="?android:attr/colorForeground"
++                        android:fillType="nonZero"
++                        android:pathData=" M2.75 0.25 C4.13,0.25 5.25,1.37 5.25,2.75 C5.25,4.13 4.13,5.25 2.75,5.25 C1.37,5.25 0.25,4.13 0.25,2.75 C0.25,1.37 1.37,0.25 2.75,0.25c " />
++                </group>
++            </group>
++        </group>
++        <group
++            android:name="_R_G_L_0_G_N_4_T_1"
++            android:translateX="16"
++            android:translateY="23.993">
++            <group
++                android:name="_R_G_L_0_G_N_4_T_0"
++                android:translateX="-14.333"
++                android:translateY="-13">
++                <group
++                    android:name="_R_G_L_0_G"
++                    android:translateX="4.666"
++                    android:translateY="-9.327">
++                    <path
++                        android:name="_R_G_L_0_G_D_0_P_0"
++                        android:pathData=" M14.33 14.33 C14.33,14.33 14.32,9.42 14.32,9.42 C14.32,7.4 15.67,5.01 18.65,5 C21.76,4.99 23.07,7.37 23.05,9.47 C23.05,9.47 23.06,9.77 23.06,9.77 "
++                        android:strokeWidth="2"
++                        android:strokeAlpha="?android:attr/secondaryContentAlpha"
++                        android:strokeColor="?android:attr/colorForeground" />
++                </group>
++            </group>
++        </group>
++    </group>
++    <group android:name="time_group" />
++</vector>
+\ No newline at end of file
+diff --git a/res/layout/preference_applock.xml b/res/layout/preference_applock.xml
+new file mode 100644
+index 0000000..343d39e
+--- /dev/null
++++ b/res/layout/preference_applock.xml
+@@ -0,0 +1,116 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++  Copyright (C) 2020 Paranoid Android
++
++  Licensed under the Apache License, Version 2.0 (the "License");
++  you may not use this file except in compliance with the License.
++  You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++  Unless required by applicable law or agreed to in writing, software
++  distributed under the License is distributed on an "AS IS" BASIS,
++  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++  See the License for the specific language governing permissions and
++  limitations under the License.
++  -->
++<LinearLayout
++    xmlns:android="http://schemas.android.com/apk/res/android"
++    android:layout_width="match_parent"
++    android:layout_height="wrap_content"
++    android:background="?android:attr/selectableItemBackground"
++    android:gravity="center_vertical"
++    android:minHeight="?android:attr/listPreferredItemHeightSmall"
++    android:paddingStart="?android:attr/listPreferredItemPaddingStart"
++    android:paddingEnd="?android:attr/listPreferredItemPaddingEnd">
++
++    <LinearLayout
++        android:id="@+id/icon_frame"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:gravity="start|center_vertical"
++        android:minWidth="56dp"
++        android:orientation="horizontal"
++        android:paddingEnd="8dp"
++        android:paddingTop="4dp"
++        android:paddingBottom="4dp">
++        <ImageView
++            android:id="@android:id/icon"
++            android:layout_width="@dimen/secondary_app_icon_size"
++            android:layout_height="@dimen/secondary_app_icon_size"/>
++    </LinearLayout>
++
++    <LinearLayout
++        android:layout_width="0dp"
++        android:layout_height="wrap_content"
++        android:layout_weight="1"
++        android:orientation="vertical"
++        android:paddingTop="16dp"
++        android:paddingBottom="16dp">
++
++        <TextView
++            android:id="@android:id/title"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:ellipsize="marquee"
++            android:fadingEdge="horizontal"
++            android:singleLine="true"
++            android:textAppearance="?android:attr/textAppearanceListItem"/>
++
++        <TextView
++            android:id="@android:id/summary"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:textAppearance="?android:attr/textAppearanceSmall"
++            android:textColor="?android:attr/textColorSecondary"/>
++
++        <TextView
++            android:id="@+id/appendix"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:ellipsize="end"
++            android:maxLines="1"
++            android:textAppearance="?android:attr/textAppearanceSmall"
++            android:textColor="?android:attr/textColorSecondary"
++            android:visibility="gone"/>
++
++        <ProgressBar
++            android:id="@android:id/progress"
++            style="?android:attr/progressBarStyleHorizontal"
++            android:layout_width="match_parent"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="4dp"
++            android:max="100"
++            android:visibility="gone"/>
++    </LinearLayout>
++
++    <LinearLayout
++        android:id="@+id/notification_frame"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginEnd="-16dp"
++        android:minWidth="48dp"
++        android:minHeight="48dp"
++        android:layout_gravity="center_vertical|end"
++        android:gravity="center"
++        android:orientation="horizontal"
++        android:background="@drawable/button_ripple_radius"
++        android:visibility="gone">
++        <ImageView
++            android:id="@+id/notification_img"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:gravity="center"
++            android:tint="?android:attr/colorAccent"
++            android:clickable="false"/>
++    </LinearLayout>
++
++    <LinearLayout
++        android:id="@android:id/widget_frame"
++        android:layout_width="wrap_content"
++        android:layout_height="match_parent"
++        android:gravity="center_vertical|end"
++        android:minWidth="64dp"
++        android:orientation="vertical"/>
++
++</LinearLayout>
+diff --git a/res/layout/preference_widget_applock.xml b/res/layout/preference_widget_applock.xml
+new file mode 100644
+index 0000000..1156d72
+--- /dev/null
++++ b/res/layout/preference_widget_applock.xml
+@@ -0,0 +1,24 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     Copyright (C) 2019 Paranoid Android
++
++     Licensed under the Apache License, Version 2.0 (the "License");
++     you may not use this file except in compliance with the License.
++     You may obtain a copy of the License at
++
++          http://www.apache.org/licenses/LICENSE-2.0
++
++     Unless required by applicable law or agreed to in writing, software
++     distributed under the License is distributed on an "AS IS" BASIS,
++     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++     See the License for the specific language governing permissions and
++     limitations under the License.
++-->
++
++<CheckBox
++    xmlns:android="http://schemas.android.com/apk/res/android"
++    android:id="@android:id/checkbox"
++    android:layout_width="wrap_content"
++    android:layout_height="wrap_content"
++    android:button="@drawable/button_app_lock"
++    android:background="@null"/>
+diff --git a/res/menu/applock_menu.xml b/res/menu/applock_menu.xml
+new file mode 100644
+index 0000000..c293059
+--- /dev/null
++++ b/res/menu/applock_menu.xml
+@@ -0,0 +1,24 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!-- Copyright (C) 2015 The Android Open Source Project
++
++     Licensed under the Apache License, Version 2.0 (the "License");
++     you may not use this file except in compliance with the License.
++     You may obtain a copy of the License at
++
++          http://www.apache.org/licenses/LICENSE-2.0
++
++     Unless required by applicable law or agreed to in writing, software
++     distributed under the License is distributed on an "AS IS" BASIS,
++     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++     See the License for the specific language governing permissions and
++     limitations under the License.
++-->
++
++<menu xmlns:android="http://schemas.android.com/apk/res/android">
++    <item
++        android:id="@+id/search_app_list_menu"
++        android:title="@string/search_settings"
++        android:icon="@drawable/ic_find_in_page_24px"
++        android:showAsAction="always|collapseActionView"
++        android:actionViewClass="android.widget.SearchView" />
++</menu>
+diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
+index 3fc5eb7..1ae1399 100644
+--- a/res/values/cm_strings.xml
++++ b/res/values/cm_strings.xml
+@@ -179,4 +179,24 @@
+     <string name="fingerprint_power_button_press_title">Press to unlock</string>
+     <string name="fingerprint_power_button_press_off_summary">Touch power button to unlock with fingerprint when screen is off</string>
+     <string name="fingerprint_power_button_press_on_summary">Press power button firmly to unlock with fingerprint when screen is off</string>
++
++    <!-- App Lock -->
++    <string name="applock_title">App locker</string>
++    <string name="applock_locked">Locked</string>
++    <string name="applock_unlocked">Unlocked</string>
++    <string name="applock_locked_apps">Locked apps</string>
++    <string name="applock_unlocked_apps">Unlocked apps</string>
++    <string name="applock_show_only_on_wake">Authenticate only once</string>
++    <string name="applock_show_only_on_wake_on_summary">Once authenticated, an app stays unlocked until the screen turns off</string>
++    <string name="applock_show_only_on_wake_off_summary">Once authenticated, an app stays unlocked for 15 seconds after exiting</string>
++    <string name="applock_notification_info">You can show/hide the notification content on a per-app basis by clicking on the notification icon shown on each locked apps\' preference</string>
++    <string name="applock_show_notif">Showing notification content</string>
++    <string name="applock_hide_notif">Hiding notification content</string>
++    <string name="applock_setup">Setup app locker</string>
++    <string name="applock_overlay_summary">This feature is not available because this app is locked</string>
++    <plurals name="applock_summary">
++        <item quantity="one">1 app locked</item>
++        <item quantity="other">%d apps locked</item>
++    </plurals>
++    <string name="keywords_applock_settings">applock, applocker, app lock, app locker</string>
+ </resources>
+diff --git a/res/xml/security_dashboard_settings.xml b/res/xml/security_dashboard_settings.xml
+index b5dcebf..8b07302 100644
+--- a/res/xml/security_dashboard_settings.xml
++++ b/res/xml/security_dashboard_settings.xml
+@@ -55,6 +55,12 @@
+             android:title="@string/security_settings_face_preference_title"
+             android:summary="@string/summary_placeholder"
+             settings:keywords="@string/keywords_face_settings" />
++
++        <Preference
++            android:key="app_lock_settings"
++            android:title="@string/applock_title"
++            android:summary="@string/summary_placeholder"
++            settings:keywords="@string/keywords_applock_settings" />
+     </PreferenceCategory>
+ 
+     <!-- work profile security section -->
+diff --git a/res/xml/security_settings_applock.xml b/res/xml/security_settings_applock.xml
+new file mode 100644
+index 0000000..05b5ac7
+--- /dev/null
++++ b/res/xml/security_settings_applock.xml
+@@ -0,0 +1,48 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++  Copyright (C) 2020 Paranoid Android
++
++  Licensed under the Apache License, Version 2.0 (the "License");
++  you may not use this file except in compliance with the License.
++  You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++  Unless required by applicable law or agreed to in writing, software
++  distributed under the License is distributed on an "AS IS" BASIS,
++  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++  See the License for the specific language governing permissions and
++  limitations under the License.
++  -->
++
++<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:app="http://schemas.android.com/apk/res-auto"
++    xmlns:settings="http://schemas.android.com/apk/res-auto"
++    android:title="@string/applock_title"
++    settings:keywords="@string/keywords_applock_settings">
++
++    <SwitchPreference
++        android:key="show_only_on_wake"
++        android:title="@string/applock_show_only_on_wake"
++        android:defaultValue="false"
++        android:summaryOn="@string/applock_show_only_on_wake_on_summary"
++        android:summaryOff="@string/applock_show_only_on_wake_off_summary"
++        android:order="-999" />
++
++    <Preference
++        android:key="applock_notification_info"
++        android:order="-998"
++        android:icon="@drawable/ic_info_outline_24dp"
++        android:summary="@string/applock_notification_info"
++        app:allowDividerAbove="true"/>
++
++    <PreferenceCategory
++        android:key="locked_apps"
++        android:title="@string/applock_locked_apps"
++        android:order="-997" />
++
++    <PreferenceCategory
++        android:key="unlocked_apps"
++        android:title="@string/applock_unlocked_apps"
++        android:order="500"/>
++</PreferenceScreen>
+diff --git a/src/com/android/settings/Settings.java b/src/com/android/settings/Settings.java
+index 2f23c84..670bb61 100644
+--- a/src/com/android/settings/Settings.java
++++ b/src/com/android/settings/Settings.java
+@@ -37,6 +37,7 @@ public class Settings extends SettingsActivity {
+     public static class CreateShortcutActivity extends SettingsActivity { /* empty */ }
+     public static class FaceSettingsActivity extends SettingsActivity { /* empty */ }
+     public static class FingerprintSettingsActivity extends SettingsActivity { /* empty */ }
++    public static class AppLockSettingsActivity extends SettingsActivity { /* empty */ }
+     public static class TetherSettingsActivity extends SettingsActivity {
+         // TODO(b/147675042): Clean the override up when we enable the new Fragment persistently.
+         @Override
+diff --git a/src/com/android/settings/Utils.java b/src/com/android/settings/Utils.java
+index ff7e0aa..a597843 100644
+--- a/src/com/android/settings/Utils.java
++++ b/src/com/android/settings/Utils.java
+@@ -30,6 +30,7 @@ import android.app.ActionBar;
+ import android.app.Activity;
+ import android.app.ActivityManager;
+ import android.app.AppGlobals;
++import android.app.AppLockManager;
+ import android.app.IActivityManager;
+ import android.app.KeyguardManager;
+ import android.app.admin.DevicePolicyManager;
+@@ -806,6 +807,10 @@ public final class Utils extends com.android.settingslib.Utils {
+         return null;
+     }
+ 
++    public static AppLockManager getAppLockManager(Context context) {
++        return (AppLockManager) context.getSystemService(Context.APPLOCK_SERVICE);
++    }
++
+     public static FingerprintManager getFingerprintManagerOrNull(Context context) {
+         if (context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)) {
+             return (FingerprintManager) context.getSystemService(Context.FINGERPRINT_SERVICE);
+diff --git a/src/com/android/settings/applications/appinfo/DrawOverlayDetailPreferenceController.java b/src/com/android/settings/applications/appinfo/DrawOverlayDetailPreferenceController.java
+index 5274e28..e13642a 100644
+--- a/src/com/android/settings/applications/appinfo/DrawOverlayDetailPreferenceController.java
++++ b/src/com/android/settings/applications/appinfo/DrawOverlayDetailPreferenceController.java
+@@ -18,16 +18,24 @@ package com.android.settings.applications.appinfo;
+ 
+ import static android.Manifest.permission.SYSTEM_ALERT_WINDOW;
+ 
++import android.app.AppLockManager;
+ import android.content.Context;
+ import android.content.pm.PackageInfo;
+ import android.os.UserManager;
+ 
++import com.android.settingslib.applications.ApplicationsState.AppEntry;
++
++import com.android.settings.R;
+ import com.android.settings.SettingsPreferenceFragment;
++import com.android.settings.Utils;
+ 
+ public class DrawOverlayDetailPreferenceController extends AppInfoPreferenceControllerBase {
+ 
++    private final AppLockManager mAppLockManager;
++
+     public DrawOverlayDetailPreferenceController(Context context, String key) {
+         super(context, key);
++        mAppLockManager = Utils.getAppLockManager(context);
+     }
+ 
+     @Override
+@@ -39,6 +47,9 @@ public class DrawOverlayDetailPreferenceController extends AppInfoPreferenceCont
+         if (packageInfo == null || packageInfo.requestedPermissions == null) {
+             return DISABLED_FOR_USER;
+         }
++        if (mAppLockManager.isAppLocked(packageInfo.packageName)) {
++            return DISABLED_DEPENDENT_SETTING;
++        }
+         for (int i = 0; i < packageInfo.requestedPermissions.length; i++) {
+             if (packageInfo.requestedPermissions[i].equals(SYSTEM_ALERT_WINDOW)) {
+                 return AVAILABLE;
+@@ -54,6 +65,13 @@ public class DrawOverlayDetailPreferenceController extends AppInfoPreferenceCont
+ 
+     @Override
+     public CharSequence getSummary() {
+-        return DrawOverlayDetails.getSummary(mContext, mParent.getAppEntry());
++        final AppEntry entry = mParent.getAppEntry();
++        final CharSequence summary;
++        if (mAppLockManager.isAppLocked(entry.info.packageName)) {
++            summary = mContext.getString(R.string.applock_overlay_summary);
++        } else {
++            summary = DrawOverlayDetails.getSummary(mContext, entry);
++        }
++        return summary;
+     }
+ }
+diff --git a/src/com/android/settings/applications/appinfo/DrawOverlayDetails.java b/src/com/android/settings/applications/appinfo/DrawOverlayDetails.java
+index 0f90c69..a7568bd 100644
+--- a/src/com/android/settings/applications/appinfo/DrawOverlayDetails.java
++++ b/src/com/android/settings/applications/appinfo/DrawOverlayDetails.java
+@@ -15,6 +15,7 @@
+  */
+ package com.android.settings.applications.appinfo;
+ 
++import android.app.AppLockManager;
+ import android.app.AppOpsManager;
+ import android.app.settings.SettingsEnums;
+ import android.content.Context;
+@@ -50,6 +51,7 @@ public class DrawOverlayDetails extends AppInfoWithHeader implements OnPreferenc
+     // TODO: Break out this functionality into its own class.
+     private AppStateOverlayBridge mOverlayBridge;
+     private AppOpsManager mAppOpsManager;
++    private AppLockManager mAppLockManager;
+     private SwitchPreference mSwitchPref;
+     private OverlayState mOverlayState;
+ 
+@@ -60,8 +62,10 @@ public class DrawOverlayDetails extends AppInfoWithHeader implements OnPreferenc
+         Context context = getActivity();
+         mOverlayBridge = new AppStateOverlayBridge(context, mState, null);
+         mAppOpsManager = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
++        mAppLockManager = Utils.getAppLockManager(context);
+ 
+-        if (!Utils.isSystemAlertWindowEnabled(context)) {
++        if (!Utils.isSystemAlertWindowEnabled(context) || mAppLockManager.isAppLocked(
++                mPackageInfo.packageName)) {
+             mPackageInfo = null;
+             return;
+         }
+diff --git a/src/com/android/settings/applications/manageapplications/ManageApplications.java b/src/com/android/settings/applications/manageapplications/ManageApplications.java
+index 8bac11a..5aef339 100644
+--- a/src/com/android/settings/applications/manageapplications/ManageApplications.java
++++ b/src/com/android/settings/applications/manageapplications/ManageApplications.java
+@@ -35,6 +35,7 @@ import android.annotation.Nullable;
+ import android.annotation.StringRes;
+ import android.app.Activity;
+ import android.app.ActivityManager;
++import android.app.AppLockManager;
+ import android.app.settings.SettingsEnums;
+ import android.app.usage.IUsageStatsManager;
+ import android.compat.annotation.ChangeId;
+@@ -258,10 +259,15 @@ public class ManageApplications extends InstrumentedFragment
+     private View mEmptyView;
+     private int mFilterType;
+ 
++    private AppLockManager mAppLockManager;
++
+     @Override
+     public void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+         setHasOptionsMenu(true);
++
++        mAppLockManager = Utils.getAppLockManager(getContext());
++
+         final Activity activity = getActivity();
+         mUserManager = activity.getSystemService(UserManager.class);
+         mApplicationsState = ApplicationsState.getInstance(activity.getApplication());
+@@ -635,7 +641,9 @@ public class ManageApplications extends InstrumentedFragment
+                 HighPowerDetail.show(this, mCurrentUid, mCurrentPkgName, INSTALLED_APP_DETAILS);
+                 break;
+             case LIST_TYPE_OVERLAY:
+-                startAppInfoFragment(DrawOverlayDetails.class, R.string.overlay_settings);
++                if (!mAppLockManager.isAppLocked(mCurrentPkgName)) {
++                    startAppInfoFragment(DrawOverlayDetails.class, R.string.overlay_settings);
++                }
+                 break;
+             case LIST_TYPE_WRITE_SETTINGS:
+                 startAppInfoFragment(WriteSettingsDetails.class, R.string.write_system_settings);
+@@ -1466,6 +1474,7 @@ public class ManageApplications extends InstrumentedFragment
+                 // Bind the data efficiently with the holder
+                 ApplicationsState.AppEntry entry = mEntries.get(position);
+                 synchronized (entry) {
++                    holder.setEnabled(isEnabled(position));
+                     holder.setTitle(entry.label);
+                     mState.ensureLabelDescription(entry);
+                     holder.itemView.setContentDescription(entry.labelDescription);
+@@ -1475,7 +1484,6 @@ public class ManageApplications extends InstrumentedFragment
+                     updateSwitch(holder, entry);
+                     holder.updateDisableView(entry.info);
+                 }
+-                holder.setEnabled(isEnabled(position));
+             }
+             holder.itemView.setOnClickListener(mManageApplications);
+         }
+@@ -1505,7 +1513,16 @@ public class ManageApplications extends InstrumentedFragment
+                     holder.setSummary(HighPowerDetail.getSummary(mContext, entry));
+                     break;
+                 case LIST_TYPE_OVERLAY:
+-                    holder.setSummary(DrawOverlayDetails.getSummary(mContext, entry));
++                    final CharSequence summary;
++                    AppLockManager al = (AppLockManager) Utils.getAppLockManager(mContext);
++                    if (al.isAppLocked(entry.info.packageName)) {
++                        summary = mContext.getString(R.string.applock_overlay_summary);
++                        holder.setEnabled(false);
++                    } else {
++                        summary = DrawOverlayDetails.getSummary(mContext, entry);
++                        holder.setEnabled(true);
++                    }
++                    holder.setSummary(summary);
+                     break;
+                 case LIST_TYPE_WRITE_SETTINGS:
+                     holder.setSummary(WriteSettingsDetails.getSummary(mContext, entry));
+diff --git a/src/com/android/settings/core/gateway/SettingsGateway.java b/src/com/android/settings/core/gateway/SettingsGateway.java
+index ad4da08..04d609b 100644
+--- a/src/com/android/settings/core/gateway/SettingsGateway.java
++++ b/src/com/android/settings/core/gateway/SettingsGateway.java
+@@ -134,6 +134,7 @@ import com.android.settings.password.ChooseLockPattern;
+ import com.android.settings.print.PrintJobSettingsFragment;
+ import com.android.settings.print.PrintSettingsFragment;
+ import com.android.settings.privacy.PrivacyDashboardFragment;
++import com.android.settings.security.applock.AppLockSettings;
+ import com.android.settings.security.CryptKeeperSettings;
+ import com.android.settings.security.LockscreenDashboardFragment;
+ import com.android.settings.security.SecuritySettings;
+@@ -221,6 +222,7 @@ public class SettingsGateway {
+             AssistGestureSettings.class.getName(),
+             FaceSettings.class.getName(),
+             FingerprintSettings.FingerprintSettingsFragment.class.getName(),
++            AppLockSettings.AppLockSettingsFragment.class.getName(),
+             SwipeToNotificationSettings.class.getName(),
+             DoubleTapPowerSettings.class.getName(),
+             DoubleTapScreenSettings.class.getName(),
+diff --git a/src/com/android/settings/security/SecuritySettings.java b/src/com/android/settings/security/SecuritySettings.java
+index 2f2b349..3f7cb6a 100644
+--- a/src/com/android/settings/security/SecuritySettings.java
++++ b/src/com/android/settings/security/SecuritySettings.java
+@@ -34,6 +34,7 @@ import com.android.settings.enterprise.EnterprisePrivacyPreferenceController;
+ import com.android.settings.search.BaseSearchIndexProvider;
+ import com.android.settings.security.trustagent.ManageTrustAgentsPreferenceController;
+ import com.android.settings.security.trustagent.TrustAgentListPreferenceController;
++import com.android.settings.security.applock.AppLockPreferenceController;
+ import com.android.settings.widget.PreferenceCategoryController;
+ import com.android.settingslib.core.AbstractPreferenceController;
+ import com.android.settingslib.core.lifecycle.Lifecycle;
+@@ -118,6 +119,7 @@ public class SecuritySettings extends DashboardFragment {
+         securityPreferenceControllers.add(new FaceStatusPreferenceController(context));
+         securityPreferenceControllers.add(new FingerprintStatusPreferenceController(context));
+         securityPreferenceControllers.add(new ChangeScreenLockPreferenceController(context, host));
++        securityPreferenceControllers.add(new AppLockPreferenceController(context));
+         controllers.add(new PreferenceCategoryController(context, SECURITY_CATEGORY)
+                 .setChildren(securityPreferenceControllers));
+         controllers.addAll(securityPreferenceControllers);
+diff --git a/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java b/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java
+index e0326ff..7cb5d89 100644
+--- a/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java
++++ b/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java
+@@ -16,6 +16,7 @@
+ 
+ package com.android.settings.security;
+ 
++import android.app.AppLockManager;
+ import android.content.Context;
+ import android.hardware.face.FaceManager;
+ import android.hardware.fingerprint.FingerprintManager;
+@@ -43,14 +44,22 @@ public class TopLevelSecurityEntryPreferenceController extends BasePreferenceCon
+                 Utils.getFingerprintManagerOrNull(mContext);
+         final FaceManager faceManager =
+                 Utils.getFaceManagerOrNull(mContext);
++        final AppLockManager appLockManager =
++                Utils.getAppLockManager(mContext);
++        CharSequence summary = null;
+         if (fpm != null && fpm.isHardwareDetected() && FaceUtils.isFaceUnlockSupported()) {
+-            return mContext.getText(R.string.security_dashboard_summary_face_and_fingerprint);
++            summary = mContext.getText(R.string.security_dashboard_summary_face_and_fingerprint);
+         } else if (fpm != null && fpm.isHardwareDetected()) {
+-            return mContext.getText(R.string.security_dashboard_summary);
++            summary = mContext.getText(R.string.security_dashboard_summary);
+         } else if (faceManager != null && faceManager.isHardwareDetected()) {
+-            return mContext.getText(R.string.security_dashboard_summary_face);
++            summary = mContext.getText(R.string.security_dashboard_summary_face);
+         } else {
+-            return mContext.getText(R.string.security_dashboard_summary_no_fingerprint);
++            summary = mContext.getText(R.string.security_dashboard_summary_no_fingerprint);
++        }
++        if (appLockManager == null) {
++            return summary;
++        } else {
++            return summary + ", " + mContext.getText(R.string.applock_title);
+         }
+     }
+ }
+diff --git a/src/com/android/settings/security/applock/AppLockInfo.java b/src/com/android/settings/security/applock/AppLockInfo.java
+new file mode 100644
+index 0000000..3bba6ca
+--- /dev/null
++++ b/src/com/android/settings/security/applock/AppLockInfo.java
+@@ -0,0 +1,67 @@
++/*
++ * Copyright (C) 2014 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.settings.security.applock;
++
++import android.app.AppLockManager;
++import android.content.ComponentName;
++import android.content.Intent;
++import android.content.pm.PackageManager;
++import android.content.pm.ResolveInfo;
++import android.graphics.drawable.Drawable;
++
++public class AppLockInfo {
++
++    private String mLabel;
++    private String mPackageName;
++    private Drawable mIcon;
++    private boolean mAppLocked;
++
++    AppLockInfo(ResolveInfo info, PackageManager pm, AppLockManager am) {
++        mLabel = info.loadLabel(pm).toString();
++        mIcon = info.loadIcon(pm);
++        mPackageName = info.activityInfo.packageName;
++        mAppLocked = am.isAppLocked(mPackageName);
++    }
++
++    String getLabel() {
++        return mLabel;
++    }
++
++    void setLabel(String label) {
++        mLabel = label;
++    }
++
++    String getPackageName() {
++        return mPackageName;
++    }
++
++    boolean isAppLocked() {
++        return mAppLocked;
++    }
++
++    void setAppLocked(boolean locked) {
++        mAppLocked = locked;
++    }
++
++    Drawable getIcon() {
++        return mIcon;
++    }
++
++    @Override
++    public String toString() {
++        return mLabel;
++    }
++}
+diff --git a/src/com/android/settings/security/applock/AppLockPreferenceController.java b/src/com/android/settings/security/applock/AppLockPreferenceController.java
+new file mode 100644
+index 0000000..0e9f992
+--- /dev/null
++++ b/src/com/android/settings/security/applock/AppLockPreferenceController.java
+@@ -0,0 +1,75 @@
++/*
++ * Copyright (C) 2019 Paranoid Android
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.settings.security.applock;
++
++import android.app.AppLockManager;
++import android.content.Context;
++import android.content.res.Resources;
++import android.util.Log;
++
++import com.android.settings.biometrics.BiometricStatusPreferenceController;
++
++import com.android.settings.R;
++import com.android.settings.Settings;
++import com.android.settings.Utils;
++
++public class AppLockPreferenceController extends BiometricStatusPreferenceController {
++
++    private static final String TAG = "AppLockPrefController";
++    private static final String KEY_APP_LOCK = "app_lock_settings";
++
++    private AppLockManager mAppLockManager;
++    private Resources mResources;
++
++    public AppLockPreferenceController(Context context) {
++        super(context, KEY_APP_LOCK);
++        mAppLockManager = Utils.getAppLockManager(context);
++        mResources = (Resources) context.getResources();
++    }
++
++    @Override
++    protected boolean isDeviceSupported() {
++        return mAppLockManager != null;
++    }
++
++    @Override
++    protected boolean hasEnrolledBiometrics() {
++        final int N = mAppLockManager.getLockedAppsCount();
++        return (N > 0);
++    }
++
++    @Override
++    protected String getSummaryTextEnrolled() {
++        final int N = mAppLockManager.getLockedAppsCount();
++        return mResources.getQuantityString(R.plurals.applock_summary, N, N);
++    }
++
++    @Override
++    protected String getSummaryTextNoneEnrolled() {
++        return mResources.getString(R.string.applock_setup);
++    }
++
++    @Override
++    protected String getSettingsClassName() {
++        return Settings.AppLockSettingsActivity.class.getName();
++    }
++
++    @Override
++    protected String getEnrollClassName() {
++        return AppLockSettings.class.getName();
++    }
++}
+diff --git a/src/com/android/settings/security/applock/AppLockSettings.java b/src/com/android/settings/security/applock/AppLockSettings.java
+new file mode 100644
+index 0000000..ca6045a
+--- /dev/null
++++ b/src/com/android/settings/security/applock/AppLockSettings.java
+@@ -0,0 +1,447 @@
++/*
++ * Copyright (C) 2021 Paranoid Android
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.settings.security.applock;
++
++import static com.android.settings.Utils.SETTINGS_PACKAGE_NAME;
++
++import androidx.annotation.WorkerThread;
++
++import android.app.Activity;
++import android.app.AppLockManager;
++import android.app.admin.DevicePolicyManager;
++import android.content.Intent;
++import android.graphics.drawable.Drawable;
++import android.os.Bundle;
++import android.os.UserHandle;
++import android.provider.Settings;
++import android.text.TextUtils;
++import android.util.Log;
++import android.view.Menu;
++import android.view.MenuInflater;
++import android.view.MenuItem;
++import android.widget.Filter;
++import android.widget.SearchView;
++
++import androidx.lifecycle.ViewModelProviders;
++import androidx.preference.Preference;
++import androidx.preference.PreferenceScreen;
++import androidx.preference.SwitchPreference;
++
++import com.android.settings.biometrics.BiometricEnrollBase;
++import com.android.settings.R;
++import com.android.settings.SettingsPreferenceFragment;
++import com.android.settings.SubSettings;
++import com.android.settings.Utils;
++import com.android.settings.password.ChooseLockGeneric;
++import com.android.settings.password.ChooseLockSettingsHelper;
++import com.android.settings.widget.AppLockPreference;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.TreeMap;
++
++/**
++ * App lock settings.
++ */
++public class AppLockSettings extends SubSettings {
++
++    private static final String TAG = "AppLockSettings";
++
++    private static final int RESULT_FINISHED = BiometricEnrollBase.RESULT_FINISHED;
++    private static final int CONFIRM_REQUEST = 101;
++    private static final int CHOOSE_LOCK_GENERIC_REQUEST = 102;
++
++    @Override
++    public Intent getIntent() {
++        Intent intent = new Intent(super.getIntent());
++        intent.putExtra(EXTRA_SHOW_FRAGMENT, AppLockSettingsFragment.class.getName());
++        return intent;
++    }
++
++    @Override
++    protected boolean isValidFragment(String fragmentName) {
++        return AppLockSettingsFragment.class.getName().equals(fragmentName);
++    }
++
++    @Override
++    public void onCreate(Bundle savedInstanceState) {
++        super.onCreate(savedInstanceState);
++        CharSequence msg = getText(R.string.applock_title);
++        setTitle(msg);
++    }
++
++    public static class AppLockSettingsFragment extends SettingsPreferenceFragment
++            implements SearchView.OnQueryTextListener, SearchView.OnCloseListener {
++
++        private final String KEY_SHOW_ON_WAKE = "show_only_on_wake";
++        private final String KEY_LOCKED_APPS = "locked_apps";
++        private final String KEY_UNLOCKED_APPS = "unlocked_apps";
++        private final String KEY_NOTIFICATION_HELP = "applock_notification_info";
++
++        private final char DUPLICATE_CHAR = 6;
++
++        private AppLockManager mAppLockManager;
++
++        private int mUserId;
++        private boolean mSearching;
++        private boolean mLaunchAuthenticated;
++        private SearchView mSearchView;
++        private SearchFilter mSearchFilter;
++        private PreferenceScreen mPreferenceScreen;
++        private SwitchPreference mShowOnlyOnWake;
++        private Preference mLocked;
++        private Preference mUnlocked;
++        private Preference mNotifInfo;
++
++        private final TreeMap<String, AppLockInfo> mLockedApps = new TreeMap<>();
++        private final TreeMap<String, AppLockInfo> mUnlockedApps = new TreeMap<>();
++        private final ArrayList<AppLockInfo> mAllApps = new ArrayList<>();
++
++        @Override
++        public int getMetricsCategory() {
++            return -1;
++        }
++
++        @Override
++        public void onResume() {
++            super.onResume();
++        }
++
++        @Override
++        public void onPause() {
++            super.onPause();
++            if (mLaunchAuthenticated) {
++                getActivity().finish();
++            }
++        }
++
++        @Override
++        public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
++            final Activity activity = getActivity();
++            if (activity == null) {
++                return;
++            }
++            inflater.inflate(R.menu.applock_menu, menu);
++
++            final MenuItem searchMenuItem = menu.findItem(R.id.search_app_list_menu);
++            if (searchMenuItem != null) {
++                mSearchView = (SearchView) searchMenuItem.getActionView();
++                mSearchView.setQueryHint(getText(R.string.search_settings));
++                mSearchView.setOnQueryTextListener(this);
++                mSearchView.setOnCloseListener(this);
++            }
++        }
++
++        @Override
++        public void onCreate(Bundle savedInstanceState) {
++            Log.d(TAG, "onCreate");
++            super.onCreate(savedInstanceState);
++            setHasOptionsMenu(true);
++            setAnimationAllowed(true);
++
++            mUserId = getActivity().getIntent().getIntExtra(
++                    Intent.EXTRA_USER_ID, UserHandle.myUserId());
++
++            launchChooseOrConfirmLock();
++
++            addPreferencesFromResource(R.xml.security_settings_applock);
++
++            mSearching = false;
++            mLaunchAuthenticated = false;
++            mAppLockManager = Utils.getAppLockManager(getPrefContext());
++            mPreferenceScreen = getPreferenceScreen();
++
++            mShowOnlyOnWake = mPreferenceScreen.findPreference(KEY_SHOW_ON_WAKE);
++            mLocked = mPreferenceScreen.findPreference(KEY_LOCKED_APPS);
++            mUnlocked = mPreferenceScreen.findPreference(KEY_UNLOCKED_APPS);
++            mNotifInfo = mPreferenceScreen.findPreference(KEY_NOTIFICATION_HELP);
++
++            mShowOnlyOnWake.setChecked(mAppLockManager.getShowOnlyOnWake());
++            mShowOnlyOnWake.setOnPreferenceChangeListener((preference, checked) -> {
++                mAppLockManager.setShowOnlyOnWake((boolean) checked);
++                return true;
++            });
++
++            mNotifInfo.setOnPreferenceClickListener((preference) -> {
++                performNotifHintAnimation();
++                return true;
++            });
++
++            final AppLockViewModel model = ViewModelProviders.of(this).get(AppLockViewModel.class);
++            if (!model.getAppList().hasActiveObservers()) {
++                model.getAppList().observeForever(data -> {
++                    updateAppsList(data);
++                });
++            }
++        }
++
++        private void updateAppsList(List<AppLockInfo> entries) {
++            for (AppLockInfo info : entries) {
++                boolean locked = info.isAppLocked();
++                if (locked) {
++                    addToLocked(info.getLabel(), info);
++                } else {
++                    addToUnlocked(info.getLabel(), info);
++                }
++            }
++            mAllApps.addAll(mLockedApps.values());
++            mAllApps.addAll(mUnlockedApps.values());
++            addPreferences();
++        }
++
++        private void updateAppsLocked(Preference preference, boolean isLocked) {
++            String label = preference.getTitle().toString();
++            if (isLocked) {
++                mAppLockManager.addAppToList(preference.getKey());
++                AppLockInfo info = mUnlockedApps.get(label);
++                info.setAppLocked(true);
++                addToLocked(label, info);
++                removeFromUnlocked(label);
++            } else {
++                mAppLockManager.removeAppFromList(preference.getKey());
++                AppLockInfo info = mLockedApps.get(label);
++                info.setAppLocked(false);
++                addToUnlocked(label, info);
++                removeFromLocked(label);
++            }
++            updatePreferenceOrder();
++            if (mSearching) {
++                int totalAppsShown = 0;
++                int lockedAppsShown = 0;
++                final int count = mPreferenceScreen.getPreferenceCount();
++                for (int i = 0; i < count; i++) {
++                    Preference pref = mPreferenceScreen.getPreference(i);
++                    if ((pref instanceof AppLockPreference) && pref.isVisible()) {
++                        totalAppsShown++;
++                        if ((pref == preference && isLocked) || (pref != preference
++                                && ((AppLockPreference) pref).isChecked())) {
++                            lockedAppsShown++;
++                        }
++                    }
++                }
++                updateCategoryVisibility(lockedAppsShown, totalAppsShown - lockedAppsShown);
++            } else {
++                updateCategoryVisibility(mLockedApps.size(), mUnlockedApps.size());
++            }
++        }
++
++        private void addToLocked(String label, AppLockInfo info) {
++            handleDuplicate(mLockedApps.put(label, info), mLockedApps);
++        }
++
++        private void addToUnlocked(String label, AppLockInfo info) {
++            handleDuplicate(mUnlockedApps.put(label, info), mUnlockedApps);
++        }
++
++        private void handleDuplicate(AppLockInfo duplicate,
++                TreeMap<String, AppLockInfo> map) {
++            int count = 1;
++            while (duplicate != null) {
++                String dup = duplicate.getLabel();
++                for (int i = 0; i < count; i++) {
++                    dup += DUPLICATE_CHAR;
++                }
++                duplicate.setLabel(dup);
++                duplicate = map.put(dup, duplicate);
++                count++;
++            }
++        }
++
++        private void removeFromLocked(String label) {
++            mLockedApps.remove(label);
++        }
++
++        private void removeFromUnlocked(String label) {
++            mUnlockedApps.remove(label);
++        }
++
++        private void updatePreferenceOrder() {
++            int order = 0;
++            for (AppLockInfo info : mLockedApps.values()) {
++                AppLockPreference pref = mPreferenceScreen.findPreference(info.getPackageName());
++                pref.setOrder(order);
++                order++;
++            }
++            mUnlocked.setOrder(order);
++            order++;
++            for (AppLockInfo info : mUnlockedApps.values()) {
++                AppLockPreference pref = mPreferenceScreen.findPreference(info.getPackageName());
++                pref.setOrder(order);
++                order++;
++            }
++        }
++
++        private void addPreferences() {
++            int order = 0;
++            for (AppLockInfo info : mLockedApps.values()) {
++                AppLockPreference pref = createPreference(info);
++                mPreferenceScreen.addPreference(pref);
++                pref.setOrder(order);
++                order++;
++            }
++            mUnlocked.setOrder(order);
++            order++;
++            for (AppLockInfo info : mUnlockedApps.values()) {
++                AppLockPreference pref = createPreference(info);
++                mPreferenceScreen.addPreference(pref);
++                pref.setOrder(order);
++                order++;
++            }
++            updateCategoryVisibility(mLockedApps.size(), mUnlockedApps.size());
++        }
++
++        private void performNotifHintAnimation() {
++            for (AppLockInfo info : mLockedApps.values()) {
++                AppLockPreference pref = mPreferenceScreen.findPreference(info.getPackageName());
++                pref.startHintAnimation();
++            }
++        }
++
++        private void updatePreferencesPostSearch(ArrayList<AppLockInfo> results) {
++            int lockedAppsShown = 0;
++            for (AppLockInfo info : results) {
++                String packageName = info.getPackageName();
++                AppLockPreference pref = mPreferenceScreen.findPreference(packageName);
++                if (pref != null) pref.setVisible(true);
++                if (info.isAppLocked()) lockedAppsShown++;
++            }
++            ArrayList<AppLockInfo> negPackages = new ArrayList<>(mAllApps);
++            negPackages.removeAll(results);
++            for (AppLockInfo info : negPackages) {
++                String packageName = info.getPackageName();
++                AppLockPreference pref = mPreferenceScreen.findPreference(packageName);
++                if (pref != null) pref.setVisible(false);
++            }
++            updateCategoryVisibility(lockedAppsShown, results.size() - lockedAppsShown);
++        }
++
++        @Override
++        public void onActivityResult(int requestCode, int resultCode, Intent data) {
++            super.onActivityResult(requestCode, resultCode, data);
++            if (requestCode == CHOOSE_LOCK_GENERIC_REQUEST
++                    || requestCode == CONFIRM_REQUEST) {
++                if (resultCode != RESULT_FINISHED && resultCode != RESULT_OK) {
++                    // Authentication failed, close Activity.
++                    getActivity().finish();
++                } else {
++                    mLaunchAuthenticated = true;
++                }
++            }
++        }
++
++        @Override
++        public boolean onQueryTextSubmit(String query) {
++            return false;
++        }
++
++        @Override
++        public boolean onQueryTextChange(String newText) {
++            if (mSearchFilter == null) {
++                mSearchFilter = new SearchFilter();
++            }
++            mSearching = true;
++            mSearchFilter.filter(newText);
++            return false;
++        }
++
++        @Override
++        public boolean onClose() {
++            mSearching = false;
++            updatePreferencesPostSearch(mAllApps);
++            return false;
++        }
++
++        private void launchChooseOrConfirmLock() {
++            Intent intent = new Intent();
++            ChooseLockSettingsHelper helper = new ChooseLockSettingsHelper(getActivity(), this);
++            if (!helper.launchConfirmationActivity(CONFIRM_REQUEST,
++                    getString(R.string.applock_title), null,
++                    null, 0, mUserId, true /* foregroundOnly */)) {
++                intent.setClassName(SETTINGS_PACKAGE_NAME, ChooseLockGeneric.class.getName());
++                intent.putExtra(ChooseLockGeneric.ChooseLockGenericFragment.MINIMUM_QUALITY_KEY,
++                        DevicePolicyManager.PASSWORD_QUALITY_SOMETHING);
++                intent.putExtra(ChooseLockGeneric.ChooseLockGenericFragment.HIDE_DISABLED_PREFS,
++                        true);
++                intent.putExtra(Intent.EXTRA_USER_ID, mUserId);
++                startActivityForResult(intent, CHOOSE_LOCK_GENERIC_REQUEST);
++            }
++        }
++
++        private AppLockPreference createPreference(AppLockInfo info) {
++            String label = info.getLabel().toString();
++            Drawable icon = info.getIcon();
++            String packageName = info.getPackageName();
++            boolean locked = info.isAppLocked();
++            AppLockPreference pref = new AppLockPreference(getPrefContext(), mAppLockManager,
++                    packageName);
++            pref.setTitle(label);
++            pref.setIcon(icon);
++            pref.setKey(packageName);
++            pref.setChecked(locked);
++            pref.setOnPreferenceChangeListener((preference, isLocked) -> {
++                updateAppsLocked(preference, (boolean) isLocked);
++                return true;
++            });
++            return pref;
++        }
++
++        private void updateCategoryVisibility(int lockedApps, int unlockedApps) {
++            if (lockedApps == 0) {
++                mLocked.setVisible(false);
++                mNotifInfo.setVisible(false);
++            } else {
++                mLocked.setVisible(true);
++                mNotifInfo.setVisible(true);
++            }
++            if (unlockedApps == 0) {
++                mUnlocked.setVisible(false);
++            } else {
++                mUnlocked.setVisible(true);
++            }
++        }
++
++        /**
++         * An array filter that constrains the content of the array adapter with a substring.
++         * Item that does not contains the specified substring will be removed from the list.</p>
++         */
++        private class SearchFilter extends Filter {
++            @WorkerThread
++            @Override
++            protected FilterResults performFiltering(CharSequence query) {
++                final ArrayList<AppLockInfo> matchedEntries = new ArrayList<>();
++                if (!TextUtils.isEmpty(query)) {
++                    for (AppLockInfo info : mAllApps) {
++                        if (info.getLabel().toString()
++                                .toLowerCase().contains(query.toString().toLowerCase())) {
++                            matchedEntries.add(info);
++                        }
++                    }
++                } else {
++                    matchedEntries.addAll(mAllApps);
++                }
++                final FilterResults results = new FilterResults();
++                results.values = matchedEntries;
++                results.count = matchedEntries.size();
++                return results;
++            }
++
++            @Override
++            protected void publishResults(CharSequence constraint, FilterResults results) {
++                updatePreferencesPostSearch((ArrayList<AppLockInfo>) results.values);
++            }
++        }
++    }
++}
+diff --git a/src/com/android/settings/security/applock/AppLockViewModel.java b/src/com/android/settings/security/applock/AppLockViewModel.java
+new file mode 100644
+index 0000000..b16286d
+--- /dev/null
++++ b/src/com/android/settings/security/applock/AppLockViewModel.java
+@@ -0,0 +1,95 @@
++/*
++ * Copyright (C) 2014 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.settings.security.applock;
++
++import static com.android.settings.Utils.SETTINGS_PACKAGE_NAME;
++
++import android.app.Application;
++import android.app.AppLockManager;
++import android.content.Context;
++import android.content.Intent;
++import android.content.pm.PackageManager;
++import android.content.pm.ResolveInfo;
++import android.os.AsyncTask;
++
++import androidx.lifecycle.AndroidViewModel;
++import androidx.lifecycle.LiveData;
++
++import com.android.settings.Utils;
++
++import java.util.ArrayList;
++import java.util.List;
++
++public class AppLockViewModel extends AndroidViewModel {
++
++    private final AppListLiveData mLiveData;
++
++    public AppLockViewModel(Application application) {
++        super(application);
++        mLiveData = new AppListLiveData(application);
++    }
++
++    public LiveData<List<AppLockInfo>> getAppList() {
++        return mLiveData;
++    }
++}
++
++class AppListLiveData extends LiveData<List<AppLockInfo>> {
++
++    private final PackageManager mPackageManager;
++    private final AppLockManager mAppLockManager;
++    private int mCurrentDataVersion;
++
++    public AppListLiveData(Context context) {
++        mPackageManager = context.getPackageManager();
++        mAppLockManager = Utils.getAppLockManager(context);
++        loadSupportedAppData();
++    }
++
++    void loadSupportedAppData() {
++        final int dataVersion = ++mCurrentDataVersion;
++
++        new AsyncTask<Void, Void, List<AppLockInfo>>() {
++            @Override
++            protected List<AppLockInfo> doInBackground(Void... voids) {
++                Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
++                mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
++
++                List<ResolveInfo> apps = mPackageManager.queryIntentActivities(mainIntent,
++                        PackageManager.GET_META_DATA);
++
++                List<AppLockInfo> entries = new ArrayList<>();
++                if (apps != null) {
++                    for (ResolveInfo app : apps) {
++                        if (app.activityInfo.packageName.equals(SETTINGS_PACKAGE_NAME)) {
++                            continue;
++                        }
++                        AppLockInfo entry = new AppLockInfo(app, mPackageManager, mAppLockManager);
++                        entries.add(entry);
++                    }
++                }
++                return entries;
++            }
++
++            @Override
++            protected void onPostExecute(List<AppLockInfo> data) {
++                if (mCurrentDataVersion == dataVersion) {
++                    setValue(data);
++                }
++            }
++        }.execute();
++    }
++}
+\ No newline at end of file
+diff --git a/src/com/android/settings/widget/AppLockPreference.java b/src/com/android/settings/widget/AppLockPreference.java
+new file mode 100644
+index 0000000..2d0e003
+--- /dev/null
++++ b/src/com/android/settings/widget/AppLockPreference.java
+@@ -0,0 +1,123 @@
++/*
++ * Copyright (C) 2019 Paranoid Android
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.settings.widget;
++
++import android.app.AppLockManager;
++import android.content.Context;
++import android.widget.ImageView;
++import android.view.View;
++
++import androidx.preference.CheckBoxPreference;
++import androidx.preference.PreferenceViewHolder;
++
++import com.android.settings.R;
++import com.android.settings.Utils;
++
++public class AppLockPreference extends CheckBoxPreference {
++
++    private final AppLockManager mAppLockManager;
++    private final String mPackageName;
++
++    private ImageView mNotificationImage;
++    private View mNotifFrame;
++
++    private boolean mHandleClick;
++    private boolean mAnimating;
++
++    public AppLockPreference(Context context, AppLockManager am, String pkg) {
++        super(context, null);
++        mAppLockManager = am;
++        mPackageName = pkg;
++
++        setLayoutResource(R.layout.preference_applock);
++        setWidgetLayoutResource(R.layout.preference_widget_applock);
++
++        setSummaryOn(R.string.applock_locked);
++        setSummaryOff(R.string.applock_unlocked);
++    }
++
++    @Override
++    public void onBindViewHolder(PreferenceViewHolder view) {
++        super.onBindViewHolder(view);
++
++        mNotificationImage = (ImageView) view.findViewById(R.id.notification_img);
++        mNotifFrame = (View) view.findViewById(R.id.notification_frame);
++        mNotifFrame.setOnClickListener(new View.OnClickListener() {
++            @Override
++            public void onClick(View v) {
++                boolean hide = mAppLockManager.getAppNotificationHide(mPackageName);
++                mAppLockManager.setAppNotificationHide(mPackageName, !hide);
++                mNotificationImage.setImageResource(hide ? R.drawable.ic_notifications
++                        : R.drawable.ic_notifications_off_24dp);
++                String toolTip = getContext().getString(hide ? R.string.applock_show_notif
++                        : R.string.applock_hide_notif);
++                v.setTooltipText(toolTip);
++                v.performLongClick();
++            }
++        });
++        boolean hiding = mAppLockManager.getAppNotificationHide(mPackageName);
++        String toolTip = getContext().getString(hiding ? R.string.applock_hide_notif
++                : R.string.applock_show_notif);
++        mNotifFrame.setTooltipText(toolTip);
++        mNotificationImage.setImageResource(hiding ? R.drawable.ic_notifications_off_24dp
++                : R.drawable.ic_notifications);
++        if (mHandleClick) {
++            mAnimating = true;
++            mNotifFrame.animate()
++                .alpha(isChecked() ? 1f : 0f)
++                .setDuration(200)
++                .setStartDelay(100)
++                .withStartAction(() -> {
++                    mNotifFrame.setVisibility(View.VISIBLE);
++                    mNotifFrame.setAlpha(isChecked() ? 0f : 1f);
++                })
++                .withEndAction(() -> {
++                    mNotifFrame.setVisibility(isChecked() ? View.VISIBLE : View.GONE);
++                    mAnimating = false;
++                })
++                .start();
++        } else if (!mAnimating) {
++            mNotifFrame.setAlpha(1f);
++            mNotifFrame.setVisibility(isChecked() ? View.VISIBLE : View.GONE);
++        }
++        mHandleClick = false;
++    }
++
++    @Override
++    public void onClick() {
++        super.onClick();
++        mHandleClick = true;
++    }
++
++    public void startHintAnimation() {
++        mNotifFrame.postOnAnimationDelayed(
++                getSinglePressFor(mNotifFrame), 200);
++    }
++
++    private Runnable getSinglePressFor(View v) {
++        return () -> {
++            v.setPressed(true);
++            v.postOnAnimationDelayed(getSingleUnpressFor(v), 200);
++        };
++    }
++
++    private Runnable getSingleUnpressFor(View v) {
++        return () -> {
++            v.setPressed(false);
++        };
++    }
++}
+-- 
+2.31.1
+

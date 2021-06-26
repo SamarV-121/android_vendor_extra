@@ -1,7 +1,7 @@
 From 5ab33f3b2a24f6633d488f386ebba8216a7b3cf9 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:00:16 -0700
-Subject: [PATCH 34/52] PackageInfo: Optimize ApplicationInfo creation
+Subject: [PATCH 34/57] PackageInfo: Optimize ApplicationInfo creation
 
 When opening and closing activities in Settings, a significant amount of
 CPU time is spent in ART interface method call trampolines, as reported
