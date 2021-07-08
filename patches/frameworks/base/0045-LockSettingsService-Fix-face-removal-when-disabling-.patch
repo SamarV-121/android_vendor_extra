@@ -1,0 +1,37 @@
+From c533b505571f90c9deaa4c7bc4ef4c59e8b49a3a Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Sat, 27 Mar 2021 20:48:48 -0300
+Subject: [PATCH 45/56] LockSettingsService: Fix face removal when disabling
+ security
+
+Change-Id: I291e73b292263784893e1a2d4fc21145acfec9bd
+---
+ .../com/android/server/locksettings/LockSettingsService.java | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/services/core/java/com/android/server/locksettings/LockSettingsService.java b/services/core/java/com/android/server/locksettings/LockSettingsService.java
+index 659e7efe7b27..b254c08c7316 100644
+--- a/services/core/java/com/android/server/locksettings/LockSettingsService.java
++++ b/services/core/java/com/android/server/locksettings/LockSettingsService.java
+@@ -167,6 +167,8 @@ import javax.crypto.NoSuchPaddingException;
+ import javax.crypto.SecretKey;
+ import javax.crypto.spec.GCMParameterSpec;
+ 
++import com.android.internal.util.custom.faceunlock.FaceUnlockUtils;
++
+ /**
+  * Keeps the lock pattern/password data and related settings for each user. Used by
+  * LockPatternUtils. Needs to be a service because Settings app also needs to be able to save
+@@ -2949,6 +2951,9 @@ public class LockSettingsService extends ILockSettings.Stub {
+                 mFaceManager.setActiveUser(userId);
+                 CountDownLatch latch = new CountDownLatch(1);
+                 Face face = new Face(null, 0, 0);
++                if (FaceUnlockUtils.isFaceUnlockSupported()){
++                    face = mFaceManager.getEnrolledFaces(userId).get(0);
++                }
+                 mFaceManager.remove(face, userId, faceManagerRemovalCallback(latch));
+                 try {
+                     latch.await(10000, TimeUnit.MILLISECONDS);
+-- 
+2.25.1
+

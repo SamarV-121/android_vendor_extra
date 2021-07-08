@@ -1,7 +1,7 @@
-From d55d287f26ac1a052aa6c89850654218dfe6f789 Mon Sep 17 00:00:00 2001
+From 254338a7b16f63ef9f5e72fc4f3f96ba36e5a81e Mon Sep 17 00:00:00 2001
 From: Jyotiraditya <imjyotiraditya@pm.me>
 Date: Tue, 17 Nov 2020 09:31:46 +0530
-Subject: [PATCH 01/10] Settings: Move blur toggle to Display options
+Subject: [PATCH 1/9] Settings: Move blur toggle to Display options
 
 Signed-off-by: Jyotiraditya <imjyotiraditya@pm.me>
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -17,7 +17,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  rename src/com/android/settings/{development => display}/EnableBlursPreferenceController.java (79%)
 
 diff --git a/res/xml/development_settings.xml b/res/xml/development_settings.xml
-index 66fbab1..1293b7e 100644
+index 66fbab165d..1293b7e063 100644
 --- a/res/xml/development_settings.xml
 +++ b/res/xml/development_settings.xml
 @@ -505,11 +505,6 @@
@@ -33,7 +33,7 @@ index 66fbab1..1293b7e 100644
              android:key="force_msaa"
              android:title="@string/force_msaa"
 diff --git a/res/xml/display_settings.xml b/res/xml/display_settings.xml
-index 5398d2d..d883b7c 100644
+index 5398d2d51e..d883b7c498 100644
 --- a/res/xml/display_settings.xml
 +++ b/res/xml/display_settings.xml
 @@ -193,6 +193,11 @@
@@ -49,7 +49,7 @@ index 5398d2d..d883b7c 100644
          android:key="theme"
          android:title="@string/device_theme"
 diff --git a/src/com/android/settings/DisplaySettings.java b/src/com/android/settings/DisplaySettings.java
-index 20a33f0..3c17c0e 100644
+index 20a33f0a3f..3c17c0e477 100644
 --- a/src/com/android/settings/DisplaySettings.java
 +++ b/src/com/android/settings/DisplaySettings.java
 @@ -29,6 +29,7 @@ import com.android.settings.display.NightModePreferenceController;
@@ -69,7 +69,7 @@ index 20a33f0..3c17c0e 100644
          controllers.add(new VrDisplayPreferenceController(context));
          controllers.add(new ShowOperatorNamePreferenceController(context));
 diff --git a/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java b/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
-index 8eb1dd3..a910794 100644
+index 8eb1dd3cf4..a91079422f 100644
 --- a/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
 +++ b/src/com/android/settings/development/DevelopmentSettingsDashboardFragment.java
 @@ -533,7 +533,6 @@ public class DevelopmentSettingsDashboardFragment extends RestrictedDashboardFra
@@ -84,7 +84,7 @@ diff --git a/src/com/android/settings/development/EnableBlursPreferenceControlle
 similarity index 79%
 rename from src/com/android/settings/development/EnableBlursPreferenceController.java
 rename to src/com/android/settings/display/EnableBlursPreferenceController.java
-index 88e0db1..7ee2edb 100644
+index 88e0db1ab9..7ee2edbd44 100644
 --- a/src/com/android/settings/development/EnableBlursPreferenceController.java
 +++ b/src/com/android/settings/display/EnableBlursPreferenceController.java
 @@ -14,7 +14,7 @@
@@ -136,5 +136,5 @@ index 88e0db1..7ee2edb 100644
      }
  }
 -- 
-2.31.1
+2.25.1
 

@@ -1,0 +1,2169 @@
+From 2bef718366cb1cdddbdc2b49108252b94f5d79fc Mon Sep 17 00:00:00 2001
+From: rituj <ritujbeniwal@gmail.com>
+Date: Thu, 30 Apr 2020 19:13:56 +0530
+Subject: [PATCH 52/56] base: Introduce Applock [1/3]
+
+* Includes applock 1.1 and more
+* Built upon the initial commit by "Anass Karbila <anaskarbila@aospa.co>"
+
+Signed-off-by: rituj <ritujbeniwal@gmail.com>
+Change-Id: Ida21d22035d708a359eaaa29e2c48ff6f0dd6627
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ core/java/android/app/AppLockManager.java     | 143 +++
+ core/java/android/app/IAppLockCallback.aidl   |  22 +
+ core/java/android/app/IAppLockService.aidl    |  48 +
+ .../android/app/SystemServiceRegistry.java    |   9 +
+ core/java/android/content/Context.java        |  10 +
+ .../hardware/biometrics/BiometricPrompt.java  |  16 +
+ core/java/android/provider/Settings.java      |   7 +
+ packages/SystemUI/res/values/cm_strings.xml   |   8 +
+ .../SystemUI/res/values/lineage_dimens.xml    |   3 +
+ .../biometrics/AuthBiometricFaceView.java     |   5 +
+ .../AuthBiometricFingerprintView.java         |   5 +
+ .../biometrics/AuthBiometricView.java         |  67 +-
+ .../biometrics/AuthContainerView.java         |   4 +-
+ .../biometrics/AuthCredentialView.java        |  30 +-
+ .../systemui/dagger/SystemServicesModule.java |   7 +
+ .../NotificationViewHierarchyManager.java     |   7 +-
+ .../NotificationEntryManager.java             |  26 +
+ .../collection/NotificationEntry.java         |  52 ++
+ .../inflation/NotificationRowBinderImpl.java  |   3 +-
+ .../dagger/NotificationsModule.java           |   3 +
+ ...otificationInterruptStateProviderImpl.java |   9 +
+ .../row/ExpandableNotificationRow.java        |  17 +-
+ .../biometrics/AuthenticationClient.java      |   6 +-
+ .../locksettings/LockSettingsService.java     |   2 +
+ .../com/android/server/wm/ActivityRecord.java |  25 +-
+ .../android/server/wm/ActivityStarter.java    |  12 +
+ .../wm/ActivityTaskManagerDebugConfig.java    |   4 +-
+ .../server/wm/ActivityTaskManagerService.java |  45 +-
+ .../com/android/server/wm/AppLockService.java | 867 ++++++++++++++++++
+ .../java/com/android/server/SystemServer.java |   5 +
+ 30 files changed, 1446 insertions(+), 21 deletions(-)
+ create mode 100644 core/java/android/app/AppLockManager.java
+ create mode 100644 core/java/android/app/IAppLockCallback.aidl
+ create mode 100644 core/java/android/app/IAppLockService.aidl
+ create mode 100644 services/core/java/com/android/server/wm/AppLockService.java
+
+diff --git a/core/java/android/app/AppLockManager.java b/core/java/android/app/AppLockManager.java
+new file mode 100644
+index 000000000000..1b2968bcdff6
+--- /dev/null
++++ b/core/java/android/app/AppLockManager.java
+@@ -0,0 +1,143 @@
++/**
++ * Copyright (C) 2021 Paranoid Android
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.app;
++
++import android.annotation.SystemService;
++import android.content.Context;
++import android.os.RemoteException;
++import android.os.ServiceManager;
++import android.os.ServiceManager.ServiceNotFoundException;
++
++import java.util.List;
++
++/**
++ * @author Anas Karbila
++ * @author Rituj Beniwal
++ * @hide
++ */
++@SystemService(Context.APPLOCK_SERVICE)
++public class AppLockManager {
++
++    private static final String TAG = "AppLockManager";
++
++    private final IAppLockService mService;
++
++    public AppLockManager(IAppLockService service) {
++        mService = service;
++    }
++
++    public void addAppToList(String packageName) {
++        try {
++            mService.addAppToList(packageName);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public void removeAppFromList(String packageName) {
++        try {
++            mService.removeAppFromList(packageName);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public boolean isAppLocked(String packageName) {
++        try {
++            return mService.isAppLocked(packageName);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public boolean isAppOpen(String packageName) {
++        try {
++            return mService.isAppOpen(packageName);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public void setShowOnlyOnWake(boolean showOnce) {
++        try {
++            mService.setShowOnlyOnWake(showOnce);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public boolean getShowOnlyOnWake() {
++        try {
++            return mService.getShowOnlyOnWake();
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public int getLockedAppsCount() {
++        try {
++            return mService.getLockedAppsCount();
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public List<String> getLockedPackages() {
++        try {
++            return mService.getLockedPackages();
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public boolean getAppNotificationHide(String packageName) {
++        try {
++            return mService.getAppNotificationHide(packageName);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public void setAppNotificationHide(String packageName, boolean hide) {
++        try {
++            mService.setAppNotificationHide(packageName, hide);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public void addAppLockCallback(IAppLockCallback c) {
++        try {
++            mService.addAppLockCallback(c);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public void removeAppLockCallback(IAppLockCallback c) {
++        try {
++            mService.removeAppLockCallback(c);
++        } catch (RemoteException e) {
++            throw e.rethrowFromSystemServer();
++        }
++    }
++
++    public abstract static class AppLockCallback extends IAppLockCallback.Stub {
++        @Override
++        public abstract void onAppStateChanged(String pkg);
++    };
++}
+diff --git a/core/java/android/app/IAppLockCallback.aidl b/core/java/android/app/IAppLockCallback.aidl
+new file mode 100644
+index 000000000000..9824af4ac48a
+--- /dev/null
++++ b/core/java/android/app/IAppLockCallback.aidl
+@@ -0,0 +1,22 @@
++/**
++ * Copyright (C) 2021 Paranoid Android
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.app;
++
++/** @hide */
++oneway interface IAppLockCallback {
++    void onAppStateChanged(String packageName);
++}
+diff --git a/core/java/android/app/IAppLockService.aidl b/core/java/android/app/IAppLockService.aidl
+new file mode 100644
+index 000000000000..e9e1a99b7c0e
+--- /dev/null
++++ b/core/java/android/app/IAppLockService.aidl
+@@ -0,0 +1,48 @@
++/**
++ * Copyright (C) 2021 Paranoid Android
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.app;
++
++import android.app.IAppLockCallback;
++
++/** @hide */
++interface IAppLockService {
++
++    void addAppToList(String packageName);
++
++    void removeAppFromList(String packageName);
++
++    boolean isAppLocked(String packageName);
++
++    boolean isAppOpen(String packageName);
++
++    void setShowOnlyOnWake(boolean showOnce);
++
++    boolean getShowOnlyOnWake();
++
++    int getLockedAppsCount();
++
++    List<String> getLockedPackages();
++
++    boolean getAppNotificationHide(String packageName);
++
++    void setAppNotificationHide(String packageName, boolean hide);
++
++    void addAppLockCallback(IAppLockCallback callback);
++
++    void removeAppLockCallback(IAppLockCallback callback);
++
++}
+\ No newline at end of file
+diff --git a/core/java/android/app/SystemServiceRegistry.java b/core/java/android/app/SystemServiceRegistry.java
+index 433a0724fdaf..1b9ff7e7cd46 100644
+--- a/core/java/android/app/SystemServiceRegistry.java
++++ b/core/java/android/app/SystemServiceRegistry.java
+@@ -925,6 +925,15 @@ public final class SystemServiceRegistry {
+                     }
+                 });
+ 
++        registerService(Context.APPLOCK_SERVICE, AppLockManager.class,
++                new CachedServiceFetcher<AppLockManager>() {
++            @Override
++            public AppLockManager createService(ContextImpl ctx) throws ServiceNotFoundException {
++                IBinder b = ServiceManager.getServiceOrThrow(Context.APPLOCK_SERVICE);
++                IAppLockService service = IAppLockService.Stub.asInterface(b);
++                return new AppLockManager(service);
++            }});
++
+         registerService(Context.TV_INPUT_SERVICE, TvInputManager.class,
+                 new CachedServiceFetcher<TvInputManager>() {
+             @Override
+diff --git a/core/java/android/content/Context.java b/core/java/android/content/Context.java
+index 8472144a92cf..775cf57cc211 100644
+--- a/core/java/android/content/Context.java
++++ b/core/java/android/content/Context.java
+@@ -5163,6 +5163,16 @@ public abstract class Context {
+     @TestApi
+     public static final String DREAM_SERVICE = "dream";
+ 
++    /**
++     * Use with {@link #getSystemService} to retrieve a
++     * {@link android.app.AppLockManager} for accessing and setting locked apps state.
++     *
++     * @hide
++     * @see #getSystemService
++     * @see android.app.AppLockManager
++     */
++    public static final String APPLOCK_SERVICE = "applock";
++
+     /**
+      * Determine whether the given permission is allowed for a particular
+      * process and user ID running in the system.
+diff --git a/core/java/android/hardware/biometrics/BiometricPrompt.java b/core/java/android/hardware/biometrics/BiometricPrompt.java
+index 74caceae07c9..58374082a1e1 100644
+--- a/core/java/android/hardware/biometrics/BiometricPrompt.java
++++ b/core/java/android/hardware/biometrics/BiometricPrompt.java
+@@ -67,6 +67,10 @@ public class BiometricPrompt implements BiometricAuthenticator, BiometricConstan
+      */
+     @RequiresPermission(USE_BIOMETRIC_INTERNAL)
+     public static final String KEY_USE_DEFAULT_TITLE = "use_default_title";
++    /**
++     * @hide
++     */
++    public static final String KEY_APPLOCK_PKG = "applock_package_name";
+     /**
+      * @hide
+      */
+@@ -224,6 +228,18 @@ public class BiometricPrompt implements BiometricAuthenticator, BiometricConstan
+             return this;
+         }
+ 
++        /**
++         * Optional: Show a special dialog for app locker if KEY_APPLOCK_PKG is set
++         * @param packageName
++         * @return
++         * @hide
++         */
++        @NonNull
++        public Builder setApplockPackage(@NonNull CharSequence packageName) {
++            mBundle.putCharSequence(KEY_APPLOCK_PKG, packageName);
++            return this;
++        }
++
+         /**
+          * Optional: Sets a subtitle that will be shown on the prompt.
+          * @param subtitle The subtitle to display.
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index f77c50093815..c3bac2cd006f 100755
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -4115,6 +4115,13 @@ public final class Settings {
+         public static final String RING_VIBRATION_INTENSITY =
+                 "ring_vibration_intensity";
+ 
++        /**
++         * Indicates whether we should only show the app lock view when the device is woken up
++         * Or always.
++         * @hide
++         */
++        public static final String APP_LOCK_SHOW_ONLY_ON_WAKE = "app_lock_show_only_on_wake";
++
+         /**
+          * The intensity of haptic feedback vibrations, if configurable.
+          *
+diff --git a/packages/SystemUI/res/values/cm_strings.xml b/packages/SystemUI/res/values/cm_strings.xml
+index 650f41cb52b0..735b69440da9 100644
+--- a/packages/SystemUI/res/values/cm_strings.xml
++++ b/packages/SystemUI/res/values/cm_strings.xml
+@@ -134,4 +134,12 @@
+ 
+     <!-- Biometric Dialog - Use Face -->
+     <string name="biometric_dialog_button_use_face">Use Face</string>
++
++    <!-- App Lock -->
++    <string name="applock_locked">&#160;is locked</string>
++    <string name="applock_fingerprint_face">, fingerprint or your face to unlock</string>
++    <string name="applock_face">&#160;or your face to unlock</string>
++    <string name="applock_fingerprint">&#160;or your fingerprint to unlock</string>
++    <string name="applock_credential">&#160;to unlock</string>
++    <string name="applock_unlock">Unlock</string>
+ </resources>
+diff --git a/packages/SystemUI/res/values/lineage_dimens.xml b/packages/SystemUI/res/values/lineage_dimens.xml
+index 843eca6ceae8..a37db7f166d3 100644
+--- a/packages/SystemUI/res/values/lineage_dimens.xml
++++ b/packages/SystemUI/res/values/lineage_dimens.xml
+@@ -24,4 +24,7 @@
+ 
+     <!-- Per app volume -->
+     <dimen name="volume_row_app_icon_padding">8dp</dimen>
++
++    <!-- App Lock -->
++    <dimen name="applock_icon_dimension">54dp</dimen>
+ </resources>
+diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java
+index 7daad1ca7e79..8fb627087164 100644
+--- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java
++++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java
+@@ -173,6 +173,11 @@ public class AuthBiometricFaceView extends AuthBiometricView {
+         return true;
+     }
+ 
++    @Override
++    protected int getDescriptionTextId() {
++        return R.string.applock_face;
++    }
++
+     @Override
+     protected void onFinishInflate() {
+         super.onFinishInflate();
+diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
+index 45ee4ad9ae50..9e0700450335 100644
+--- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
++++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
+@@ -62,6 +62,11 @@ public class AuthBiometricFingerprintView extends AuthBiometricView {
+         return false;
+     }
+ 
++    @Override
++    protected int getDescriptionTextId() {
++        return R.string.applock_fingerprint;
++    }
++
+     @Override
+     public void updateState(@BiometricState int newState) {
+         updateIcon(mState, newState);
+diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
+index a1982bfbb1e5..a663912e1a42 100644
+--- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
++++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
+@@ -16,6 +16,8 @@
+ 
+ package com.android.systemui.biometrics;
+ 
++import static android.view.Gravity.CENTER;
++
+ import android.animation.Animator;
+ import android.animation.AnimatorListenerAdapter;
+ import android.animation.AnimatorSet;
+@@ -23,7 +25,11 @@ import android.animation.ValueAnimator;
+ import android.annotation.IntDef;
+ import android.annotation.NonNull;
+ import android.annotation.Nullable;
++import android.annotation.StringRes;
+ import android.content.Context;
++import android.content.pm.ApplicationInfo;
++import android.content.pm.PackageManager;
++import android.graphics.drawable.Drawable;
+ import android.hardware.biometrics.BiometricPrompt;
+ import android.os.Bundle;
+ import android.os.Handler;
+@@ -174,6 +180,7 @@ public abstract class AuthBiometricView extends LinearLayout {
+     private TextView mSubtitleView;
+     private TextView mDescriptionView;
+     protected ImageView mIconView;
++    protected ImageView mAppIcon;
+     protected TextView mIndicatorView;
+     @VisibleForTesting Button mNegativeButton;
+     @VisibleForTesting Button mPositiveButton;
+@@ -192,6 +199,8 @@ public abstract class AuthBiometricView extends LinearLayout {
+     protected boolean mDialogSizeAnimating;
+     protected Bundle mSavedState;
+ 
++    protected final PackageManager mPackageManager;
++
+     /**
+      * Delay after authentication is confirmed, before the dialog should be animated away.
+      */
+@@ -214,6 +223,12 @@ public abstract class AuthBiometricView extends LinearLayout {
+      */
+     protected abstract boolean supportsSmallDialog();
+ 
++    /**
++     * @return string resource which is appended to the negative text
++     */
++    @StringRes
++    protected abstract int getDescriptionTextId();
++
+     private final Runnable mResetErrorRunnable;
+ 
+     private final Runnable mResetHelpRunnable;
+@@ -252,6 +267,8 @@ public abstract class AuthBiometricView extends LinearLayout {
+         mInjector = injector;
+         mInjector.mBiometricView = this;
+ 
++        mPackageManager = context.getPackageManager();
++
+         mAccessibilityManager = context.getSystemService(AccessibilityManager.class);
+ 
+         mResetErrorRunnable = () -> {
+@@ -599,6 +616,16 @@ public abstract class AuthBiometricView extends LinearLayout {
+         mTryAgainButton = mInjector.getTryAgainButton();
+         mUseFaceButton = mInjector.getUseFaceButton();
+ 
++        mAppIcon = new ImageView(mContext);
++        final int iconDim = getResources().getDimensionPixelSize(
++                    R.dimen.applock_icon_dimension);
++        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(iconDim, iconDim);
++        lp.gravity = CENTER;
++        lp.topMargin = -iconDim / 2;
++        mAppIcon.setLayoutParams(lp);
++        mAppIcon.setVisibility(View.GONE);
++        addView(mAppIcon, 0);
++
+         mNegativeButton.setOnClickListener((view) -> {
+             if (mState == STATE_PENDING_CONFIRMATION) {
+                 mCallback.onAction(Callback.ACTION_USER_CANCELED);
+@@ -651,8 +678,6 @@ public abstract class AuthBiometricView extends LinearLayout {
+      */
+     @VisibleForTesting
+     void onAttachedToWindowInternal() {
+-        setText(mTitleView, mBiometricPromptBundle.getString(BiometricPrompt.KEY_TITLE));
+-
+         final String negativeText;
+         if (isDeviceCredentialAllowed()) {
+ 
+@@ -682,8 +707,33 @@ public abstract class AuthBiometricView extends LinearLayout {
+         setTextOrHide(mSubtitleView,
+                 mBiometricPromptBundle.getString(BiometricPrompt.KEY_SUBTITLE));
+ 
+-        setTextOrHide(mDescriptionView,
+-                mBiometricPromptBundle.getString(BiometricPrompt.KEY_DESCRIPTION));
++        final CharSequence applockPackage = mBiometricPromptBundle.getCharSequence(BiometricPrompt.KEY_APPLOCK_PKG);
++        if (TextUtils.isEmpty(applockPackage)) {
++            setText(mTitleView, mBiometricPromptBundle.getString(BiometricPrompt.KEY_TITLE));
++            setTextOrHide(mDescriptionView,
++                    mBiometricPromptBundle.getString(BiometricPrompt.KEY_DESCRIPTION));
++        } else {
++            ApplicationInfo aInfo = null;
++            try {
++                aInfo = mPackageManager.getApplicationInfoAsUser(applockPackage.toString(), 0, mUserId);
++            } catch(PackageManager.NameNotFoundException e) {
++                // ignored
++            }
++            Drawable icon = (aInfo == null) ? null : mPackageManager.getApplicationIcon(aInfo);
++            if (icon == null) {
++                mTitleView.setVisibility(View.VISIBLE);
++                setText(mTitleView, getResources().getString(R.string.applock_unlock) + " "
++                        + mBiometricPromptBundle.getString(BiometricPrompt.KEY_TITLE));
++            } else {
++                mTitleView.setVisibility(View.GONE);
++                mAppIcon.setVisibility(View.VISIBLE);
++                mAppIcon.setImageDrawable(icon);
++            }
++            setTextOrHide(mDescriptionView, mBiometricPromptBundle.getString(BiometricPrompt.KEY_DESCRIPTION)
++                    + getResources().getString(R.string.applock_locked) + "\n"
++                    + negativeText + getResources().getString(getDescriptionTextId()));
++            mDescriptionView.setGravity(CENTER);
++        }
+ 
+         if (mSavedState == null) {
+             updateState(STATE_AUTHENTICATING_ANIMATING_IN);
+@@ -726,6 +776,12 @@ public abstract class AuthBiometricView extends LinearLayout {
+                         MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.EXACTLY),
+                         MeasureSpec.makeMeasureSpec(child.getLayoutParams().height,
+                                 MeasureSpec.EXACTLY));
++            } else if (child.equals(mAppIcon)) {
++                child.measure(
++                        MeasureSpec.makeMeasureSpec(child.getLayoutParams().width,
++                                MeasureSpec.EXACTLY),
++                        MeasureSpec.makeMeasureSpec(child.getLayoutParams().height,
++                                MeasureSpec.EXACTLY));
+             } else {
+                 child.measure(
+                         MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.EXACTLY),
+@@ -733,7 +789,8 @@ public abstract class AuthBiometricView extends LinearLayout {
+             }
+ 
+             if (child.getVisibility() != View.GONE) {
+-                totalHeight += child.getMeasuredHeight();
++                totalHeight += (child.equals(mAppIcon)) ? child.getMeasuredHeight() / 2
++                        : child.getMeasuredHeight();
+             }
+         }
+ 
+diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
+index f8718d0dbf23..2229dae54e9b 100644
+--- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
++++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
+@@ -299,6 +299,8 @@ public class AuthContainerView extends LinearLayout
+         mBackgroundView = mInjector.getBackgroundView(mFrameLayout);
+ 
+         addView(mFrameLayout);
++        mBiometricScrollView.setClipChildren(false);
++        mFrameLayout.setClipChildren(false);
+ 
+         // TODO: De-dupe the logic with AuthCredentialPasswordView
+         setOnKeyListener((v, keyCode, event) -> {
+@@ -429,7 +431,6 @@ public class AuthContainerView extends LinearLayout
+                         .translationY(0)
+                         .setDuration(ANIMATION_DURATION_SHOW_MS)
+                         .setInterpolator(mLinearOutSlowIn)
+-                        .withLayer()
+                         .start();
+                 if (mCredentialView != null && mCredentialView.isAttachedToWindow()) {
+                     mCredentialView.setY(mTranslationY);
+@@ -568,7 +569,6 @@ public class AuthContainerView extends LinearLayout
+                     .translationY(mTranslationY)
+                     .setDuration(ANIMATION_DURATION_AWAY_MS)
+                     .setInterpolator(mLinearOutSlowIn)
+-                    .withLayer()
+                     .start();
+             if (mCredentialView != null && mCredentialView.isAttachedToWindow()) {
+                 mCredentialView.animate()
+diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java
+index 084b791a8dcd..008be41e6e76 100644
+--- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java
++++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java
+@@ -215,9 +215,35 @@ public abstract class AuthCredentialView extends LinearLayout {
+         super.onAttachedToWindow();
+ 
+         final CharSequence title = getTitle(mBiometricPromptBundle);
+-        setText(mTitleView, title);
+         setTextOrHide(mSubtitleView, getSubtitle(mBiometricPromptBundle));
+-        setTextOrHide(mDescriptionView, getDescription(mBiometricPromptBundle));
++
++        final String credText;
++        final @Utils.CredentialType int credentialType =
++                Utils.getCredentialType(mContext, mEffectiveUserId);
++
++        switch (credentialType) {
++            case Utils.CREDENTIAL_PIN:
++                credText = getResources().getString(R.string.biometric_dialog_use_pin);
++                break;
++            case Utils.CREDENTIAL_PATTERN:
++                credText = getResources().getString(R.string.biometric_dialog_use_pattern);
++                break;
++            case Utils.CREDENTIAL_PASSWORD:
++                credText = getResources().getString(R.string.biometric_dialog_use_password);
++                break;
++            default:
++                credText = getResources().getString(R.string.biometric_dialog_use_password);
++                break;
++        }
++
++        final CharSequence applockPackage = mBiometricPromptBundle.getCharSequence(BiometricPrompt.KEY_APPLOCK_PKG);
++        if (TextUtils.isEmpty(applockPackage)) {
++            setText(mTitleView, title);
++            setTextOrHide(mDescriptionView, getDescription(mBiometricPromptBundle));
++        } else {
++            setText(mTitleView, title + getResources().getString(R.string.applock_locked));
++            setTextOrHide(mDescriptionView, credText + getResources().getString(R.string.applock_credential));
++        }
+         announceForAccessibility(title);
+ 
+         if (mIconView != null) {
+diff --git a/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java b/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java
+index e2361d8f415a..500c24043cd4 100644
+--- a/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java
++++ b/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java
+@@ -21,6 +21,7 @@ import android.annotation.SuppressLint;
+ import android.app.ActivityManager;
+ import android.app.ActivityTaskManager;
+ import android.app.AlarmManager;
++import android.app.AppLockManager;
+ import android.app.IActivityManager;
+ import android.app.IActivityTaskManager;
+ import android.app.IWallpaperManager;
+@@ -333,4 +334,10 @@ public class SystemServicesModule {
+     static RoleManager provideRoleManager(Context context) {
+         return context.getSystemService(RoleManager.class);
+     }
++
++    @Provides
++    @Singleton
++    static AppLockManager provideAppLockManager(Context context) {
++        return context.getSystemService(AppLockManager.class);
++    }
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java
+index 5bee9a762f6f..a7f3e889a17b 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java
+@@ -175,11 +175,12 @@ public class NotificationViewHierarchyManager implements DynamicPrivacyControlle
+                     || !mLockscreenUserManager.needsSeparateWorkChallenge(userId))) {
+                 userPublic = false;
+             }
+-            boolean needsRedaction = mLockscreenUserManager.needsRedaction(ent);
++            boolean appLocked = ent.secureContent();
++            boolean needsRedaction = appLocked || mLockscreenUserManager.needsRedaction(ent);
+             boolean sensitive = userPublic && needsRedaction;
+             boolean deviceSensitive = devicePublic
+-                    && !mLockscreenUserManager.userAllowsPrivateNotificationsInPublic(
+-                    currentUserId);
++                    && (appLocked || !mLockscreenUserManager.userAllowsPrivateNotificationsInPublic(
++                    currentUserId));
+             ent.setSensitive(sensitive, deviceSensitive);
+             ent.getRow().setNeedsRedaction(needsRedaction);
+             mLowPriorityInflationHelper.recheckLowPriorityViewAndInflate(ent, ent.getRow());
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java
+index 9fd729f425c1..96157905724d 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java
+@@ -23,6 +23,8 @@ import static com.android.systemui.statusbar.notification.row.NotificationRowCon
+ 
+ import android.annotation.NonNull;
+ import android.annotation.Nullable;
++import android.app.AppLockManager;
++import android.app.AppLockManager.AppLockCallback;
+ import android.app.Notification;
+ import android.os.SystemClock;
+ import android.service.notification.NotificationListenerService;
+@@ -149,6 +151,25 @@ public class NotificationEntryManager implements
+     private final List<NotificationEntryListener> mNotificationEntryListeners = new ArrayList<>();
+     private final List<NotificationRemoveInterceptor> mRemoveInterceptors = new ArrayList<>();
+ 
++    private final AppLockManager mAppLockManager;
++    private final AppLockCallback mAppLockCallback = new AppLockCallback() {
++        @Override
++        public void onAppStateChanged(String pkg) {
++            for (NotificationEntry notif : mAllNotifications) {
++                updateAppLockNotification(pkg, notif);
++            }
++        }
++    };
++
++    private void updateAppLockNotification(String pkg, NotificationEntry notif) {
++        if (pkg.equals(notif.getSbn().getPackageName())) {
++            boolean appLocked = mAppLockManager.isAppLocked(pkg);
++            notif.setAppLocked(appLocked);
++            notif.onAppStateChanged(!mAppLockManager.getAppNotificationHide(pkg)
++                    || mAppLockManager.isAppOpen(pkg));
++        }
++    }
++
+     @Override
+     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+         pw.println("NotificationEntryManager state:");
+@@ -196,6 +217,7 @@ public class NotificationEntryManager implements
+      * Injected constructor. See {@link NotificationsModule}.
+      */
+     public NotificationEntryManager(
++            AppLockManager appLockManager,
+             NotificationEntryManagerLogger logger,
+             NotificationGroupManager groupManager,
+             NotificationRankingManager rankingManager,
+@@ -216,6 +238,8 @@ public class NotificationEntryManager implements
+         mLeakDetector = leakDetector;
+         mFgsFeatureController = fgsFeatureController;
+         mBubbleControllerLazy = bubbleController;
++        mAppLockManager = appLockManager;
++        mAppLockManager.addAppLockCallback(mAppLockCallback);
+     }
+ 
+     /** Once called, the NEM will start processing notification events from system server. */
+@@ -589,6 +613,8 @@ public class NotificationEntryManager implements
+             }
+         }
+ 
++        updateAppLockNotification(notification.getPackageName(), entry);
++
+         for (NotifCollectionListener listener : mNotifCollectionListeners) {
+             listener.onEntryBind(entry, notification);
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java
+index bd65ef06f3a9..b441e0a2f5c3 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java
+@@ -40,9 +40,11 @@ import android.app.Notification;
+ import android.app.Notification.MessagingStyle.Message;
+ import android.app.NotificationChannel;
+ import android.app.NotificationManager.Policy;
++import android.app.PendingIntent;
+ import android.app.Person;
+ import android.app.RemoteInput;
+ import android.app.RemoteInputHistoryItem;
++import android.content.ComponentName;
+ import android.content.Context;
+ import android.content.pm.ShortcutInfo;
+ import android.net.Uri;
+@@ -98,6 +100,10 @@ public final class NotificationEntry extends ListEntry {
+     private Ranking mRanking;
+     private long mCreationTime;
+ 
++    private boolean mAppOpen;
++    private boolean mIsAppLocked;
++    private boolean mIsAlarmOrCall;
++
+     /*
+      * Bookkeeping members
+      */
+@@ -206,6 +212,7 @@ public final class NotificationEntry extends ListEntry {
+         mKey = sbn.getKey();
+         setSbn(sbn);
+         setRanking(ranking);
++        updateIsAlarmOrCall();
+ 
+         mAllowFgsDismissal = allowFgsDismissal;
+     }
+@@ -429,6 +436,51 @@ public final class NotificationEntry extends ListEntry {
+         return row;
+     }
+ 
++    public void setAppLocked(boolean appLocked) {
++        mIsAppLocked = appLocked;
++    }
++
++    public void onAppStateChanged(boolean open) {
++        if (mAppOpen != open) {
++            mAppOpen = open;
++            if (rowExists()) {
++                row.onAppStateChanged();
++            }
++        }
++    }
++
++    public boolean isAppLocked() {
++        return mIsAppLocked;
++    }
++
++    public boolean secureContent() {
++        return mIsAppLocked && !mAppOpen && !mIsAlarmOrCall;
++    }
++
++    private void updateIsAlarmOrCall() {
++        PendingIntent intent = mSbn.getNotification().contentIntent;
++        if (intent == null) {
++            mIsAlarmOrCall = false;
++            return;
++        }
++
++        ComponentName cmp = intent.getIntent().getComponent();
++        if (cmp != null) {
++            String intentClassName = cmp.getClassName().toLowerCase();
++            mIsAlarmOrCall = intentClassName.contains("callactivity")
++                                || intentClassName.contains("callingactivity")
++                                || intentClassName.contains("voipactivity")
++                                || intentClassName.contains("alarmactivity");
++        } else {
++            intent = mSbn.getNotification().fullScreenIntent;
++            if (intent != null) {
++                mIsAlarmOrCall = true;
++            } else {
++                mIsAlarmOrCall = false;
++            }
++        }
++    }
++
+     //TODO: This will go away when we have a way to bind an entry to a row
+     public void setRow(ExpandableNotificationRow row) {
+         this.row = row;
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java
+index 673aa3903156..19fddca185e1 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java
+@@ -240,7 +240,8 @@ public class NotificationRowBinderImpl implements NotificationRowBinder {
+ 
+         // TODO: Replace this API with RowContentBindParams directly. Also move to a separate
+         // redaction controller.
+-        row.setNeedsRedaction(mNotificationLockscreenUserManager.needsRedaction(entry));
++        row.setNeedsRedaction(entry.secureContent()
++                || mNotificationLockscreenUserManager.needsRedaction(entry));
+ 
+         params.rebindAllContentViews();
+         mRowContentBindStage.requestRebind(entry, en -> {
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java
+index c37e93d4fcc5..60aae526ead4 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java
+@@ -16,6 +16,7 @@
+ 
+ package com.android.systemui.statusbar.notification.dagger;
+ 
++import android.app.AppLockManager;
+ import android.app.INotificationManager;
+ import android.content.Context;
+ import android.content.pm.LauncherApps;
+@@ -79,6 +80,7 @@ public interface NotificationsModule {
+     @Singleton
+     @Provides
+     static NotificationEntryManager provideNotificationEntryManager(
++            AppLockManager appLockManager,
+             NotificationEntryManagerLogger logger,
+             NotificationGroupManager groupManager,
+             NotificationRankingManager rankingManager,
+@@ -90,6 +92,7 @@ public interface NotificationsModule {
+             Lazy<BubbleController> bubbleController,
+             ForegroundServiceDismissalFeatureController fgsFeatureController) {
+         return new NotificationEntryManager(
++                appLockManager,
+                 logger,
+                 groupManager,
+                 rankingManager,
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java
+index eeb91b548d65..c20db2cb1032 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java
+@@ -130,6 +130,10 @@ public class NotificationInterruptStateProviderImpl implements NotificationInter
+ 
+     @Override
+     public boolean shouldBubbleUp(NotificationEntry entry) {
++        if (entry.isAppLocked()) {
++            return false;
++        }
++
+         final StatusBarNotification sbn = entry.getSbn();
+ 
+         if (!canAlertCommon(entry)) {
+@@ -182,6 +186,11 @@ public class NotificationInterruptStateProviderImpl implements NotificationInter
+     }
+ 
+     private boolean shouldHeadsUpWhenAwake(NotificationEntry entry) {
++        if (mStatusBarStateController.getState() != StatusBarState.KEYGUARD
++                && entry.secureContent()) {
++            return false;
++        }
++
+         StatusBarNotification sbn = entry.getSbn();
+ 
+         if (!mUseHeadsUp) {
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
+index 70dd80e71e7a..6973a6ad802a 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
+@@ -2310,7 +2310,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
+             return mGuts.getIntrinsicHeight();
+         } else if ((isChildInGroup() && !isGroupExpanded())) {
+             return mPrivateLayout.getMinHeight();
+-        } else if (mSensitive && mHideSensitiveForIntrinsicHeight) {
++        } else if (shouldShowPublic()) {
+             return getMinHeight();
+         } else if (mIsSummaryWithChildren) {
+             return mChildrenContainer.getIntrinsicHeight();
+@@ -2334,7 +2334,8 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
+      *         except for legacy use cases.
+      */
+     public boolean canShowHeadsUp() {
+-        if (mOnKeyguard && !isDozing() && !isBypassEnabled()) {
++        if (mOnKeyguard && !isDozing() && !isBypassEnabled() || (mEntry != null
++                && mEntry.secureContent())) {
+             return false;
+         }
+         return true;
+@@ -2514,7 +2515,8 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
+             return;
+         }
+         boolean oldShowingPublic = mShowingPublic;
+-        mShowingPublic = mSensitive && hideSensitive;
++        mShowingPublic = (mSensitive && hideSensitive)
++                || (mEntry != null && mEntry.secureContent());
+         if (mShowingPublicInitialized && mShowingPublic == oldShowingPublic) {
+             return;
+         }
+@@ -2575,6 +2577,12 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
+         }
+     }
+ 
++    public void onAppStateChanged() {
++        Dependency.get(Dependency.MAIN_HANDLER).post(() ->
++            setHideSensitive(mSensitive, true, 0, 100)
++        );
++    }
++
+     @Override
+     public boolean mustStayOnScreen() {
+         return mIsHeadsUp && mMustStayOnScreen;
+@@ -2590,7 +2598,8 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
+     }
+ 
+     private boolean shouldShowPublic() {
+-        return mSensitive && mHideSensitiveForIntrinsicHeight;
++        return (mSensitive && mHideSensitiveForIntrinsicHeight) || (mEntry != null
++                && mEntry.secureContent());
+     }
+ 
+     public void makeActionsVisibile() {
+diff --git a/services/core/java/com/android/server/biometrics/AuthenticationClient.java b/services/core/java/com/android/server/biometrics/AuthenticationClient.java
+index 8ca37b813b63..e1d9fd7e2875 100644
+--- a/services/core/java/com/android/server/biometrics/AuthenticationClient.java
++++ b/services/core/java/com/android/server/biometrics/AuthenticationClient.java
+@@ -30,6 +30,9 @@ import android.security.KeyStore;
+ import android.util.EventLog;
+ import android.util.Slog;
+ 
++import com.android.server.LocalServices;
++import com.android.server.wm.AppLockService;
++
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+@@ -156,7 +159,8 @@ public abstract class AuthenticationClient extends ClientMonitor {
+ 
+             // Ensure authentication only succeeds if the client activity is on top or is keyguard.
+             boolean isBackgroundAuth = false;
+-            if (authenticated && !Utils.isKeyguard(getContext(), getOwnerString())) {
++            if (authenticated && !Utils.isKeyguard(getContext(), getOwnerString())
++                    && !LocalServices.getService(AppLockService.class).isAppLockAuthenticating()) {
+                 try {
+                     final List<ActivityManager.RunningTaskInfo> tasks =
+                             ActivityTaskManager.getService().getTasks(1);
+diff --git a/services/core/java/com/android/server/locksettings/LockSettingsService.java b/services/core/java/com/android/server/locksettings/LockSettingsService.java
+index b254c08c7316..8e3a88aadd6b 100644
+--- a/services/core/java/com/android/server/locksettings/LockSettingsService.java
++++ b/services/core/java/com/android/server/locksettings/LockSettingsService.java
+@@ -129,6 +129,7 @@ import com.android.server.locksettings.LockSettingsStorage.PersistentData;
+ import com.android.server.locksettings.SyntheticPasswordManager.AuthenticationResult;
+ import com.android.server.locksettings.SyntheticPasswordManager.AuthenticationToken;
+ import com.android.server.locksettings.recoverablekeystore.RecoverableKeyStoreManager;
++import com.android.server.wm.AppLockService;
+ import com.android.server.wm.WindowManagerInternal;
+ 
+ import libcore.util.HexEncoding;
+@@ -2260,6 +2261,7 @@ public class LockSettingsService extends ILockSettings.Stub {
+         mHandler.post(() -> {
+             mInjector.getDevicePolicyManager().reportPasswordChanged(userId);
+             LocalServices.getService(WindowManagerInternal.class).reportPasswordChanged(userId);
++            LocalServices.getService(AppLockService.class).reportPasswordChanged(userId);
+         });
+     }
+ 
+diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
+index e01b685e5b00..a256aab8ffea 100644
+--- a/services/core/java/com/android/server/wm/ActivityRecord.java
++++ b/services/core/java/com/android/server/wm/ActivityRecord.java
+@@ -152,6 +152,7 @@ import static com.android.server.wm.ActivityStack.STACK_VISIBILITY_VISIBLE;
+ import static com.android.server.wm.ActivityStackSupervisor.PRESERVE_WINDOWS;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_APP;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_CLEANUP;
++import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_APPLOCK;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_CONFIGURATION;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_CONTAINERS;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_FOCUS;
+@@ -165,6 +166,7 @@ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_USER_LE
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_VISIBILITY;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_ADD_REMOVE;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_APP;
++import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_APPLOCK;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_CONFIGURATION;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_CONTAINERS;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_FOCUS;
+@@ -351,6 +353,7 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+     private static final String TAG_TRANSITION = TAG + POSTFIX_TRANSITION;
+     private static final String TAG_USER_LEAVING = TAG + POSTFIX_USER_LEAVING;
+     private static final String TAG_VISIBILITY = TAG + POSTFIX_VISIBILITY;
++    private static final String TAG_APPLOCK = TAG + POSTFIX_APPLOCK;
+ 
+     private static final String ATTR_ID = "id";
+     private static final String TAG_INTENT = "intent";
+@@ -655,6 +658,9 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+     boolean startingDisplayed;
+     boolean startingMoved;
+ 
++    boolean isAppLocked;
++    private int mResizeMode = -1;
++
+     // TODO: Have a WindowContainer state for tracking exiting/deferred removal.
+     boolean mIsExiting;
+ 
+@@ -1625,6 +1631,7 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+         }
+ 
+         launchMode = aInfo.launchMode;
++        isAppLocked = mAtmService.isAppLocked(packageName);
+ 
+         setActivityType(_componentSpecified, _launchedFromUid, _intent, options, sourceRecord);
+ 
+@@ -2063,6 +2070,16 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+         return sourceRecord != null && sourceRecord.isResolverOrDelegateActivity();
+     }
+ 
++    boolean getIsAppLocked() {
++        isAppLocked = mAtmService.isAppLocked(packageName);
++        if (isAppLocked) {
++            info.resizeMode = RESIZE_MODE_UNRESIZEABLE;
++        } else {
++            info.resizeMode = mResizeMode;
++        }
++        return isAppLocked;
++    }
++
+     /**
+      * @return whether the given package name can launch an assist activity.
+      */
+@@ -2124,6 +2141,12 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+                 && DreamActivity.class.getName() == info.name) {
+             activityType = ACTIVITY_TYPE_DREAM;
+         }
++        if (mResizeMode == -1){
++            mResizeMode = info.resizeMode;
++        }
++        if (getIsAppLocked()) {
++            info.resizeMode = RESIZE_MODE_UNRESIZEABLE;
++        }
+         setActivityType(activityType);
+     }
+ 
+@@ -4369,7 +4392,7 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
+      */
+     boolean shouldUseAppThemeSnapshot() {
+         return mDisablePreviewScreenshots || forAllWindows(WindowState::isSecureLocked,
+-                true /* topToBottom */);
++                true /* topToBottom */) || getIsAppLocked();
+     }
+ 
+     /**
+diff --git a/services/core/java/com/android/server/wm/ActivityStarter.java b/services/core/java/com/android/server/wm/ActivityStarter.java
+index 54ad4acaca4c..9b2628208eb8 100644
+--- a/services/core/java/com/android/server/wm/ActivityStarter.java
++++ b/services/core/java/com/android/server/wm/ActivityStarter.java
+@@ -62,11 +62,13 @@ import static com.android.server.wm.ActivityStackSupervisor.ON_TOP;
+ import static com.android.server.wm.ActivityStackSupervisor.PRESERVE_WINDOWS;
+ import static com.android.server.wm.ActivityStackSupervisor.TAG_TASKS;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_ACTIVITY_STARTS;
++import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_APPLOCK;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_CONFIGURATION;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_PERMISSIONS_REVIEW;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_RESULTS;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_TASKS;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_USER_LEAVING;
++import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_APPLOCK;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_CONFIGURATION;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_FOCUS;
+ import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_RESULTS;
+@@ -139,6 +141,7 @@ class ActivityStarter {
+     private static final String TAG_FOCUS = TAG + POSTFIX_FOCUS;
+     private static final String TAG_CONFIGURATION = TAG + POSTFIX_CONFIGURATION;
+     private static final String TAG_USER_LEAVING = TAG + POSTFIX_USER_LEAVING;
++    private static final String TAG_APPLOCK = TAG + POSTFIX_APPLOCK;
+     private static final int INVALID_LAUNCH_MODE = -1;
+ 
+     private final ActivityTaskManagerService mService;
+@@ -1004,6 +1007,15 @@ class ActivityStarter {
+         abort |= !mService.getPermissionPolicyInternal().checkStartActivity(intent, callingUid,
+                 callingPackage);
+ 
++        final String pkg = aInfo == null ? null : aInfo.packageName;
++        if (mService.isAppLocked(pkg) && !mService.isAppOpened(pkg)
++                && !mService.isAlarmOrCallIntent(intent)) {
++            if (DEBUG_APPLOCK) Slog.d(TAG_APPLOCK, "Locked pkg:" + pkg + " intent:" + intent);
++            mService.mAppLockService.setAppIntent(pkg, intent);
++            mService.mAppLockService.launchBeforeActivity(pkg);
++            abort = true;
++        }
++
+         boolean restrictedBgActivity = false;
+         if (!abort) {
+             try {
+diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java b/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java
+index da0bfd67e353..59175c002332 100644
+--- a/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java
++++ b/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java
+@@ -32,7 +32,7 @@ public class ActivityTaskManagerDebugConfig {
+     // While debugging it is sometimes useful to have the category name of the log appended to the
+     // base log tag to make sifting through logs with the same base tag easier. By setting this
+     // constant to true, the category name of the log point will be appended to the log tag.
+-    private static final boolean APPEND_CATEGORY_NAME = false;
++    private static final boolean APPEND_CATEGORY_NAME = true;
+ 
+     // Default log tag for the activities.
+     static final String TAG_ATM = "ActivityTaskManager";
+@@ -68,6 +68,7 @@ public class ActivityTaskManagerDebugConfig {
+     static final boolean DEBUG_ACTIVITY_STARTS = DEBUG_ALL || false;
+     public static final boolean DEBUG_CLEANUP = DEBUG_ALL || false;
+     public static final boolean DEBUG_METRICS = DEBUG_ALL || false;
++    public static final boolean DEBUG_APPLOCK = DEBUG_ALL || false;
+ 
+     static final String POSTFIX_APP = APPEND_CATEGORY_NAME ? "_App" : "";
+     static final String POSTFIX_CLEANUP = (APPEND_CATEGORY_NAME) ? "_Cleanup" : "";
+@@ -90,4 +91,5 @@ public class ActivityTaskManagerDebugConfig {
+     static final String POSTFIX_TRANSITION = APPEND_CATEGORY_NAME ? "_Transition" : "";
+     static final String POSTFIX_VISIBILITY = APPEND_CATEGORY_NAME ? "_Visibility" : "";
+     static final String POSTFIX_RESULTS = APPEND_CATEGORY_NAME ? "_Results" : "";
++    public static final String POSTFIX_APPLOCK = APPEND_CATEGORY_NAME ? "_AppLock" : "";
+ }
+diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
+index ec178a4b543f..5d45573e3e56 100644
+--- a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
++++ b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
+@@ -345,6 +345,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+ 
+     Context mContext;
+ 
++    AppLockService mAppLockService;
++
+     /**
+      * This Context is themable and meant for UI display (AlertDialogs, etc.). The theme can
+      * change at runtime. Use mContext for non-UI purposes.
+@@ -747,6 +749,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+             mRecentTasks.onSystemReadyLocked();
+             mStackSupervisor.onSystemReady();
+         }
++
++        mAppLockService = LocalServices.getService(AppLockService.class);
+     }
+ 
+     public void onInitPowerManagement() {
+@@ -1609,7 +1613,16 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+     public final int startActivityFromRecents(int taskId, Bundle bOptions) {
+         enforceCallerIsRecentsOrHasPermission(START_TASKS_FROM_RECENTS,
+                 "startActivityFromRecents()");
+-
++        final Task task = mRootWindowContainer.anyTaskForId(taskId);
++        final ActivityRecord r = task.getRootActivity();
++        if (r != null) {
++            if (isAppLocked(r.packageName) && !isAppOpened(r.packageName)) {
++                mAppLockService.setAppIntent(r.packageName, r.intent);
++                mAppLockService.setStartingFromRecents();
++                mAppLockService.launchBeforeActivity(r.packageName);
++                return ActivityManager.START_SWITCHES_CANCELED;
++            }
++        }
+         final int callingPid = Binder.getCallingPid();
+         final int callingUid = Binder.getCallingUid();
+         final SafeActivityOptions safeOptions = SafeActivityOptions.fromBundle(bOptions);
+@@ -1825,6 +1838,15 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+     @Override
+     public final void activityResumed(IBinder token) {
+         final long origId = Binder.clearCallingIdentity();
++        final ActivityRecord r = ActivityRecord.isInStackLocked(token);
++        if (r != null) {
++            if (mAppLockService != null) {
++                mAppLockService.setForegroundApp(r.packageName);
++            }
++            if (isAppLocked(r.packageName)) {
++                mAppLockService.setAppIntent(r.packageName, r.intent);
++            }
++        }
+         synchronized (mGlobalLock) {
+             ActivityRecord.activityResumedLocked(token);
+         }
+@@ -1848,6 +1870,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+             final ActivityRecord r = ActivityRecord.forTokenLocked(token);
+             if (r != null) {
+                 r.activityPaused(false);
++                if (isAppLocked(r.packageName)) {
++                    mAppLockService.activityStopped(r.packageName, r.intent);
++                }
+             }
+             Trace.traceEnd(TRACE_TAG_WINDOW_MANAGER);
+         }
+@@ -3421,6 +3446,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+             throw new SecurityException("Requires permission "
+                     + android.Manifest.permission.DEVICE_POWER);
+         }
++        if (mAppLockService != null) {
++            mAppLockService.setKeyguardShown(keyguardShowing);
++        }
+ 
+         synchronized (mGlobalLock) {
+             long ident = Binder.clearCallingIdentity();
+@@ -4288,6 +4316,21 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+         return mWindowOrganizerController;
+     }
+ 
++    boolean isAppLocked(String packageName) {
++        if (mAppLockService == null || packageName == null) return false;
++        return mAppLockService.isAppLocked(packageName);
++    }
++
++    boolean isAppOpened(String packageName) {
++        if (mAppLockService == null || packageName == null) return true;
++        return mAppLockService.isAppOpen(packageName);
++    }
++
++    boolean isAlarmOrCallIntent(Intent intent) {
++        if (mAppLockService == null) return false;
++        return mAppLockService.isAlarmOrCallIntent(intent);
++    }
++
+     /**
+      * Check that we have the features required for VR-related API calls, and throw an exception if
+      * not.
+diff --git a/services/core/java/com/android/server/wm/AppLockService.java b/services/core/java/com/android/server/wm/AppLockService.java
+new file mode 100644
+index 000000000000..1aca448b081f
+--- /dev/null
++++ b/services/core/java/com/android/server/wm/AppLockService.java
+@@ -0,0 +1,867 @@
++/**
++ * Copyright (C) 2017-2020 Paranoid Android
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.server.wm;
++
++import static com.android.server.wm.ActivityTaskManagerDebugConfig.DEBUG_APPLOCK;
++import static com.android.server.wm.ActivityTaskManagerDebugConfig.POSTFIX_APPLOCK;
++
++import android.app.admin.DevicePolicyManager;
++import android.app.ActivityManager;
++import android.app.AppGlobals;
++import android.app.AppOpsManager;
++import android.app.IActivityManager;
++import android.app.IAppLockService;
++import android.app.IAppLockCallback;
++import android.content.BroadcastReceiver;
++import android.content.ComponentName;
++import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
++import android.content.pm.ActivityInfo;
++import android.content.pm.ApplicationInfo;
++import android.content.pm.IPackageManager;
++import android.content.pm.PackageManager;
++import android.content.pm.ResolveInfo;
++import android.hardware.biometrics.BiometricConstants;
++import android.hardware.biometrics.BiometricManager.Authenticators;
++import android.hardware.biometrics.BiometricPrompt;
++import android.hardware.biometrics.BiometricPrompt.AuthenticationResult;
++import android.net.Uri;
++import android.os.Binder;
++import android.os.Bundle;
++import android.os.CancellationSignal;
++import android.os.Environment;
++import android.os.Handler;
++import android.os.Looper;
++import android.os.Message;
++import android.os.RemoteException;
++import android.os.UserHandle;
++import android.os.UserManager;
++import android.provider.Settings;
++import android.util.ArrayMap;
++import android.util.ArraySet;
++import android.util.AtomicFile;
++import android.util.Slog;
++import android.util.Xml;
++
++import com.android.internal.os.BackgroundThread;
++import com.android.internal.widget.LockPatternUtils;
++import com.android.internal.R;
++import com.android.server.DisplayThread;
++import com.android.server.LocalServices;
++import com.android.server.SystemService;
++
++import libcore.io.IoUtils;
++
++import org.xmlpull.v1.XmlPullParser;
++import org.xmlpull.v1.XmlPullParserException;
++import org.xmlpull.v1.XmlSerializer;
++
++import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileNotFoundException;
++import java.io.FileOutputStream;
++import java.io.IOException;
++import java.nio.charset.StandardCharsets;
++import java.util.Arrays;
++import java.util.ArrayList;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.List;
++
++public class AppLockService extends SystemService {
++
++    private static final String TAG = "AppLockService";
++    private static final String TAG_APPLOCK = TAG + POSTFIX_APPLOCK;
++
++    private static final String FILE_NAME = "locked-apps.xml";
++    private static final String TAG_LOCKED_APPS = "locked-apps";
++    private static final String TAG_PACKAGE = "package";
++    private static final String ATTRIBUTE_NAME = "name";
++    private static final String ATTRIBUTE_OP_MODE = "opMode";
++    private static final String ATTRIBUTE_NOTIFICATION = "notifHide";
++
++    private final int APPLOCK_TIMEOUT = 15000;
++
++    private AppLockContainer mCurrent;
++    private PackageManager mPackageManager;
++    private IPackageManager mIpm;
++    private AppOpsManager mAppOpsManager;
++    private CancellationSignal mCancellationSignal;
++    private BiometricPrompt mBiometricPrompt;
++
++    private UserHandle mUserHandle;
++    private int mUserId;
++    private UserManager mUserManager;
++    private boolean mShowOnlyOnWake;
++    private boolean mIsSecure;
++    private boolean mStartingFromRecents;
++    private boolean mKeyguardShown;
++    private boolean mLaunchAfterKeyguard;
++    private boolean mBiometricRunning;
++    private String mForegroundApp;
++
++    private final LockPatternUtils mLockPatternUtils;
++    private Context mContext;
++
++    private AtomicFile mFile;
++    private final AppLockHandler mHandler;
++    private final Object mLock = new Object();
++
++    private final ArrayMap<String, AppLockContainer> mAppsList = new ArrayMap<>();
++    private final ArraySet<String> mOpenedApplicationsIndex = new ArraySet<>();
++    private final ArraySet<IAppLockCallback> mCallbacks= new ArraySet<>();
++
++    private final BiometricPrompt.AuthenticationCallback mBiometricCallback =
++            new BiometricPrompt.AuthenticationCallback() {
++        @Override
++        public void onAuthenticationError(int errMsgId, CharSequence errString) {
++            if (DEBUG_APPLOCK && mCurrent != null) Slog.v(TAG, "onAuthenticationError() pkg:" + mCurrent.packageName
++                    + " Id=" + errMsgId + " Name=" + errString);
++            if (errMsgId == BiometricConstants.BIOMETRIC_ERROR_USER_CANCELED && mStartingFromRecents) {
++                fallbackToHomeActivity();
++            }
++            mStartingFromRecents = false;
++            mBiometricRunning = false;
++            mCurrent = null;
++        }
++
++        @Override
++        public void onAuthenticationHelp(int helpMsgId, CharSequence helpString) {
++            if (DEBUG_APPLOCK) Slog.v(TAG, "onAuthenticationHelp");
++            if (DEBUG_APPLOCK) Slog.v(TAG, "Help: Id=" + helpMsgId + " Name=" + helpString);
++        }
++
++        @Override
++        public void onAuthenticationFailed() {
++            if (DEBUG_APPLOCK) Slog.v(TAG, "onAuthenticationFailed");
++            mStartingFromRecents = false;
++            mBiometricRunning = false;
++        }
++
++        @Override
++        public void onAuthenticationSucceeded(AuthenticationResult result) {
++            if (DEBUG_APPLOCK) Slog.v(TAG, "onAuthenticationSucceeded result=" + result);
++            if (mCurrent != null) {
++                mCurrent.onUnlockSucceed();
++            }
++            mStartingFromRecents = false;
++            mBiometricRunning = false;
++            mCurrent = null;
++        }
++    };
++
++    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
++        @Override
++        public void onReceive(Context context, Intent intent) {
++            if (Intent.ACTION_PACKAGE_REMOVED.equals(intent.getAction())
++                    && !intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) {
++                if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "Package removed intent received");
++                final Uri data = intent.getData();
++                if (data == null) {
++                    if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK,
++                            "Cannot handle package broadcast with null data");
++                    return;
++                }
++
++                final String packageName = data.getSchemeSpecificPart();
++                removeAppFromList(packageName);
++            } else if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
++                if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "ACTION_SCREEN_OFF");
++                clearOpenedAppsList();
++                stopBiometricPrompt();
++                fallbackToHomeActivity();
++            }
++        }
++    };
++
++    public AppLockService(Context context) {
++        super(context);
++
++        mContext = context;
++        mHandler = new AppLockHandler(BackgroundThread.getHandler().getLooper());
++        mUserId = ActivityManager.getCurrentUser();
++        mLockPatternUtils = new LockPatternUtils(context);
++
++        IntentFilter packageFilter = new IntentFilter();
++        packageFilter.addAction(Intent.ACTION_PACKAGE_REMOVED);
++        packageFilter.addDataScheme("package");
++        context.registerReceiver(mReceiver, packageFilter);
++
++        IntentFilter intentFilter = new IntentFilter();
++        intentFilter.addAction(Intent.ACTION_SCREEN_OFF);
++        context.registerReceiver(mReceiver, intentFilter);
++    }
++
++    @Override
++    public void onStart() {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "Starting AppLockService");
++        publishBinderService(Context.APPLOCK_SERVICE, new AppLockImpl());
++        publishLocalService(AppLockService.class, this);
++    }
++
++    @Override
++    public void onBootPhase(int phase) {
++        if (phase == SystemService.PHASE_SYSTEM_SERVICES_READY) {
++            Slog.v(TAG_APPLOCK, "onBootPhase PHASE_SYSTEM_SERVICES_READY");
++            mAppOpsManager = (AppOpsManager) mContext.getSystemService(Context.APP_OPS_SERVICE);
++            mPackageManager = mContext.getPackageManager();
++            mIpm = AppGlobals.getPackageManager();
++        }
++    }
++
++    @Override
++    public void onUnlockUser(int userHandle) {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "onUnlockUser() mUserId:" + userHandle);
++        if (!UserManager.get(mContext).isManagedProfile(userHandle)) {
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "onUnlockUser() is NOT ManagedProfile");
++            mUserId = userHandle;
++            mHandler.sendEmptyMessage(AppLockHandler.MSG_INIT_APPS);
++        }
++    }
++
++    @Override
++    public void onSwitchUser(int userHandle) {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "onSwitchUser() mUserId:" + userHandle);
++        if (!UserManager.get(mContext).isManagedProfile(userHandle)) {
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "onSwitchUser() is NOT ManagedProfile");
++            mUserId = userHandle;
++            mHandler.sendEmptyMessage(AppLockHandler.MSG_INIT_APPS);
++        }
++    }
++
++    @Override
++    public void onStopUser(int userHandle) {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "onStopUser() userHandle:" + userHandle);
++        if (mUserId == userHandle) {
++            mUserId = ActivityManager.getCurrentUser();
++            mHandler.sendEmptyMessage(AppLockHandler.MSG_INIT_APPS);
++        }
++    }
++
++    private void initLockedApps() {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "initLockedApps(" + mUserId + ")");
++        mUserHandle = new UserHandle(mUserId);
++        mIsSecure = isSecure();
++        mFile = new AtomicFile(getFile());
++        readState();
++        clearOpenedAppsList();
++
++        mShowOnlyOnWake = Settings.System.getIntForUser(mContext
++                .getContentResolver(),
++                Settings.System.APP_LOCK_SHOW_ONLY_ON_WAKE, 0,
++                mUserId) != 0;
++    }
++
++    private File getFile() {
++        File file = new File(Environment.getDataSystemCeDirectory(mUserId), FILE_NAME);
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "getFile(): " + file.getAbsolutePath());
++        return file;
++    }
++
++    private void readState() {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "readState()");
++        mAppsList.clear();
++        try (FileInputStream in = mFile.openRead()) {
++            XmlPullParser parser = Xml.newPullParser();
++            parser.setInput(in, null);
++            parseXml(parser);
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "Read locked-apps.xml successfully");
++        } catch (FileNotFoundException e) {
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "locked-apps.xml not found");
++            Slog.i(TAG, "locked-apps.xml not found");
++        } catch (XmlPullParserException | IOException e) {
++            throw new IllegalStateException("Failed to parse locked-apps.xml: " + mFile, e);
++        }
++    }
++
++    private void parseXml(XmlPullParser parser) throws IOException,
++            XmlPullParserException {
++        int type;
++        int depth;
++        int innerDepth = parser.getDepth() + 1;
++        while ((type = parser.next()) != XmlPullParser.END_DOCUMENT
++                && ((depth = parser.getDepth()) >= innerDepth || type != XmlPullParser.END_TAG)) {
++            if (depth > innerDepth || type != XmlPullParser.START_TAG) {
++                continue;
++            }
++            if (parser.getName().equals(TAG_LOCKED_APPS)) {
++                parsePackages(parser);
++                return;
++            }
++        }
++        Slog.w(TAG, "Missing <" + TAG_LOCKED_APPS + "> in locked-apps.xml");
++    }
++
++    private void parsePackages(XmlPullParser parser) throws IOException,
++            XmlPullParserException {
++        int type;
++        int depth;
++        int innerDepth = parser.getDepth() + 1;
++        boolean writeAfter = false;
++        while ((type = parser.next()) != XmlPullParser.END_DOCUMENT
++                && ((depth = parser.getDepth()) >= innerDepth || type != XmlPullParser.END_TAG)) {
++            if (depth > innerDepth || type != XmlPullParser.START_TAG) {
++                continue;
++            }
++            if (parser.getName().equals(TAG_PACKAGE)) {
++                String pkgName = parser.getAttributeValue(null, ATTRIBUTE_NAME);
++                String appOpMode = parser.getAttributeValue(null, ATTRIBUTE_OP_MODE);
++                String notifHide = parser.getAttributeValue(null, ATTRIBUTE_NOTIFICATION);
++                AppLockContainer cont = new AppLockContainer(pkgName, (appOpMode == null)
++                        ? -1 : Integer.parseInt(appOpMode), (notifHide == null) ? false
++                        : Boolean.parseBoolean(notifHide));
++                writeAfter = (appOpMode == null) || (Integer.parseInt(appOpMode) == -1);
++                mAppsList.put(pkgName, cont);
++                if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "parsePackages(): pkgName=" + pkgName
++                        + " appOpMode=" + appOpMode + " notifHide:" + notifHide);
++            }
++        }
++        if (writeAfter) {
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "parsePackages(): writeAfter");
++            mHandler.sendEmptyMessage(AppLockHandler.MSG_WRITE_STATE);
++        }
++    }
++
++    private void writeState() {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "writeState()");
++
++        FileOutputStream out = null;
++        try {
++            out = mFile.startWrite();
++            XmlSerializer serializer = Xml.newSerializer();
++            serializer.setOutput(out, StandardCharsets.UTF_8.name());
++            serializer.setFeature(
++                    "http://xmlpull.org/v1/doc/features.html#indent-output", true);
++            serializer.startDocument(null, true);
++            serializeLockedApps(serializer);
++            serializer.endDocument();
++            mFile.finishWrite(out);
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "Wrote locked-apps.xml successfully");
++        } catch (IllegalArgumentException | IllegalStateException | IOException e) {
++            Slog.wtf(TAG, "Failed to write locked-apps.xml, restoring backup", e);
++            if (out != null) {
++                mFile.failWrite(out);
++            }
++        } finally {
++            IoUtils.closeQuietly(out);
++        }
++    }
++
++    private void serializeLockedApps(XmlSerializer serializer) throws IOException {
++        serializer.startTag(null, TAG_LOCKED_APPS);
++        ArrayList<AppLockContainer> apps = new ArrayList<>(mAppsList.values());
++        for (AppLockContainer app : apps) {
++            serializer.startTag(null, TAG_PACKAGE);
++            serializer.attribute(null, ATTRIBUTE_NAME, app.packageName);
++            serializer.attribute(null, ATTRIBUTE_OP_MODE, String.valueOf(app.appOpMode));
++            serializer.attribute(null, ATTRIBUTE_NOTIFICATION, String.valueOf(app.notifHide));
++            serializer.endTag(null, TAG_PACKAGE);
++        }
++        serializer.endTag(null, TAG_LOCKED_APPS);
++    }
++
++    private void addAppToList(String packageName) {
++        if (DEBUG_APPLOCK) Slog.v(TAG, "addAppToList packageName:" + packageName);
++        if (!mAppsList.containsKey(packageName)) {
++            AppLockContainer cont = new AppLockContainer(packageName, -1, false);
++            mAppsList.put(packageName, cont);
++            mHandler.sendEmptyMessage(AppLockHandler.MSG_WRITE_STATE);
++            dispatchCallbacks(packageName);
++        }
++    }
++
++    private void removeAppFromList(String packageName) {
++        if (mAppsList.containsKey(packageName)) {
++            AppLockContainer cont = getAppLockContainer(packageName);
++            cont.appRemovedFromList();
++            mAppsList.remove(packageName);
++            mHandler.sendEmptyMessage(AppLockHandler.MSG_WRITE_STATE);
++            dispatchCallbacks(packageName);
++        }
++    }
++
++    private boolean getAppNotificationHide(String packageName) {
++        AppLockContainer cont = getAppLockContainer(packageName);
++        if (cont != null) {
++            return cont.notifHide;
++        }
++        return false;
++    }
++
++    private void setAppNotificationHide(String packageName, boolean hide) {
++        AppLockContainer cont = getAppLockContainer(packageName);
++        if (cont != null) {
++            if (cont.notifHide != hide) {
++                cont.notifHide = hide;
++                mHandler.sendEmptyMessage(AppLockHandler.MSG_WRITE_STATE);
++                dispatchCallbacks(packageName);
++            }
++        }
++    }
++
++    public void reportPasswordChanged(int userId) {
++        if (mUserId == userId) {
++            mIsSecure = isSecure();
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "reportPasswordChanged() mIsSecure:" + mIsSecure);
++            for (AppLockContainer app : mAppsList.values()) {
++                app.reportPasswordChanged();
++            }
++        }
++    }
++
++    public boolean isAppLocked(String packageName) {
++        if (!mIsSecure) {
++            return false;
++        }
++        return mAppsList.containsKey(packageName);
++    }
++
++    private AppLockContainer getAppLockContainer(String packageName) {
++        return mAppsList.get(packageName);
++    }
++
++    private void clearOpenedAppsList() {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "clearOpenedAppsList()");
++        for (String p : mOpenedApplicationsIndex) {
++            dispatchCallbacks(p);
++        }
++        mOpenedApplicationsIndex.clear();
++    }
++
++    public boolean isAppOpen(String packageName) {
++        return mOpenedApplicationsIndex.contains(packageName);
++    }
++
++    private List<String> getLockedPackages() {
++        return new ArrayList<String>(mAppsList.keySet());
++    }
++
++    public boolean isAlarmOrCallIntent(Intent intent) {
++        if (intent == null) return false;
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "isAlarmOrCallIntent() intent:" + intent);
++
++        String intentClassName = intent.getComponent().getClassName().toLowerCase();
++        return intentClassName.contains("callactivity")
++                || intentClassName.contains("callingactivity")
++                || intentClassName.contains("voipactivity")
++                || intentClassName.contains("alarmactivity");
++    }
++
++    public boolean isAppLockAuthenticating() {
++        return mBiometricRunning;
++    }
++
++    void removeOpenedApp(String packageName) {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "removeOpenedApp(" + packageName + ")");
++        if (mOpenedApplicationsIndex.remove(packageName)) {
++            dispatchCallbacks(packageName);
++        }
++    }
++
++    void addOpenedApp(String packageName) {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "addOpenedApp(" + packageName + ")");
++        if (mOpenedApplicationsIndex.add(packageName)) {
++            dispatchCallbacks(packageName);
++        }
++    }
++
++    public void launchBeforeActivity(String packageName) {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "launchBeforeActivity(" + packageName + ")");
++        AppLockContainer cont = getAppLockContainer(packageName);
++        if (cont != null) {
++            DisplayThread.getHandler().post(() -> {
++                mCurrent = cont;
++                if (mKeyguardShown) {
++                    mLaunchAfterKeyguard = true;
++                    return;
++                }
++                mBiometricPrompt = new BiometricPrompt.Builder(mContext)
++                    .setTitle(cont.appLabel)
++                    .setApplockPackage(cont.packageName)
++                    .setDescription(cont.appLabel)
++                    .setAllowedAuthenticators(Authenticators.DEVICE_CREDENTIAL | Authenticators.BIOMETRIC_WEAK)
++                    .setConfirmationRequired(false)
++                    .build();
++                startBiometricPrompt();
++            });
++        }
++    }
++
++    public void activityStopped(String packageName, Intent removed) {
++        AppLockContainer cont = getAppLockContainer(packageName);
++        if (cont != null) {
++            if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "activityStopped() pkg:" + packageName);
++            if (isAppOpen(packageName)) {
++                mHandler.removeMessages(AppLockHandler.MSG_REMOVE_OPENED_APP, cont.packageName);
++                if (cont.intent.equals(removed)) {
++                    if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "activityStopped() send: MSG_REMOVE_OPENED_APP");
++                    final Message msgRemove = mHandler.obtainMessage(AppLockHandler.MSG_REMOVE_OPENED_APP,
++                            cont.packageName);
++                    mHandler.sendMessageDelayed(msgRemove, APPLOCK_TIMEOUT);
++                }
++            }
++        }
++    }
++
++    public void setAppIntent(String packageName, Intent intent) {
++        if (DEBUG_APPLOCK) Slog.v(TAG, "setAppIntent(" + packageName + ") intent:" + intent);
++        AppLockContainer cont = getAppLockContainer(packageName);
++        if (cont != null) {
++            cont.intent = intent;
++            mHandler.removeMessages(AppLockHandler.MSG_REMOVE_OPENED_APP, cont.packageName);
++        }
++    }
++
++    public void setStartingFromRecents() {
++        if (DEBUG_APPLOCK) Slog.v(TAG, "setStartingFromRecents()");
++        mStartingFromRecents = true;
++    }
++
++    public void setForegroundApp(String packageName) {
++        if (DEBUG_APPLOCK) Slog.v(TAG, "setForegroundApp(" + packageName + ")");
++        mForegroundApp = packageName;
++    }
++
++    private void startBiometricPrompt() {
++        if (DEBUG_APPLOCK) Slog.v(TAG, "startBiometricPrompt()");
++        if (mBiometricRunning) return;
++        if (mCancellationSignal == null || mCancellationSignal.isCanceled()) {
++            mCancellationSignal = new CancellationSignal();
++        }
++        mBiometricPrompt.authenticate(mCancellationSignal, mContext.getMainExecutor(), mBiometricCallback);
++        mBiometricRunning = true;
++    }
++
++    private void stopBiometricPrompt() {
++        if (DEBUG_APPLOCK) Slog.v(TAG, "stopBiometricPrompt()");
++        if (mCancellationSignal != null) {
++            mCancellationSignal.cancel();
++        }
++        mBiometricRunning = false;
++    }
++
++    public void setKeyguardShown(boolean shown) {
++        mKeyguardShown = shown;
++        if (mLaunchAfterKeyguard && !shown) {
++            mLaunchAfterKeyguard = false;
++            mHandler.postDelayed(() -> {
++                if (mCurrent != null) {
++                    launchBeforeActivity(mCurrent.packageName);
++                }
++            }, 200);
++        }
++    }
++
++    private boolean isSecure() {
++        int storedQuality = mLockPatternUtils.getKeyguardStoredPasswordQuality(mUserId);
++        switch (storedQuality) {
++            case DevicePolicyManager.PASSWORD_QUALITY_SOMETHING:
++            case DevicePolicyManager.PASSWORD_QUALITY_NUMERIC:
++            case DevicePolicyManager.PASSWORD_QUALITY_NUMERIC_COMPLEX:
++            case DevicePolicyManager.PASSWORD_QUALITY_ALPHABETIC:
++            case DevicePolicyManager.PASSWORD_QUALITY_ALPHANUMERIC:
++            case DevicePolicyManager.PASSWORD_QUALITY_COMPLEX:
++            case DevicePolicyManager.PASSWORD_QUALITY_MANAGED:
++                return true;
++            default:
++                return false;
++        }
++    }
++
++    private void fallbackToHomeActivity() {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "fallbackToHomeActivity()");
++        if (mAppsList.containsKey(mForegroundApp) || mStartingFromRecents) {
++            Intent intent = new Intent(Intent.ACTION_MAIN);
++            intent.addCategory(Intent.CATEGORY_HOME);
++            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++            mContext.startActivityAsUser(intent, mUserHandle);
++        }
++    }
++
++    private int getLockedAppsCount() {
++        if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "Number of locked apps: " + mAppsList.size());
++        return mIsSecure ? mAppsList.size() : 0;
++    }
++
++    private void dispatchCallbacks(String packageName) {
++        mHandler.post(() -> {
++            synchronized (mCallbacks) {
++                final int N = mCallbacks.size();
++                boolean cleanup = false;
++                for (int i = 0; i < N; i++) {
++                    final IAppLockCallback callback = mCallbacks.valueAt(i);
++                    try {
++                        if (callback != null) {
++                            callback.onAppStateChanged(packageName);
++                        } else {
++                            cleanup = true;
++                        }
++                    } catch (RemoteException e) {
++                        cleanup = true;
++                    }
++                }
++                if (cleanup) {
++                    cleanUpCallbacksLocked(null);
++                }
++            }
++        });
++    }
++
++    private void cleanUpCallbacksLocked(IAppLockCallback callback) {
++        mHandler.post(() -> {
++            synchronized (mCallbacks) {
++                for (int i = mCallbacks.size() - 1; i >= 0; i--) {
++                    IAppLockCallback found = mCallbacks.valueAt(i);
++                    if (found == null || found == callback) {
++                        mCallbacks.remove(i);
++                    }
++                }
++            }
++        });
++    }
++
++    private void addAppLockCallback(IAppLockCallback callback) {
++        mHandler.post(() -> {
++            synchronized(mCallbacks) {
++                if (!mCallbacks.contains(callback)) {
++                    mCallbacks.add(callback);
++                }
++            }
++        });
++    }
++
++    private void removeAppLockCallback(IAppLockCallback callback) {
++        mHandler.post(() -> {
++            synchronized(mCallbacks) {
++                if (mCallbacks.contains(callback)) {
++                    mCallbacks.remove(callback);
++                }
++            }
++        });
++    }
++
++    private void setShowOnlyOnWake(boolean showOnce) {
++        mShowOnlyOnWake = showOnce;
++        Settings.System.putIntForUser(mContext
++                .getContentResolver(),
++                Settings.System.APP_LOCK_SHOW_ONLY_ON_WAKE,
++                showOnce ? 1 : 0,
++                mUserId);
++    }
++
++    private boolean getShowOnlyOnWake() {
++        return mShowOnlyOnWake;
++    }
++
++    private class AppLockImpl extends IAppLockService.Stub {
++        @Override
++        public void addAppToList(String packageName) {
++            AppLockService.this.addAppToList(packageName);
++        }
++
++        @Override
++        public void removeAppFromList(String packageName) {
++            AppLockService.this.removeAppFromList(packageName);
++        }
++
++        @Override
++        public boolean isAppLocked(String packageName) {
++            return AppLockService.this.isAppLocked(packageName);
++        }
++
++        @Override
++        public boolean isAppOpen(String packageName) {
++            return AppLockService.this.isAppOpen(packageName);
++        }
++
++        @Override
++        public void setShowOnlyOnWake(boolean showOnce) {
++            AppLockService.this.setShowOnlyOnWake(showOnce);
++        }
++
++        @Override
++        public boolean getShowOnlyOnWake() {
++            return AppLockService.this.getShowOnlyOnWake();
++        }
++
++        @Override
++        public int getLockedAppsCount() {
++            return AppLockService.this.getLockedAppsCount();
++        }
++
++        @Override
++        public List<String> getLockedPackages() {
++            return AppLockService.this.getLockedPackages();
++        }
++
++        @Override
++        public boolean getAppNotificationHide(String packageName) {
++            return AppLockService.this.getAppNotificationHide(packageName);
++        }
++
++        @Override
++        public void setAppNotificationHide(String packageName, boolean hide) {
++            AppLockService.this.setAppNotificationHide(packageName, hide);
++        }
++
++        @Override
++        public void addAppLockCallback(IAppLockCallback callback) {
++            AppLockService.this.addAppLockCallback(callback);
++        }
++
++        @Override
++        public void removeAppLockCallback(IAppLockCallback callback) {
++            AppLockService.this.removeAppLockCallback(callback);
++        }
++    };
++
++    private class AppLockHandler extends Handler {
++
++        public static final int MSG_INIT_APPS = 0;
++        public static final int MSG_READ_STATE = 1;
++        public static final int MSG_WRITE_STATE = 2;
++        public static final int MSG_REMOVE_OPENED_APP = 3;
++
++        public AppLockHandler(Looper looper) {
++            super(looper);
++        }
++
++        @Override
++        public void handleMessage(android.os.Message msg) {
++            switch (msg.what) {
++                case MSG_INIT_APPS:
++                    initLockedApps();
++                    break;
++                case MSG_WRITE_STATE:
++                    writeState();
++                    break;
++                case MSG_REMOVE_OPENED_APP:
++                    if (!mShowOnlyOnWake) {
++                        removeOpenedApp((String) msg.obj);
++                    }
++                    break;
++                default:
++                    Slog.w(TAG, "Unknown message:" + msg.what);
++            }
++        }
++    }
++
++    private class AppLockContainer {
++        private final String packageName;
++        private ApplicationInfo aInfo;
++        private CharSequence appLabel;
++        private int appOpMode = -1;
++        private Intent intent;
++        private boolean notifHide;
++
++        public AppLockContainer(String pkg, int opMode, boolean hideNotif) {
++            packageName = pkg;
++            notifHide = hideNotif;
++
++            final long ident = Binder.clearCallingIdentity();
++            try {
++                mIpm.setBlockUninstallForUser(packageName, mIsSecure, mUserId);
++            } catch (RemoteException re) {
++                // Shouldn't happen.
++                Slog.e(TAG, "Failed to setBlockUninstallForUser", re);
++            } finally {
++                Binder.restoreCallingIdentity(ident);
++            }
++
++            try {
++                aInfo = mPackageManager.getApplicationInfo(packageName, 0);
++            } catch(PackageManager.NameNotFoundException e) {
++                Slog.e(TAG, "Failed to find package " + packageName, e);
++                removeAppFromList(packageName);
++                return;
++            }
++            appLabel = mPackageManager.getApplicationLabel(aInfo);
++
++            if (opMode == -1) {
++                appOpMode = mAppOpsManager.checkOpNoThrow(AppOpsManager.OP_SYSTEM_ALERT_WINDOW,
++                    aInfo.uid, packageName);
++            } else {
++                appOpMode = opMode;
++            }
++
++            if (appOpMode == AppOpsManager.MODE_ALLOWED
++                    || appOpMode == AppOpsManager.MODE_DEFAULT) {
++                mAppOpsManager.setMode(AppOpsManager.OP_SYSTEM_ALERT_WINDOW,
++                        aInfo.uid, packageName, AppOpsManager.MODE_ERRORED);
++            }
++        }
++
++        private void startActivityAfterUnlock() {
++            if (DEBUG_APPLOCK) Slog.v(TAG, "startActivityAfterUnlock() intent:" + intent);
++            Intent fallBackIntent = new Intent(Intent.ACTION_MAIN);
++            fallBackIntent.setPackage(packageName);
++            List<ResolveInfo> resolveInfos = mPackageManager.queryIntentActivities(fallBackIntent, 0);
++            if(resolveInfos.size() > 0) {
++                ResolveInfo launchable = resolveInfos.get(0);
++                ActivityInfo activity = launchable.activityInfo;
++                ComponentName name = new ComponentName(activity.applicationInfo.packageName,
++                        activity.name);
++                fallBackIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
++                        Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
++                fallBackIntent.setComponent(name);
++            }
++            if (intent != null) {
++                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++                mContext.startActivityAsUser(intent, mUserHandle);
++            } else if (fallBackIntent != null) {
++                mContext.startActivityAsUser(fallBackIntent, mUserHandle);
++            }
++            if (fallBackIntent != null) {
++                intent = fallBackIntent;
++            }
++        }
++
++        private void onUnlockSucceed() {
++            addOpenedApp(packageName);
++            startActivityAfterUnlock();
++        }
++
++        private void appRemovedFromList() {
++            Slog.d(TAG, "appRemovedFromList() appOpMode: " + appOpMode);
++
++            final long ident = Binder.clearCallingIdentity();
++            try {
++                mIpm.setBlockUninstallForUser(packageName, false, mUserId);
++            } catch (RemoteException re) {
++                // Shouldn't happen.
++                Slog.e(TAG, "Failed to setBlockUninstallForUser", re);
++            } finally {
++                Binder.restoreCallingIdentity(ident);
++            }
++
++            mAppOpsManager.setMode(AppOpsManager.OP_SYSTEM_ALERT_WINDOW,
++                    aInfo.uid, packageName, appOpMode);
++        }
++
++        private void reportPasswordChanged() {
++            final long ident = Binder.clearCallingIdentity();
++            try {
++                mIpm.setBlockUninstallForUser(packageName, mIsSecure, mUserId);
++            } catch (RemoteException re) {
++                // Shouldn't happen.
++                Slog.e(TAG, "Failed to setBlockUninstallForUser", re);
++            } finally {
++                Binder.restoreCallingIdentity(ident);
++            }
++        }
++    }
++}
+diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
+index 5c12f2043258..7be4cc46c272 100644
+--- a/services/java/com/android/server/SystemServer.java
++++ b/services/java/com/android/server/SystemServer.java
+@@ -177,6 +177,7 @@ import com.android.server.utils.TimingsTraceAndSlog;
+ import com.android.server.vr.VrManagerService;
+ import com.android.server.webkit.WebViewUpdateService;
+ import com.android.server.wm.ActivityTaskManagerService;
++import com.android.server.wm.AppLockService;
+ import com.android.server.wm.WindowManagerGlobalLock;
+ import com.android.server.wm.WindowManagerService;
+ 
+@@ -1235,6 +1236,10 @@ public final class SystemServer {
+             mSystemServiceManager.startService(IorapForwardingService.class);
+             t.traceEnd();
+ 
++            t.traceBegin("StartAppLockService");
++            mSystemServiceManager.startService(AppLockService.class);
++            t.traceEnd();
++
+             t.traceBegin("SignedConfigService");
+             SignedConfigService.registerUpdateReceiver(mSystemContext);
+             t.traceEnd();
+-- 
+2.25.1
+
