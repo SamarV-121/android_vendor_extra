@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# set -e
+set -e
 
-# ./vendor/extra/patch.sh -r
-# ./vendor/extra/patch.sh -am
+./vendor/extra/patch.sh -r
+./vendor/extra/patch.sh -am
