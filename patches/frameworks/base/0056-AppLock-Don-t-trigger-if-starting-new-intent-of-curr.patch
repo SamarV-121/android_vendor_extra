@@ -1,7 +1,7 @@
-From b70b31ae172d58ed11f96160a9a3729b1bac0ce6 Mon Sep 17 00:00:00 2001
+From 6798d1856bcea2a02b3aea0b56c088f73fc30cbf Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhsv09@gmail.com>
 Date: Tue, 15 Jun 2021 20:57:40 -0300
-Subject: [PATCH 56/56] AppLock: Don't trigger if starting new intent of
+Subject: [PATCH 56/60] AppLock: Don't trigger if starting new intent of
  current running package
 
 Change-Id: I26d1fe4e37d2c86a8de12714634c1da0745ad0da

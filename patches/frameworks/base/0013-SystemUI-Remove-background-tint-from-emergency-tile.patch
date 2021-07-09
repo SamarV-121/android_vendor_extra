@@ -1,7 +1,7 @@
-From f40c709d6d49bfded51eca71eafce909a351c31b Mon Sep 17 00:00:00 2001
+From c43f85f321aeea9917d84170b609ff362869cec4 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 6 Nov 2020 13:28:56 -0800
-Subject: [PATCH 13/56] SystemUI: Remove background tint from emergency tile
+Subject: [PATCH 13/60] SystemUI: Remove background tint from emergency tile
 
 Translucent colors don't work well with tinting and our background color
 is the same for this tile anyway.

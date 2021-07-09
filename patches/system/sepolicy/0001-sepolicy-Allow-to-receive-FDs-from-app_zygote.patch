@@ -1,0 +1,84 @@
+From 53185bf76f7a2840c17ec3fdb87b3e8df729467e Mon Sep 17 00:00:00 2001
+From: Egor Pasko <pasko@google.com>
+Date: Thu, 17 Jun 2021 14:30:08 +0200
+Subject: [PATCH 1/2] sepolicy: Allow to receive FDs from app_zygote
+
+The primary goal is to have an ashmem region shared between the main app
+process in Chrome (=Browser Process) and the app zygote. It can only be
+passed from the App Zygote, since there is no communication in the other
+direction. Passing of the file descriptor should happen by:
+(A) inheriting via fork(2)
+(B) using binder IPC
+
+Currently ashmem FDs are sufficiently allowed to be mmap(2)-ed in all
+Chrome processes. The mode of mapping (read-only, read-write etc.) is
+controlled by the settings of the region itself, not by sepolicy.
+
+This change additionally allows an FD created in the app zygote to be
+passed to the 'untrusted_app' domain.
+
+Note: This change allows *any* FD, not just an ashmem one to be passed.
+This is on purpose: in the future we will likely want to return to the
+memfd story.  Other usecases (pipes, sockets) might appear.
+
+The app zygote preload takes the responsibility not to share
+capabilities in the form of FDs unintentionally with other app
+processes.
+
+Historical note: we tried to enable this for memfd (using additional
+rules), but it required a 'write' permission when sending an FD. Reasons
+for that are still puzzling, and there seems to be no easy workaround
+for it. Decision: use ashmem.
+
+Bug: 184808875
+Test: Manual: Build and install Chrome (trichrome_chrome_google_bundle)
+      from [1]. Make sure FileDescriptorAllowlist allows the FD, like
+      [2]. Reach a NewTabPage, click on a suggested page, observe no
+      errors related to binder transactions and selinux violations.
+
+[1] A change in Chrome to create an ashmem region during app zygote
+    preload and pass it to the browser process:
+    https://crrev.com/c/2752872/29
+
+[2] Allowlist change in review:
+     https://android-review.googlesource.com/c/platform/frameworks/base/+/1739393
+    (Alternatively: Remove gOpenFdTable checks in ForkCommon() in
+    com_android_internal_os_Zygote.cpp)
+
+Change-Id: Ide085f472c8fb6ae76ab0b094319d6924552fc02
+---
+ prebuilts/api/30.0/public/app.te | 3 +++
+ public/app.te                    | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/prebuilts/api/30.0/public/app.te b/prebuilts/api/30.0/public/app.te
+index e5b9fd670..97995ecbd 100644
+--- a/prebuilts/api/30.0/public/app.te
++++ b/prebuilts/api/30.0/public/app.te
+@@ -16,6 +16,9 @@ allow appdomain { ashmem_device ashmem_libcutils_device }:chr_file execute;
+ # Receive and use open file descriptors inherited from zygote.
+ allow appdomain zygote:fd use;
+ 
++# Receive and use open file descriptors inherited from app zygote.
++allow appdomain app_zygote:fd use;
++
+ # gdbserver for ndk-gdb reads the zygote.
+ # valgrind needs mmap exec for zygote
+ allow appdomain zygote_exec:file rx_file_perms;
+diff --git a/public/app.te b/public/app.te
+index e5b9fd670..97995ecbd 100644
+--- a/public/app.te
++++ b/public/app.te
+@@ -16,6 +16,9 @@ allow appdomain { ashmem_device ashmem_libcutils_device }:chr_file execute;
+ # Receive and use open file descriptors inherited from zygote.
+ allow appdomain zygote:fd use;
+ 
++# Receive and use open file descriptors inherited from app zygote.
++allow appdomain app_zygote:fd use;
++
+ # gdbserver for ndk-gdb reads the zygote.
+ # valgrind needs mmap exec for zygote
+ allow appdomain zygote_exec:file rx_file_perms;
+-- 
+2.25.1
+

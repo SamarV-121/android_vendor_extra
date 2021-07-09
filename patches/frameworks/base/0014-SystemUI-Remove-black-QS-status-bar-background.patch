@@ -1,7 +1,7 @@
-From 52ec278a144f8fae028858dc61b25f4a4adb0b8e Mon Sep 17 00:00:00 2001
+From 2a39852eb5c55b8163d96c1a10e4334aa9b6166a Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Oct 2020 13:24:11 -0700
-Subject: [PATCH 14/56] SystemUI: Remove black QS status bar background
+Subject: [PATCH 14/60] SystemUI: Remove black QS status bar background
 
 Now that we have high-radius blur behind the notification shade, the dark
 scrim provides enough contrast for us to remove the ugly black status

@@ -1,0 +1,40 @@
+From 4b90aaa43e98fab6e6c6048f9d63b6dd2509e30f Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Thu, 13 May 2021 17:11:34 -0700
+Subject: [PATCH 60/60] Fix error formatting issues
+
+I missed a couple of CREATE_ERROR calls the first time around.
+Unfortunately, type checking is loose enough to miss that.
+
+Bug: 187992348
+Test: TreeHugger
+Change-Id: Ib7c227fa0e8491d8ce7cd0d82217098664e3182d
+---
+ core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp b/core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp
+index 011e8f8f1b8c..7f90efb3e129 100644
+--- a/core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp
++++ b/core/jni/com_android_internal_os_ZygoteCommandBuffer.cpp
+@@ -403,7 +403,7 @@ jboolean com_android_internal_os_ZygoteCommandBuffer_nativeForkRepeatedly(
+   socklen_t cred_size = sizeof credentials;
+   if (getsockopt(n_buffer->getFd(), SOL_SOCKET, SO_PEERCRED, &credentials, &cred_size) == -1
+       || cred_size != sizeof credentials) {
+-    fail_fn_1("ForkMany failed to get initial credentials, %s", strerror(errno));
++    fail_fn_1(CREATE_ERROR("ForkMany failed to get initial credentials, %s", strerror(errno)));
+   }
+ 
+   bool first_time = true;
+@@ -454,7 +454,7 @@ jboolean com_android_internal_os_ZygoteCommandBuffer_nativeForkRepeatedly(
+       close(session_socket);
+       int new_fd = accept(zygote_socket_fd, nullptr, nullptr);
+       if (new_fd == -1) {
+-        fail_fn_z("Accept(%d) failed: %s", zygote_socket_fd, strerror(errno));
++        fail_fn_z(CREATE_ERROR("Accept(%d) failed: %s", zygote_socket_fd, strerror(errno)));
+       }
+       if (new_fd != session_socket) {
+           // Move new_fd back to the old value, so that we don't have to change Java-level data
+-- 
+2.25.1
+

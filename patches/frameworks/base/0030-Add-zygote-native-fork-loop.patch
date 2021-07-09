@@ -1,7 +1,7 @@
-From 5fe3d5a3eb51968a88bdaf1efad409190121b747 Mon Sep 17 00:00:00 2001
+From 7d9860ff96e122a68f12e4fbf3e7650cedf5ce11 Mon Sep 17 00:00:00 2001
 From: Hans Boehm <hboehm@google.com>
 Date: Mon, 9 Nov 2020 18:21:29 -0800
-Subject: [PATCH 30/56] Add zygote native fork loop
+Subject: [PATCH 30/60] Add zygote native fork loop
 
 Do not return to Java mode between consecutive fork operations.
 This greatly reduces the Zygote overhead, since we no longer need to

@@ -1,7 +1,7 @@
-From 14a929a3875029612bcaef18b974489ecdcb3886 Mon Sep 17 00:00:00 2001
+From 3a4c92de347908fda0a8d15212568c6cf039d402 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:58:24 -0700
-Subject: [PATCH 40/56] PackageManagerService: Replace ArrayMap with HashMap
+Subject: [PATCH 40/60] PackageManagerService: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of

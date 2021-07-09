@@ -1,7 +1,7 @@
-From afb837ad4df51ac2e7c1bb204fae773ca7e2d632 Mon Sep 17 00:00:00 2001
+From e37ac94758abfff12d30636a0340df9d1a85bbe4 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:32:17 -0700
-Subject: [PATCH 35/56] statsd: Disable native stats collection service
+Subject: [PATCH 35/60] statsd: Disable native stats collection service
 
 When opening and closing activities in Settings, a measurably
 significant amount of CPU time is spent processing and logging stats

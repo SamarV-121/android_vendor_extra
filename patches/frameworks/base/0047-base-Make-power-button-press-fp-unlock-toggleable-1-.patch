@@ -1,7 +1,7 @@
-From 05dd1c1b396e98b19723d652b2c0f4ef99cf3a96 Mon Sep 17 00:00:00 2001
+From eb0633c7d461fd48dcc595a28156f0b36a38bba4 Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Tue, 13 Apr 2021 14:57:01 +0530
-Subject: [PATCH 47/56] base: Make power button press fp unlock toggleable
+Subject: [PATCH 47/60] base: Make power button press fp unlock toggleable
  [1/2]
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>

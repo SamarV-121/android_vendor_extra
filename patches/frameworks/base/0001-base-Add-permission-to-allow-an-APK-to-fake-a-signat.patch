@@ -1,7 +1,7 @@
-From ecc71982762cdd6ff5976259940d2f8406a64cf6 Mon Sep 17 00:00:00 2001
+From 48c94f01fe724fe06c2f6367bfd3d4d792d10202 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20Rosenkr=C3=A4nzer?= <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
-Subject: [PATCH 01/56] base: Add permission to allow an APK to fake a
+Subject: [PATCH 01/60] base: Add permission to allow an APK to fake a
  signature.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

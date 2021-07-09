@@ -1,7 +1,7 @@
-From ae8882c21e5ed9eedc95f0fa8337b20070dc2451 Mon Sep 17 00:00:00 2001
+From b73e85afa637d72cf13dda87d4f8ba615f5c264a Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Feb 2021 17:04:10 -0300
-Subject: [PATCH 22/56] Port face unlock feature
+Subject: [PATCH 22/60] Port face unlock feature
 
 From motorola/nio_retcn/nio:11/RRN31.Q1-20-17-1/1cbc0:user/release-keys
 

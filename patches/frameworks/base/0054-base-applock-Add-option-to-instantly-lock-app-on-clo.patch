@@ -1,7 +1,7 @@
-From 0cfeb8fe20076dd6a4e990d40149239dda254aa9 Mon Sep 17 00:00:00 2001
+From 0b12ae682400d86ce8351072aa1688aa625a751a Mon Sep 17 00:00:00 2001
 From: Pranav Kapoor <pranavkapoor001@gmail.com>
 Date: Thu, 8 Apr 2021 20:34:51 +0530
-Subject: [PATCH 54/56] base: applock: Add option to instantly lock app on
+Subject: [PATCH 54/60] base: applock: Add option to instantly lock app on
  closing [1/2]
 
 Signed-off-by: Pranav Kapoor <pranavkapoor001@gmail.com>

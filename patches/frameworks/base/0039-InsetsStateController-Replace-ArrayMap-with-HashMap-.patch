@@ -1,7 +1,7 @@
-From 115b11e19b57e334e2570463df939a916777776c Mon Sep 17 00:00:00 2001
+From 2eab77c5aaf15075e232e963e35c9666a25e095a Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:50:26 -0700
-Subject: [PATCH 39/56] InsetsStateController: Replace ArrayMap with HashMap
+Subject: [PATCH 39/60] InsetsStateController: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of

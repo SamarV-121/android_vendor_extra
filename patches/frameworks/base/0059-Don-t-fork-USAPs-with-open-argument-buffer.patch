@@ -1,0 +1,78 @@
+From f300fb91a87a110bc8bb78e37367dc519144bd76 Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Tue, 23 Mar 2021 11:31:43 -0700
+Subject: [PATCH 59/60] Don't fork USAPs with open argument buffer
+
+Delay execution of any zygote command that may end up forking USAPs
+until we've released our own ZygoteCommandBuffer. Otherwise we fork
+the child with an open ZygoteCommandBuffer, preventing it from
+opening its own.
+
+Bug: 182084594
+Test: Build and boot AOSP, with USAPs enabled and disabled.
+Change-Id: I2366367d2155a120092fbdcae13cbb3d7f4e1d16
+---
+ .../android/internal/os/ZygoteConnection.java | 29 ++++++++++---------
+ 1 file changed, 16 insertions(+), 13 deletions(-)
+
+diff --git a/core/java/com/android/internal/os/ZygoteConnection.java b/core/java/com/android/internal/os/ZygoteConnection.java
+index 060689a3f657..47826b3c46ef 100644
+--- a/core/java/com/android/internal/os/ZygoteConnection.java
++++ b/core/java/com/android/internal/os/ZygoteConnection.java
+@@ -149,8 +149,11 @@ class ZygoteConnection {
+                     return null;
+                 }
+ 
+-                if (parsedArgs.mUsapPoolStatusSpecified) {
+-                    // Handle this once we've released the argBuffer, to avoid opening a second one.
++                if (parsedArgs.mUsapPoolStatusSpecified
++                        || parsedArgs.mApiBlacklistExemptions != null
++                        || parsedArgs.mHiddenApiAccessLogSampleRate != -1
++                        || parsedArgs.mHiddenApiAccessStatslogSampleRate != -1) {
++                    // Handle these once we've released argBuffer, to avoid opening a second one.
+                     break;
+                 }
+ 
+@@ -183,17 +186,7 @@ class ZygoteConnection {
+                     return null;
+                 }
+ 
+-                if (parsedArgs.mApiBlacklistExemptions != null) {
+-                    return handleApiBlacklistExemptions(zygoteServer,
+-                            parsedArgs.mApiBlacklistExemptions);
+-                }
+ 
+-                if (parsedArgs.mHiddenApiAccessLogSampleRate != -1
+-                        || parsedArgs.mHiddenApiAccessStatslogSampleRate != -1) {
+-                    return handleHiddenApiAccessLogSampleRate(zygoteServer,
+-                            parsedArgs.mHiddenApiAccessLogSampleRate,
+-                            parsedArgs.mHiddenApiAccessStatslogSampleRate);
+-                }
+ 
+                 if (parsedArgs.mPermittedCapabilities != 0
+                         || parsedArgs.mEffectiveCapabilities != 0) {
+@@ -311,10 +304,20 @@ class ZygoteConnection {
+                 }
+             }
+         }
++        // Handle anything that may need a ZygoteCommandBuffer after we've released ours.
+         if (parsedArgs.mUsapPoolStatusSpecified) {
+-            // Now that we've released argBuffer:
+             return handleUsapPoolStatusChange(zygoteServer, parsedArgs.mUsapPoolEnabled);
+         }
++        if (parsedArgs.mApiBlacklistExemptions != null) {
++            return handleApiBlacklistExemptions(zygoteServer,
++                    parsedArgs.mApiBlacklistExemptions);
++        }
++        if (parsedArgs.mHiddenApiAccessLogSampleRate != -1
++                || parsedArgs.mHiddenApiAccessStatslogSampleRate != -1) {
++            return handleHiddenApiAccessLogSampleRate(zygoteServer,
++                    parsedArgs.mHiddenApiAccessLogSampleRate,
++                    parsedArgs.mHiddenApiAccessStatslogSampleRate);
++        }
+         throw new AssertionError("Shouldn't get here");
+     }
+ 
+-- 
+2.25.1
+

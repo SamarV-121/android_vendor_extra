@@ -1,7 +1,7 @@
-From 585f0d4bda1a61d0eab40e6fd9e965dc0b8f2e40 Mon Sep 17 00:00:00 2001
+From 29091e1555cd8ec579f754d61b4deee769929780 Mon Sep 17 00:00:00 2001
 From: El Dainosor <eldainosor@gmail.com>
 Date: Fri, 17 Apr 2020 23:35:23 +0000
-Subject: [PATCH 21/56] TypeClock: Properly calculate the height
+Subject: [PATCH 21/60] TypeClock: Properly calculate the height
 
 As it was using the small clock all this time along.
 Let's get code for smallclock and add the dynamic height of the view

@@ -1,7 +1,7 @@
-From 2f18ed6ae86af70eda08b51d50ebce61469cc6dd Mon Sep 17 00:00:00 2001
+From 6483746e5b5571afab629d1a485f72b79fcace2e Mon Sep 17 00:00:00 2001
 From: Cosmin Tanislav <demonsingur@gmail.com>
 Date: Sun, 16 Aug 2020 19:45:00 +0200
-Subject: [PATCH 46/56] base: Allow unlocking fingerprint only on power button
+Subject: [PATCH 46/60] base: Allow unlocking fingerprint only on power button
  press
 
 Change-Id: I2f569a8ab4d1dd2c118cfb2d1c1072ce6b4e3584

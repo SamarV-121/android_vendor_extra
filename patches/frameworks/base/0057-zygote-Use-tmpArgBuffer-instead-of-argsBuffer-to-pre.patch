@@ -1,0 +1,27 @@
+From 901e9970868bc10f8d822fe9f1c09eca06cdc270 Mon Sep 17 00:00:00 2001
+From: Quallenauge <Hamsi2k@freenet.de>
+Date: Mon, 21 Jun 2021 23:40:28 +0100
+Subject: [PATCH 57/60] zygote: Use tmpArgBuffer instead of argsBuffer to
+ prevent NPE.
+
+Change-Id: I724605c8ee7b1437d7cbf470f0fc33cc0efe4e1c
+---
+ core/java/com/android/internal/os/Zygote.java | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/core/java/com/android/internal/os/Zygote.java b/core/java/com/android/internal/os/Zygote.java
+index 52ceeec1bf37..26d4293bd3b5 100644
+--- a/core/java/com/android/internal/os/Zygote.java
++++ b/core/java/com/android/internal/os/Zygote.java
+@@ -716,7 +716,7 @@ public final class Zygote {
+                             new DataOutputStream(sessionSocket.getOutputStream());
+                     Credentials peerCredentials = sessionSocket.getPeerCredentials();
+                     tmpArgBuffer = new ZygoteCommandBuffer(sessionSocket);
+-                    args = ZygoteArguments.getInstance(argBuffer);
++                    args = ZygoteArguments.getInstance(tmpArgBuffer);
+                     applyUidSecurityPolicy(args, peerCredentials);
+                     // TODO (chriswailes): Should this only be run for debug builds?
+                     validateUsapCommand(args);
+-- 
+2.25.1
+

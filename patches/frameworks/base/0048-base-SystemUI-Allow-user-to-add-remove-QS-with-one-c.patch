@@ -1,7 +1,7 @@
-From b69737398144862617b28c75c1552fe4fa49dcd4 Mon Sep 17 00:00:00 2001
+From 31ba3022abc4fc3daa77e8adaed0cb0333c1e605 Mon Sep 17 00:00:00 2001
 From: Andrzej Ressel <jereksel@gmail.com>
 Date: Wed, 9 Aug 2017 00:11:16 +0200
-Subject: [PATCH 48/56] base: SystemUI: Allow user to add/remove QS with one
+Subject: [PATCH 48/60] base: SystemUI: Allow user to add/remove QS with one
  click
 
 Change-Id: Ied86dcfb6179d936786273867a50610900f1c5e5

@@ -1,0 +1,38 @@
+From b04b0b7f18feed842752b0af3b758d9699290fc4 Mon Sep 17 00:00:00 2001
+From: Quallenauge <Hamsi2k@freenet.de>
+Date: Tue, 22 Jun 2021 20:03:41 +0200
+Subject: [PATCH 2/2] sepolicy: Allow to access zygote sockets from app domain.
+
+Change-Id: I09f66be21d87754d9d11e9d2ef53c14e50ecf7f3
+---
+ prebuilts/api/30.0/public/app.te | 1 +
+ public/app.te                    | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/prebuilts/api/30.0/public/app.te b/prebuilts/api/30.0/public/app.te
+index 97995ecbd..d849d8a90 100644
+--- a/prebuilts/api/30.0/public/app.te
++++ b/prebuilts/api/30.0/public/app.te
+@@ -15,6 +15,7 @@ allow appdomain { ashmem_device ashmem_libcutils_device }:chr_file execute;
+ 
+ # Receive and use open file descriptors inherited from zygote.
+ allow appdomain zygote:fd use;
++allow appdomain zygote:unix_stream_socket { getopt getattr read write shutdown };
+ 
+ # Receive and use open file descriptors inherited from app zygote.
+ allow appdomain app_zygote:fd use;
+diff --git a/public/app.te b/public/app.te
+index 97995ecbd..d849d8a90 100644
+--- a/public/app.te
++++ b/public/app.te
+@@ -15,6 +15,7 @@ allow appdomain { ashmem_device ashmem_libcutils_device }:chr_file execute;
+ 
+ # Receive and use open file descriptors inherited from zygote.
+ allow appdomain zygote:fd use;
++allow appdomain zygote:unix_stream_socket { getopt getattr read write shutdown };
+ 
+ # Receive and use open file descriptors inherited from app zygote.
+ allow appdomain app_zygote:fd use;
+-- 
+2.25.1
+
