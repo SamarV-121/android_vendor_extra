@@ -1,7 +1,7 @@
-From 9a8c4dec3622f7cb6f105956da99b10fde69956d Mon Sep 17 00:00:00 2001
+From 5ccb63a99dc54a119d0fadc08ba3c0bc85480ef4 Mon Sep 17 00:00:00 2001
 From: rituj <ritujbeniwal@gmail.com>
 Date: Thu, 30 Apr 2020 19:13:56 +0530
-Subject: [PATCH 52/60] base: Introduce Applock [1/3]
+Subject: [PATCH 52/61] base: Introduce Applock [1/3]
 
 * Includes applock 1.1 and more
 * Built upon the initial commit by "Anass Karbila <anaskarbila@aospa.co>"
@@ -21,7 +21,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  .../SystemUI/res/values/lineage_dimens.xml    |   3 +
  .../biometrics/AuthBiometricFaceView.java     |   5 +
  .../AuthBiometricFingerprintView.java         |   5 +
- .../biometrics/AuthBiometricView.java         |  67 +-
+ .../biometrics/AuthBiometricView.java         |  66 +-
  .../biometrics/AuthContainerView.java         |   4 +-
  .../biometrics/AuthCredentialView.java        |  30 +-
  .../systemui/dagger/SystemServicesModule.java |   7 +
@@ -40,7 +40,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  .../server/wm/ActivityTaskManagerService.java |  45 +-
  .../com/android/server/wm/AppLockService.java | 867 ++++++++++++++++++
  .../java/com/android/server/SystemServer.java |   5 +
- 30 files changed, 1446 insertions(+), 21 deletions(-)
+ 30 files changed, 1445 insertions(+), 21 deletions(-)
  create mode 100644 core/java/android/app/AppLockManager.java
  create mode 100644 core/java/android/app/IAppLockCallback.aidl
  create mode 100644 core/java/android/app/IAppLockService.aidl
@@ -48,7 +48,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
 
 diff --git a/core/java/android/app/AppLockManager.java b/core/java/android/app/AppLockManager.java
 new file mode 100644
-index 000000000000..1b2968bcdff6
+index 00000000000..1b2968bcdff
 --- /dev/null
 +++ b/core/java/android/app/AppLockManager.java
 @@ -0,0 +1,143 @@
@@ -197,7 +197,7 @@ index 000000000000..1b2968bcdff6
 +}
 diff --git a/core/java/android/app/IAppLockCallback.aidl b/core/java/android/app/IAppLockCallback.aidl
 new file mode 100644
-index 000000000000..9824af4ac48a
+index 00000000000..9824af4ac48
 --- /dev/null
 +++ b/core/java/android/app/IAppLockCallback.aidl
 @@ -0,0 +1,22 @@
@@ -225,7 +225,7 @@ index 000000000000..9824af4ac48a
 +}
 diff --git a/core/java/android/app/IAppLockService.aidl b/core/java/android/app/IAppLockService.aidl
 new file mode 100644
-index 000000000000..e9e1a99b7c0e
+index 00000000000..e9e1a99b7c0
 --- /dev/null
 +++ b/core/java/android/app/IAppLockService.aidl
 @@ -0,0 +1,48 @@
@@ -279,7 +279,7 @@ index 000000000000..e9e1a99b7c0e
 +}
 \ No newline at end of file
 diff --git a/core/java/android/app/SystemServiceRegistry.java b/core/java/android/app/SystemServiceRegistry.java
-index 433a0724fdaf..1b9ff7e7cd46 100644
+index 433a0724fda..1b9ff7e7cd4 100644
 --- a/core/java/android/app/SystemServiceRegistry.java
 +++ b/core/java/android/app/SystemServiceRegistry.java
 @@ -925,6 +925,15 @@ public final class SystemServiceRegistry {
@@ -299,7 +299,7 @@ index 433a0724fdaf..1b9ff7e7cd46 100644
                  new CachedServiceFetcher<TvInputManager>() {
              @Override
 diff --git a/core/java/android/content/Context.java b/core/java/android/content/Context.java
-index 8472144a92cf..775cf57cc211 100644
+index 8472144a92c..775cf57cc21 100644
 --- a/core/java/android/content/Context.java
 +++ b/core/java/android/content/Context.java
 @@ -5163,6 +5163,16 @@ public abstract class Context {
@@ -320,7 +320,7 @@ index 8472144a92cf..775cf57cc211 100644
       * Determine whether the given permission is allowed for a particular
       * process and user ID running in the system.
 diff --git a/core/java/android/hardware/biometrics/BiometricPrompt.java b/core/java/android/hardware/biometrics/BiometricPrompt.java
-index 74caceae07c9..58374082a1e1 100644
+index 74caceae07c..58374082a1e 100644
 --- a/core/java/android/hardware/biometrics/BiometricPrompt.java
 +++ b/core/java/android/hardware/biometrics/BiometricPrompt.java
 @@ -67,6 +67,10 @@ public class BiometricPrompt implements BiometricAuthenticator, BiometricConstan
@@ -354,7 +354,7 @@ index 74caceae07c9..58374082a1e1 100644
           * Optional: Sets a subtitle that will be shown on the prompt.
           * @param subtitle The subtitle to display.
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index f77c50093815..c3bac2cd006f 100755
+index f77c5009381..c3bac2cd006 100755
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -4115,6 +4115,13 @@ public final class Settings {
@@ -372,10 +372,10 @@ index f77c50093815..c3bac2cd006f 100755
           * The intensity of haptic feedback vibrations, if configurable.
           *
 diff --git a/packages/SystemUI/res/values/cm_strings.xml b/packages/SystemUI/res/values/cm_strings.xml
-index 650f41cb52b0..735b69440da9 100644
+index c5995cdcebe..9c8ddae1cbf 100644
 --- a/packages/SystemUI/res/values/cm_strings.xml
 +++ b/packages/SystemUI/res/values/cm_strings.xml
-@@ -134,4 +134,12 @@
+@@ -136,4 +136,12 @@
  
      <!-- Biometric Dialog - Use Face -->
      <string name="biometric_dialog_button_use_face">Use Face</string>
@@ -389,7 +389,7 @@ index 650f41cb52b0..735b69440da9 100644
 +    <string name="applock_unlock">Unlock</string>
  </resources>
 diff --git a/packages/SystemUI/res/values/lineage_dimens.xml b/packages/SystemUI/res/values/lineage_dimens.xml
-index 843eca6ceae8..a37db7f166d3 100644
+index 843eca6ceae..a37db7f166d 100644
 --- a/packages/SystemUI/res/values/lineage_dimens.xml
 +++ b/packages/SystemUI/res/values/lineage_dimens.xml
 @@ -24,4 +24,7 @@
@@ -401,7 +401,7 @@ index 843eca6ceae8..a37db7f166d3 100644
 +    <dimen name="applock_icon_dimension">54dp</dimen>
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java
-index 7daad1ca7e79..8fb627087164 100644
+index 7daad1ca7e7..8fb62708716 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFaceView.java
 @@ -173,6 +173,11 @@ public class AuthBiometricFaceView extends AuthBiometricView {
@@ -417,10 +417,10 @@ index 7daad1ca7e79..8fb627087164 100644
      protected void onFinishInflate() {
          super.onFinishInflate();
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
-index 45ee4ad9ae50..9e0700450335 100644
+index c2671733ba0..1a86a999135 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricFingerprintView.java
-@@ -62,6 +62,11 @@ public class AuthBiometricFingerprintView extends AuthBiometricView {
+@@ -63,6 +63,11 @@ public class AuthBiometricFingerprintView extends AuthBiometricView {
          return false;
      }
  
@@ -433,7 +433,7 @@ index 45ee4ad9ae50..9e0700450335 100644
      public void updateState(@BiometricState int newState) {
          updateIcon(mState, newState);
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
-index a1982bfbb1e5..a663912e1a42 100644
+index 63c2b5390eb..38632614a7e 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthBiometricView.java
 @@ -16,6 +16,8 @@
@@ -445,19 +445,17 @@ index a1982bfbb1e5..a663912e1a42 100644
  import android.animation.Animator;
  import android.animation.AnimatorListenerAdapter;
  import android.animation.AnimatorSet;
-@@ -23,7 +25,11 @@ import android.animation.ValueAnimator;
- import android.annotation.IntDef;
- import android.annotation.NonNull;
- import android.annotation.Nullable;
-+import android.annotation.StringRes;
- import android.content.Context;
-+import android.content.pm.ApplicationInfo;
-+import android.content.pm.PackageManager;
-+import android.graphics.drawable.Drawable;
- import android.hardware.biometrics.BiometricPrompt;
- import android.os.Bundle;
+@@ -30,6 +32,9 @@ import android.os.Bundle;
  import android.os.Handler;
-@@ -174,6 +180,7 @@ public abstract class AuthBiometricView extends LinearLayout {
+ import android.os.Looper;
+ import android.text.TextUtils;
++import android.annotation.StringRes;
++import android.content.pm.ApplicationInfo;
++import android.graphics.drawable.Drawable;
+ import android.util.AttributeSet;
+ import android.util.Log;
+ import android.view.View;
+@@ -179,6 +184,7 @@ public abstract class AuthBiometricView extends LinearLayout {
      private TextView mSubtitleView;
      private TextView mDescriptionView;
      protected ImageView mIconView;
@@ -465,16 +463,16 @@ index a1982bfbb1e5..a663912e1a42 100644
      protected TextView mIndicatorView;
      @VisibleForTesting Button mNegativeButton;
      @VisibleForTesting Button mPositiveButton;
-@@ -192,6 +199,8 @@ public abstract class AuthBiometricView extends LinearLayout {
-     protected boolean mDialogSizeAnimating;
-     protected Bundle mSavedState;
+@@ -199,6 +205,8 @@ public abstract class AuthBiometricView extends LinearLayout {
+ 
+     protected boolean mHasFod;
  
 +    protected final PackageManager mPackageManager;
 +
      /**
       * Delay after authentication is confirmed, before the dialog should be animated away.
       */
-@@ -214,6 +223,12 @@ public abstract class AuthBiometricView extends LinearLayout {
+@@ -221,6 +229,12 @@ public abstract class AuthBiometricView extends LinearLayout {
       */
      protected abstract boolean supportsSmallDialog();
  
@@ -487,7 +485,7 @@ index a1982bfbb1e5..a663912e1a42 100644
      private final Runnable mResetErrorRunnable;
  
      private final Runnable mResetHelpRunnable;
-@@ -252,6 +267,8 @@ public abstract class AuthBiometricView extends LinearLayout {
+@@ -259,6 +273,8 @@ public abstract class AuthBiometricView extends LinearLayout {
          mInjector = injector;
          mInjector.mBiometricView = this;
  
@@ -495,8 +493,8 @@ index a1982bfbb1e5..a663912e1a42 100644
 +
          mAccessibilityManager = context.getSystemService(AccessibilityManager.class);
  
-         mResetErrorRunnable = () -> {
-@@ -599,6 +616,16 @@ public abstract class AuthBiometricView extends LinearLayout {
+         PackageManager packageManager = context.getPackageManager();
+@@ -610,6 +626,16 @@ public abstract class AuthBiometricView extends LinearLayout {
          mTryAgainButton = mInjector.getTryAgainButton();
          mUseFaceButton = mInjector.getUseFaceButton();
  
@@ -513,7 +511,7 @@ index a1982bfbb1e5..a663912e1a42 100644
          mNegativeButton.setOnClickListener((view) -> {
              if (mState == STATE_PENDING_CONFIRMATION) {
                  mCallback.onAction(Callback.ACTION_USER_CANCELED);
-@@ -651,8 +678,6 @@ public abstract class AuthBiometricView extends LinearLayout {
+@@ -662,8 +688,6 @@ public abstract class AuthBiometricView extends LinearLayout {
       */
      @VisibleForTesting
      void onAttachedToWindowInternal() {
@@ -522,7 +520,7 @@ index a1982bfbb1e5..a663912e1a42 100644
          final String negativeText;
          if (isDeviceCredentialAllowed()) {
  
-@@ -682,8 +707,33 @@ public abstract class AuthBiometricView extends LinearLayout {
+@@ -693,8 +717,33 @@ public abstract class AuthBiometricView extends LinearLayout {
          setTextOrHide(mSubtitleView,
                  mBiometricPromptBundle.getString(BiometricPrompt.KEY_SUBTITLE));
  
@@ -558,7 +556,7 @@ index a1982bfbb1e5..a663912e1a42 100644
  
          if (mSavedState == null) {
              updateState(STATE_AUTHENTICATING_ANIMATING_IN);
-@@ -726,6 +776,12 @@ public abstract class AuthBiometricView extends LinearLayout {
+@@ -750,6 +799,12 @@ public abstract class AuthBiometricView extends LinearLayout {
                          MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.EXACTLY),
                          MeasureSpec.makeMeasureSpec(child.getLayoutParams().height,
                                  MeasureSpec.EXACTLY));
@@ -571,7 +569,7 @@ index a1982bfbb1e5..a663912e1a42 100644
              } else {
                  child.measure(
                          MeasureSpec.makeMeasureSpec(newWidth, MeasureSpec.EXACTLY),
-@@ -733,7 +789,8 @@ public abstract class AuthBiometricView extends LinearLayout {
+@@ -757,7 +812,8 @@ public abstract class AuthBiometricView extends LinearLayout {
              }
  
              if (child.getVisibility() != View.GONE) {
@@ -582,7 +580,7 @@ index a1982bfbb1e5..a663912e1a42 100644
          }
  
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
-index f8718d0dbf23..2229dae54e9b 100644
+index f8718d0dbf2..2229dae54e9 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthContainerView.java
 @@ -299,6 +299,8 @@ public class AuthContainerView extends LinearLayout
@@ -611,7 +609,7 @@ index f8718d0dbf23..2229dae54e9b 100644
              if (mCredentialView != null && mCredentialView.isAttachedToWindow()) {
                  mCredentialView.animate()
 diff --git a/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java b/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java
-index 084b791a8dcd..008be41e6e76 100644
+index 084b791a8dc..008be41e6e7 100644
 --- a/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java
 +++ b/packages/SystemUI/src/com/android/systemui/biometrics/AuthCredentialView.java
 @@ -215,9 +215,35 @@ public abstract class AuthCredentialView extends LinearLayout {
@@ -653,7 +651,7 @@ index 084b791a8dcd..008be41e6e76 100644
  
          if (mIconView != null) {
 diff --git a/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java b/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java
-index e2361d8f415a..500c24043cd4 100644
+index e2361d8f415..500c24043cd 100644
 --- a/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java
 +++ b/packages/SystemUI/src/com/android/systemui/dagger/SystemServicesModule.java
 @@ -21,6 +21,7 @@ import android.annotation.SuppressLint;
@@ -676,7 +674,7 @@ index e2361d8f415a..500c24043cd4 100644
 +    }
  }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java
-index 5bee9a762f6f..a7f3e889a17b 100644
+index 5bee9a762f6..a7f3e889a17 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationViewHierarchyManager.java
 @@ -175,11 +175,12 @@ public class NotificationViewHierarchyManager implements DynamicPrivacyControlle
@@ -696,7 +694,7 @@ index 5bee9a762f6f..a7f3e889a17b 100644
              ent.getRow().setNeedsRedaction(needsRedaction);
              mLowPriorityInflationHelper.recheckLowPriorityViewAndInflate(ent, ent.getRow());
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java
-index 9fd729f425c1..96157905724d 100644
+index 9fd729f425c..96157905724 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/NotificationEntryManager.java
 @@ -23,6 +23,8 @@ import static com.android.systemui.statusbar.notification.row.NotificationRowCon
@@ -761,7 +759,7 @@ index 9fd729f425c1..96157905724d 100644
              listener.onEntryBind(entry, notification);
          }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java
-index bd65ef06f3a9..b441e0a2f5c3 100644
+index bd65ef06f3a..b441e0a2f5c 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/NotificationEntry.java
 @@ -40,9 +40,11 @@ import android.app.Notification;
@@ -848,7 +846,7 @@ index bd65ef06f3a9..b441e0a2f5c3 100644
      public void setRow(ExpandableNotificationRow row) {
          this.row = row;
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java
-index 673aa3903156..19fddca185e1 100644
+index 673aa390315..19fddca185e 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/collection/inflation/NotificationRowBinderImpl.java
 @@ -240,7 +240,8 @@ public class NotificationRowBinderImpl implements NotificationRowBinder {
@@ -862,7 +860,7 @@ index 673aa3903156..19fddca185e1 100644
          params.rebindAllContentViews();
          mRowContentBindStage.requestRebind(entry, en -> {
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java
-index c37e93d4fcc5..60aae526ead4 100644
+index c37e93d4fcc..60aae526ead 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/dagger/NotificationsModule.java
 @@ -16,6 +16,7 @@
@@ -890,7 +888,7 @@ index c37e93d4fcc5..60aae526ead4 100644
                  groupManager,
                  rankingManager,
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java
-index eeb91b548d65..c20db2cb1032 100644
+index eeb91b548d6..c20db2cb103 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/interruption/NotificationInterruptStateProviderImpl.java
 @@ -130,6 +130,10 @@ public class NotificationInterruptStateProviderImpl implements NotificationInter
@@ -917,7 +915,7 @@ index eeb91b548d65..c20db2cb1032 100644
  
          if (!mUseHeadsUp) {
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
-index 70dd80e71e7a..6973a6ad802a 100644
+index 70dd80e71e7..6973a6ad802 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/ExpandableNotificationRow.java
 @@ -2310,7 +2310,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView
@@ -973,7 +971,7 @@ index 70dd80e71e7a..6973a6ad802a 100644
  
      public void makeActionsVisibile() {
 diff --git a/services/core/java/com/android/server/biometrics/AuthenticationClient.java b/services/core/java/com/android/server/biometrics/AuthenticationClient.java
-index 8ca37b813b63..e1d9fd7e2875 100644
+index 8ca37b813b6..e1d9fd7e287 100644
 --- a/services/core/java/com/android/server/biometrics/AuthenticationClient.java
 +++ b/services/core/java/com/android/server/biometrics/AuthenticationClient.java
 @@ -30,6 +30,9 @@ import android.security.KeyStore;
@@ -997,7 +995,7 @@ index 8ca37b813b63..e1d9fd7e2875 100644
                      final List<ActivityManager.RunningTaskInfo> tasks =
                              ActivityTaskManager.getService().getTasks(1);
 diff --git a/services/core/java/com/android/server/locksettings/LockSettingsService.java b/services/core/java/com/android/server/locksettings/LockSettingsService.java
-index b254c08c7316..8e3a88aadd6b 100644
+index b254c08c731..8e3a88aadd6 100644
 --- a/services/core/java/com/android/server/locksettings/LockSettingsService.java
 +++ b/services/core/java/com/android/server/locksettings/LockSettingsService.java
 @@ -129,6 +129,7 @@ import com.android.server.locksettings.LockSettingsStorage.PersistentData;
@@ -1017,7 +1015,7 @@ index b254c08c7316..8e3a88aadd6b 100644
      }
  
 diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
-index e01b685e5b00..a256aab8ffea 100644
+index e01b685e5b0..a256aab8ffe 100644
 --- a/services/core/java/com/android/server/wm/ActivityRecord.java
 +++ b/services/core/java/com/android/server/wm/ActivityRecord.java
 @@ -152,6 +152,7 @@ import static com.android.server.wm.ActivityStack.STACK_VISIBILITY_VISIBLE;
@@ -1102,7 +1100,7 @@ index e01b685e5b00..a256aab8ffea 100644
  
      /**
 diff --git a/services/core/java/com/android/server/wm/ActivityStarter.java b/services/core/java/com/android/server/wm/ActivityStarter.java
-index 54ad4acaca4c..9b2628208eb8 100644
+index 54ad4acaca4..9b2628208eb 100644
 --- a/services/core/java/com/android/server/wm/ActivityStarter.java
 +++ b/services/core/java/com/android/server/wm/ActivityStarter.java
 @@ -62,11 +62,13 @@ import static com.android.server.wm.ActivityStackSupervisor.ON_TOP;
@@ -1144,7 +1142,7 @@ index 54ad4acaca4c..9b2628208eb8 100644
          if (!abort) {
              try {
 diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java b/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java
-index da0bfd67e353..59175c002332 100644
+index da0bfd67e35..59175c00233 100644
 --- a/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java
 +++ b/services/core/java/com/android/server/wm/ActivityTaskManagerDebugConfig.java
 @@ -32,7 +32,7 @@ public class ActivityTaskManagerDebugConfig {
@@ -1171,7 +1169,7 @@ index da0bfd67e353..59175c002332 100644
 +    public static final String POSTFIX_APPLOCK = APPEND_CATEGORY_NAME ? "_AppLock" : "";
  }
 diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
-index ec178a4b543f..5d45573e3e56 100644
+index ec178a4b543..5d45573e3e5 100644
 --- a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
 +++ b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
 @@ -345,6 +345,8 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
@@ -1270,7 +1268,7 @@ index ec178a4b543f..5d45573e3e56 100644
       * not.
 diff --git a/services/core/java/com/android/server/wm/AppLockService.java b/services/core/java/com/android/server/wm/AppLockService.java
 new file mode 100644
-index 000000000000..1aca448b081f
+index 00000000000..1aca448b081
 --- /dev/null
 +++ b/services/core/java/com/android/server/wm/AppLockService.java
 @@ -0,0 +1,867 @@
@@ -2142,7 +2140,7 @@ index 000000000000..1aca448b081f
 +    }
 +}
 diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
-index 5c12f2043258..7be4cc46c272 100644
+index 5c12f204325..7be4cc46c27 100644
 --- a/services/java/com/android/server/SystemServer.java
 +++ b/services/java/com/android/server/SystemServer.java
 @@ -177,6 +177,7 @@ import com.android.server.utils.TimingsTraceAndSlog;
@@ -2165,5 +2163,5 @@ index 5c12f2043258..7be4cc46c272 100644
              SignedConfigService.registerUpdateReceiver(mSystemContext);
              t.traceEnd();
 -- 
-2.25.1
+2.32.0
 

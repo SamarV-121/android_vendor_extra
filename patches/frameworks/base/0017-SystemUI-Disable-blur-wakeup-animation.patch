@@ -1,7 +1,7 @@
-From e7a3735ed1dd7658112c1cf35c3852b8bac2ba52 Mon Sep 17 00:00:00 2001
+From 8077fec9a70b6299cb36ea26a33091c3f31467e8 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 6 Nov 2020 12:52:59 -0800
-Subject: [PATCH 17/60] SystemUI: Disable blur wakeup animation
+Subject: [PATCH 17/61] SystemUI: Disable blur wakeup animation
 
 This animation looks distracting and prevents the user from seeing
 anything during the unlock animation.
@@ -12,7 +12,7 @@ Change-Id: I2c8ff9e6a9ec361595bc725d971a51e91acc13a2
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
-index 20ab40570c02..5bec68549c1d 100644
+index 20ab40570c0..5bec68549c1 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 @@ -65,7 +65,7 @@ class NotificationShadeDepthController @Inject constructor(
@@ -25,5 +25,5 @@ index 20ab40570c02..5bec68549c1d 100644
          private const val MAX_VELOCITY = 3000f
          private const val MIN_VELOCITY = -MAX_VELOCITY
 -- 
-2.25.1
+2.32.0
 

@@ -1,7 +1,7 @@
-From 6798d1856bcea2a02b3aea0b56c088f73fc30cbf Mon Sep 17 00:00:00 2001
+From 6a72d370dbc31b9044cf462a2e2d51c744122910 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhsv09@gmail.com>
 Date: Tue, 15 Jun 2021 20:57:40 -0300
-Subject: [PATCH 56/60] AppLock: Don't trigger if starting new intent of
+Subject: [PATCH 56/61] AppLock: Don't trigger if starting new intent of
  current running package
 
 Change-Id: I26d1fe4e37d2c86a8de12714634c1da0745ad0da
@@ -10,7 +10,7 @@ Change-Id: I26d1fe4e37d2c86a8de12714634c1da0745ad0da
  1 file changed, 7 insertions(+), 1 deletion(-)
 
 diff --git a/services/core/java/com/android/server/wm/ActivityStarter.java b/services/core/java/com/android/server/wm/ActivityStarter.java
-index 9b2628208eb8..a852e8b1d3c9 100644
+index 9b2628208eb..a852e8b1d3c 100644
 --- a/services/core/java/com/android/server/wm/ActivityStarter.java
 +++ b/services/core/java/com/android/server/wm/ActivityStarter.java
 @@ -830,6 +830,11 @@ class ActivityStarter {
@@ -36,5 +36,5 @@ index 9b2628208eb8..a852e8b1d3c9 100644
              mService.mAppLockService.setAppIntent(pkg, intent);
              mService.mAppLockService.launchBeforeActivity(pkg);
 -- 
-2.25.1
+2.32.0
 

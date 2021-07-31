@@ -1,7 +1,7 @@
-From eb0633c7d461fd48dcc595a28156f0b36a38bba4 Mon Sep 17 00:00:00 2001
+From f90cdf3d0aefd077ce62bc8d278d557be6cf40b9 Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Tue, 13 Apr 2021 14:57:01 +0530
-Subject: [PATCH 47/60] base: Make power button press fp unlock toggleable
+Subject: [PATCH 47/61] base: Make power button press fp unlock toggleable
  [1/2]
 
 Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
@@ -13,7 +13,7 @@ Change-Id: I2fcaeb512898cf25af80b4b28b1c700e03c0f671
  3 files changed, 15 insertions(+), 4 deletions(-)
 
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 2e2ae5bc7f85..f77c50093815 100755
+index 2e2ae5bc7f8..f77c5009381 100755
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -8441,6 +8441,17 @@ public final class Settings {
@@ -35,7 +35,7 @@ index 2e2ae5bc7f85..f77c50093815 100755
           * Whether or not debugging is enabled.
           * @hide
 diff --git a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
-index df1ab8e3f333..b7faf125cbcb 100644
+index df1ab8e3f33..b7faf125cbc 100644
 --- a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 +++ b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 @@ -690,9 +690,7 @@ public abstract class BiometricServiceBase extends SystemService
@@ -50,7 +50,7 @@ index df1ab8e3f333..b7faf125cbcb 100644
  
      @Override
 diff --git a/services/core/java/com/android/server/biometrics/Utils.java b/services/core/java/com/android/server/biometrics/Utils.java
-index 2c281ef927e4..5961b56e2b9b 100644
+index 2c281ef927e..5961b56e2b9 100644
 --- a/services/core/java/com/android/server/biometrics/Utils.java
 +++ b/services/core/java/com/android/server/biometrics/Utils.java
 @@ -337,6 +337,8 @@ public class Utils {
@@ -64,5 +64,5 @@ index 2c281ef927e4..5961b56e2b9b 100644
      }
  }
 -- 
-2.25.1
+2.32.0
 

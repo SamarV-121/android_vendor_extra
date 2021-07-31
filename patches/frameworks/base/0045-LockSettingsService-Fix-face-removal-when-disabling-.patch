@@ -1,7 +1,7 @@
-From 6f8b0948d8bd26bc0538be36cf3ccf8fa9aff727 Mon Sep 17 00:00:00 2001
+From b57402b608a30f480bd8a77330b72c73f3272dda Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 27 Mar 2021 20:48:48 -0300
-Subject: [PATCH 45/60] LockSettingsService: Fix face removal when disabling
+Subject: [PATCH 45/61] LockSettingsService: Fix face removal when disabling
  security
 
 Change-Id: I291e73b292263784893e1a2d4fc21145acfec9bd
@@ -10,7 +10,7 @@ Change-Id: I291e73b292263784893e1a2d4fc21145acfec9bd
  1 file changed, 5 insertions(+)
 
 diff --git a/services/core/java/com/android/server/locksettings/LockSettingsService.java b/services/core/java/com/android/server/locksettings/LockSettingsService.java
-index 659e7efe7b27..b254c08c7316 100644
+index 659e7efe7b2..b254c08c731 100644
 --- a/services/core/java/com/android/server/locksettings/LockSettingsService.java
 +++ b/services/core/java/com/android/server/locksettings/LockSettingsService.java
 @@ -167,6 +167,8 @@ import javax.crypto.NoSuchPaddingException;
@@ -33,5 +33,5 @@ index 659e7efe7b27..b254c08c7316 100644
                  try {
                      latch.await(10000, TimeUnit.MILLISECONDS);
 -- 
-2.25.1
+2.32.0
 

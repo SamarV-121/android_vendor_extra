@@ -1,7 +1,7 @@
-From ef678eb8a4921642bdf181bae9a210fc5fab5d72 Mon Sep 17 00:00:00 2001
+From 4070c3e4e7b27e6f554ab715820689aabc74fce7 Mon Sep 17 00:00:00 2001
 From: cjybyjk <cjybyjk@zjnu.edu.cn>
 Date: Sat, 5 Sep 2020 08:44:29 +0800
-Subject: [PATCH 49/60] audio: support set volume for app [2/2]
+Subject: [PATCH 49/61] audio: support set volume for app [2/2]
 
 Signed-off-by: cjybyjk <cjybyjk@zjnu.edu.cn>
 Change-Id: If7c467ba8c2332a1fc1efe8068fd4838dcca60f8
@@ -14,7 +14,7 @@ Change-Id: If7c467ba8c2332a1fc1efe8068fd4838dcca60f8
  create mode 100644 media/java/android/media/AppTrackData.java
 
 diff --git a/core/jni/android_media_AudioSystem.cpp b/core/jni/android_media_AudioSystem.cpp
-index 22bb2102a6e1..abcc0f7f7ebd 100644
+index 22bb2102a6e..abcc0f7f7eb 100644
 --- a/core/jni/android_media_AudioSystem.cpp
 +++ b/core/jni/android_media_AudioSystem.cpp
 @@ -29,6 +29,7 @@
@@ -169,7 +169,7 @@ index 22bb2102a6e1..abcc0f7f7ebd 100644
      gAudioMixPortCstor = GetMethodIDOrDie(env, audioMixPortClass, "<init>",
 diff --git a/media/java/android/media/AppTrackData.java b/media/java/android/media/AppTrackData.java
 new file mode 100644
-index 000000000000..18c9279b2f97
+index 00000000000..18c9279b2f9
 --- /dev/null
 +++ b/media/java/android/media/AppTrackData.java
 @@ -0,0 +1,53 @@
@@ -227,7 +227,7 @@ index 000000000000..18c9279b2f97
 +    }
 +}
 diff --git a/media/java/android/media/AudioManager.java b/media/java/android/media/AudioManager.java
-index 70e0409be587..fef0e3688576 100755
+index 70e0409be58..fef0e368857 100755
 --- a/media/java/android/media/AudioManager.java
 +++ b/media/java/android/media/AudioManager.java
 @@ -927,6 +927,32 @@ public class AudioManager {
@@ -264,7 +264,7 @@ index 70e0409be587..fef0e3688576 100755
       * Returns the current ringtone mode.
       *
 diff --git a/media/java/android/media/AudioSystem.java b/media/java/android/media/AudioSystem.java
-index 842ab7c8d154..48036c9704b2 100644
+index 842ab7c8d15..48036c9704b 100644
 --- a/media/java/android/media/AudioSystem.java
 +++ b/media/java/android/media/AudioSystem.java
 @@ -1739,6 +1739,21 @@ public class AudioSystem
@@ -290,5 +290,5 @@ index 842ab7c8d154..48036c9704b2 100644
  
      /**
 -- 
-2.25.1
+2.32.0
 

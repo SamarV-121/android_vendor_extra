@@ -1,7 +1,7 @@
-From 15bdddbb0e6e8149815e2feb9e6ba58880daf79e Mon Sep 17 00:00:00 2001
+From 5cd53e277f165cecc0381dbab70c22403f8fd39a Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 20 Nov 2020 11:34:54 -0300
-Subject: [PATCH 5/8] init: Weaken property override security only when
+Subject: [PATCH 5/9] init: Weaken property override security only when
  spoofing safetynet
 
 Change-Id: I740afaa27de82bec1e6d58b58d431141ca6b4e3f
@@ -64,5 +64,5 @@ index 49cdb62..2e9ccf0 100644
  
  bool LoadPropertyInfoFromFile(const std::string& filename,
 -- 
-2.30.1
+2.32.0
 

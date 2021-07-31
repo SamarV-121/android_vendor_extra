@@ -1,7 +1,7 @@
-From 0b12ae682400d86ce8351072aa1688aa625a751a Mon Sep 17 00:00:00 2001
+From f70353277793c76fd20a1d9e1e85d566c0981d95 Mon Sep 17 00:00:00 2001
 From: Pranav Kapoor <pranavkapoor001@gmail.com>
 Date: Thu, 8 Apr 2021 20:34:51 +0530
-Subject: [PATCH 54/60] base: applock: Add option to instantly lock app on
+Subject: [PATCH 54/61] base: applock: Add option to instantly lock app on
  closing [1/2]
 
 Signed-off-by: Pranav Kapoor <pranavkapoor001@gmail.com>
@@ -16,7 +16,7 @@ Change-Id: Ic527789a4f06be7458dc293f9ab4e2c25681f4bd
  create mode 100755 core/java/android/provider/Settings.java.orig
 
 diff --git a/core/java/android/app/AppLockManager.java b/core/java/android/app/AppLockManager.java
-index 1b2968bcdff6..28c6c3cf921a 100644
+index 1b2968bcdff..28c6c3cf921 100644
 --- a/core/java/android/app/AppLockManager.java
 +++ b/core/java/android/app/AppLockManager.java
 @@ -72,17 +72,17 @@ public class AppLockManager {
@@ -42,7 +42,7 @@ index 1b2968bcdff6..28c6c3cf921a 100644
              throw e.rethrowFromSystemServer();
          }
 diff --git a/core/java/android/app/IAppLockService.aidl b/core/java/android/app/IAppLockService.aidl
-index e9e1a99b7c0e..d97086f73bb6 100644
+index e9e1a99b7c0..d97086f73bb 100644
 --- a/core/java/android/app/IAppLockService.aidl
 +++ b/core/java/android/app/IAppLockService.aidl
 @@ -29,9 +29,9 @@ interface IAppLockService {
@@ -58,7 +58,7 @@ index e9e1a99b7c0e..d97086f73bb6 100644
      int getLockedAppsCount();
  
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index c3bac2cd006f..de116fe898e7 100755
+index c3bac2cd006..de116fe898e 100755
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -4116,11 +4116,10 @@ public final class Settings {
@@ -77,7 +77,7 @@ index c3bac2cd006f..de116fe898e7 100755
           * The intensity of haptic feedback vibrations, if configurable.
 diff --git a/core/java/android/provider/Settings.java.orig b/core/java/android/provider/Settings.java.orig
 new file mode 100755
-index 000000000000..37109cffefd5
+index 00000000000..37109cffefd
 --- /dev/null
 +++ b/core/java/android/provider/Settings.java.orig
 @@ -0,0 +1,15299 @@
@@ -15381,7 +15381,7 @@ index 000000000000..37109cffefd5
 +    }
 +}
 diff --git a/services/core/java/com/android/server/wm/AppLockService.java b/services/core/java/com/android/server/wm/AppLockService.java
-index 1aca448b081f..1d931cd57077 100644
+index 1aca448b081..1d931cd5707 100644
 --- a/services/core/java/com/android/server/wm/AppLockService.java
 +++ b/services/core/java/com/android/server/wm/AppLockService.java
 @@ -105,8 +105,11 @@ public class AppLockService extends SystemService {
@@ -15474,5 +15474,5 @@ index 1aca448b081f..1d931cd57077 100644
                      }
                      break;
 -- 
-2.25.1
+2.32.0
 

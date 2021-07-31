@@ -1,7 +1,7 @@
-From 4ef54eba005bf8ccb26d6f58acd4b0764229bef7 Mon Sep 17 00:00:00 2001
+From 8a9266a878525eeb83ff80b7a73ffa7aece24c6a Mon Sep 17 00:00:00 2001
 From: Egor Pasko <pasko@google.com>
 Date: Tue, 8 Jun 2021 19:01:38 +0200
-Subject: [PATCH 58/60] Allow app zygote preload to retain files across fork
+Subject: [PATCH 58/61] Allow app zygote preload to retain files across fork
 
 The bug proposes to 'move' the /proc/self/fd/ readlink/stat/etc checks
 performed by the FileDescriptorAllowlist from before-fork to an earlier
@@ -46,7 +46,7 @@ Change-Id: Ie302eabca83a0e4f409cb131e4308b73e5f6a580
  5 files changed, 136 insertions(+), 39 deletions(-)
 
 diff --git a/core/java/com/android/internal/os/AppZygoteInit.java b/core/java/com/android/internal/os/AppZygoteInit.java
-index 0e83e41a7423..f925afc2a921 100644
+index 0e83e41a742..f925afc2a92 100644
 --- a/core/java/com/android/internal/os/AppZygoteInit.java
 +++ b/core/java/com/android/internal/os/AppZygoteInit.java
 @@ -91,7 +91,9 @@ class AppZygoteInit {
@@ -60,7 +60,7 @@ index 0e83e41a7423..f925afc2a921 100644
                  } catch (ReflectiveOperationException e) {
                      Log.e(TAG, "AppZygote application preload failed for "
 diff --git a/core/java/com/android/internal/os/Zygote.java b/core/java/com/android/internal/os/Zygote.java
-index 26d4293bd3b5..bd703553f3b1 100644
+index 26d4293bd3b..bd703553f3b 100644
 --- a/core/java/com/android/internal/os/Zygote.java
 +++ b/core/java/com/android/internal/os/Zygote.java
 @@ -498,6 +498,36 @@ public final class Zygote {
@@ -101,7 +101,7 @@ index 26d4293bd3b5..bd703553f3b1 100644
       * Installs a seccomp filter that limits setresuid()/setresgid() to the passed-in range
       * @param uidGidMin The smallest allowed uid/gid
 diff --git a/core/jni/com_android_internal_os_Zygote.cpp b/core/jni/com_android_internal_os_Zygote.cpp
-index c57e500128b3..226edbf2a370 100644
+index c57e500128b..226edbf2a37 100644
 --- a/core/jni/com_android_internal_os_Zygote.cpp
 +++ b/core/jni/com_android_internal_os_Zygote.cpp
 @@ -36,9 +36,11 @@
@@ -226,7 +226,7 @@ index c57e500128b3..226edbf2a370 100644
 +}  // namespace android
 \ No newline at end of file
 diff --git a/core/jni/fd_utils.cpp b/core/jni/fd_utils.cpp
-index 49d75dc35e64..d555ed9c2171 100644
+index 49d75dc35e6..d555ed9c217 100644
 --- a/core/jni/fd_utils.cpp
 +++ b/core/jni/fd_utils.cpp
 @@ -60,7 +60,6 @@ static const char* kPathWhitelist[] = {
@@ -381,7 +381,7 @@ index 49d75dc35e64..d555ed9c2171 100644
    const int fd = strtol(dir_entry->d_name, &end, 10);
    if ((*end) != '\0') {
 diff --git a/core/jni/fd_utils.h b/core/jni/fd_utils.h
-index 2caf1575981a..62bb82e39ebe 100644
+index 2caf1575981..62bb82e39eb 100644
 --- a/core/jni/fd_utils.h
 +++ b/core/jni/fd_utils.h
 @@ -71,6 +71,9 @@ class FileDescriptorWhitelist {
@@ -419,5 +419,5 @@ index 2caf1575981a..62bb82e39ebe 100644
    std::unordered_map<int, FileDescriptorInfo*> open_fd_map_;
  
 -- 
-2.25.1
+2.32.0
 

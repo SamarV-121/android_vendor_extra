@@ -1,7 +1,7 @@
-From 9d006e74688e33a198cee1d99033ca798443dac2 Mon Sep 17 00:00:00 2001
+From 624921a8f1d7f2dd29808382b9af394b6ee0b412 Mon Sep 17 00:00:00 2001
 From: Alex Naidis <alex.naidis@linux.com>
 Date: Sun, 9 Apr 2017 01:29:27 +0200
-Subject: [PATCH 2/8] init: Weaken property override security for the init
+Subject: [PATCH 2/9] init: Weaken property override security for the init
  extension
 
 Sometimes we need to override ro.* properties by using our vendor init
@@ -65,5 +65,5 @@ index 42dd5af..058758a 100644
          update_sys_usb_config();
      }
 -- 
-2.30.1
+2.32.0
 

@@ -1,7 +1,7 @@
-From e39f13bdf3121e3b2627bf39744e70f13bc87d2f Mon Sep 17 00:00:00 2001
+From 49b080776b00f34024e4b8327532095b940cc6e5 Mon Sep 17 00:00:00 2001
 From: cjybyjk <cjybyjk@zjnu.edu.cn>
 Date: Sat, 5 Sep 2020 17:17:04 +0800
-Subject: [PATCH 50/60] SystemUI: add app volume row to volume dialog
+Subject: [PATCH 50/61] SystemUI: add app volume row to volume dialog
 
 Signed-off-by: cjybyjk <cjybyjk@zjnu.edu.cn>
 Change-Id: Ide78f3d27c3c0077ddf96279e3cac4f60f31411e
@@ -13,7 +13,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  3 files changed, 106 insertions(+), 2 deletions(-)
 
 diff --git a/packages/SystemUI/res/layout/volume_dialog_row.xml b/packages/SystemUI/res/layout/volume_dialog_row.xml
-index 6128da8627a9..bcfbd74cc411 100644
+index 6128da8627a..bcfbd74cc41 100644
 --- a/packages/SystemUI/res/layout/volume_dialog_row.xml
 +++ b/packages/SystemUI/res/layout/volume_dialog_row.xml
 @@ -58,12 +58,25 @@
@@ -43,7 +43,7 @@ index 6128da8627a9..bcfbd74cc411 100644
  
      <include layout="@layout/volume_dnd_icon"/>
 diff --git a/packages/SystemUI/res/values/lineage_dimens.xml b/packages/SystemUI/res/values/lineage_dimens.xml
-index 8f42ea0b873d..843eca6ceae8 100644
+index 8f42ea0b873..843eca6ceae 100644
 --- a/packages/SystemUI/res/values/lineage_dimens.xml
 +++ b/packages/SystemUI/res/values/lineage_dimens.xml
 @@ -21,4 +21,7 @@
@@ -55,7 +55,7 @@ index 8f42ea0b873d..843eca6ceae8 100644
 +    <dimen name="volume_row_app_icon_padding">8dp</dimen>
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
-index 3208f9779e26..bbeea8107707 100644
+index 4cc2cb09ac1..9d729143081 100644
 --- a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
 +++ b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
 @@ -55,11 +55,16 @@ import android.content.res.Configuration;
@@ -102,7 +102,7 @@ index 3208f9779e26..bbeea8107707 100644
      }
  
      @Override
-@@ -465,6 +476,51 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -464,6 +475,51 @@ public class VolumeDialogImpl implements VolumeDialog,
          mRows.add(row);
      }
  
@@ -154,7 +154,7 @@ index 3208f9779e26..bbeea8107707 100644
      private void addExistingRows() {
          int N = mRows.size();
          for (int i = 0; i < N; i++) {
-@@ -538,6 +594,7 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -537,6 +593,7 @@ public class VolumeDialogImpl implements VolumeDialog,
  
          row.icon = row.view.findViewById(R.id.volume_row_icon);
          row.icon.setImageResource(iconRes);
@@ -162,7 +162,7 @@ index 3208f9779e26..bbeea8107707 100644
          if (row.stream != AudioSystem.STREAM_ACCESSIBILITY) {
              row.icon.setOnClickListener(v -> {
                  Events.writeEvent(Events.EVENT_ICON_CLICK, row.stream, row.iconState);
-@@ -582,6 +639,22 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -581,6 +638,22 @@ public class VolumeDialogImpl implements VolumeDialog,
          if (!isNotificationVolumeLinked()) {
              setVisOrGone(AudioManager.STREAM_NOTIFICATION, expand);
          }
@@ -185,7 +185,7 @@ index 3208f9779e26..bbeea8107707 100644
      }
  
      private void animateExpandedRowsChange(boolean expand) {
-@@ -1176,6 +1249,11 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -1175,6 +1248,11 @@ public class VolumeDialogImpl implements VolumeDialog,
          mDialogRowsView.removeView(volumeRow.view);
      }
  
@@ -197,7 +197,7 @@ index 3208f9779e26..bbeea8107707 100644
      protected void onStateChangedH(State state) {
          if (D.BUG) Log.d(TAG, "onStateChangedH() state: " + state.toString());
          if (mShowing && mState != null && state != null
-@@ -1615,10 +1693,14 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -1614,10 +1692,14 @@ public class VolumeDialogImpl implements VolumeDialog,
          @Override
          public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
              rescheduleTimeoutH();
@@ -213,7 +213,7 @@ index 3208f9779e26..bbeea8107707 100644
              if (mRow.ss.levelMin > 0) {
                  final int minProgress = mRow.ss.levelMin * 100;
                  if (progress < minProgress) {
-@@ -1641,15 +1723,17 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -1640,15 +1722,17 @@ public class VolumeDialogImpl implements VolumeDialog,
  
          @Override
          public void onStartTrackingTouch(SeekBar seekBar) {
@@ -232,7 +232,7 @@ index 3208f9779e26..bbeea8107707 100644
              mRow.userAttempt = SystemClock.uptimeMillis();
              final int userLevel = getImpliedLevel(seekBar, seekBar.getProgress());
              Events.writeEvent(Events.EVENT_TOUCH_LEVEL_DONE, mRow.stream, userLevel);
-@@ -1700,5 +1784,9 @@ public class VolumeDialogImpl implements VolumeDialog,
+@@ -1699,5 +1783,9 @@ public class VolumeDialogImpl implements VolumeDialog,
          private int animTargetProgress;
          private int lastAudibleLevel = 2;
          private FrameLayout dndIcon;
@@ -243,5 +243,5 @@ index 3208f9779e26..bbeea8107707 100644
      }
  }
 -- 
-2.25.1
+2.32.0
 

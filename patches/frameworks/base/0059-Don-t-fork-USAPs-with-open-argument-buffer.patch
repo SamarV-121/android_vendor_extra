@@ -1,7 +1,7 @@
-From f300fb91a87a110bc8bb78e37367dc519144bd76 Mon Sep 17 00:00:00 2001
+From cc495100d7be2cbe50bdfcb7540cb2ed2c45eaa3 Mon Sep 17 00:00:00 2001
 From: Hans Boehm <hboehm@google.com>
 Date: Tue, 23 Mar 2021 11:31:43 -0700
-Subject: [PATCH 59/60] Don't fork USAPs with open argument buffer
+Subject: [PATCH 59/61] Don't fork USAPs with open argument buffer
 
 Delay execution of any zygote command that may end up forking USAPs
 until we've released our own ZygoteCommandBuffer. Otherwise we fork
@@ -16,7 +16,7 @@ Change-Id: I2366367d2155a120092fbdcae13cbb3d7f4e1d16
  1 file changed, 16 insertions(+), 13 deletions(-)
 
 diff --git a/core/java/com/android/internal/os/ZygoteConnection.java b/core/java/com/android/internal/os/ZygoteConnection.java
-index 060689a3f657..47826b3c46ef 100644
+index 060689a3f65..47826b3c46e 100644
 --- a/core/java/com/android/internal/os/ZygoteConnection.java
 +++ b/core/java/com/android/internal/os/ZygoteConnection.java
 @@ -149,8 +149,11 @@ class ZygoteConnection {
@@ -74,5 +74,5 @@ index 060689a3f657..47826b3c46ef 100644
      }
  
 -- 
-2.25.1
+2.32.0
 

@@ -1,7 +1,7 @@
-From cb8d10965c83dfeca35732eaf5ef75e41da6b4d3 Mon Sep 17 00:00:00 2001
+From 2bab1243c07a32ae1400d9d0af2f2e142ac9c03f Mon Sep 17 00:00:00 2001
 From: jie shen <jie.shen@unisoc.com>
 Date: Wed, 29 Jul 2020 10:27:51 +0800
-Subject: [PATCH 26/60] Add isFaceAuthEnabledForUser checks in
+Subject: [PATCH 26/61] Add isFaceAuthEnabledForUser checks in
  KeyguardLiftController
 
 When request pick gesture sensor, judge that if the current user does not turn on the face unlocking function, the sensor should not be Listening
@@ -16,7 +16,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt
-index 74d9f5402e36..bfe0684b5411 100644
+index 74d9f5402e3..bfe0684b541 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt
 @@ -84,7 +84,9 @@ class KeyguardLiftController constructor(
@@ -38,5 +38,5 @@ index 74d9f5402e36..bfe0684b5411 100644
 \ No newline at end of file
 +}
 -- 
-2.25.1
+2.32.0
 

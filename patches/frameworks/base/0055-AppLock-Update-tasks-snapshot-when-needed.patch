@@ -1,7 +1,7 @@
-From c0158c7e2e2919c1432bcdd8386f035989aee17d Mon Sep 17 00:00:00 2001
+From e1e153be565c524a992b6bbaa0c50325ab25fa35 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhsv09@gmail.com>
 Date: Tue, 15 Jun 2021 19:37:18 -0300
-Subject: [PATCH 55/60] AppLock: Update tasks snapshot when needed
+Subject: [PATCH 55/61] AppLock: Update tasks snapshot when needed
 
 * After 15 seconds timeout or when device is locked
 
@@ -14,7 +14,7 @@ Change-Id: I29eb4bc3912ceda9958439c4fc79bded2b124ae8
  4 files changed, 65 insertions(+), 5 deletions(-)
 
 diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
-index a256aab8ffea..31d260ac3450 100644
+index a256aab8ffe..31d260ac345 100644
 --- a/services/core/java/com/android/server/wm/ActivityRecord.java
 +++ b/services/core/java/com/android/server/wm/ActivityRecord.java
 @@ -4392,7 +4392,7 @@ final class ActivityRecord extends WindowToken implements WindowManagerService.A
@@ -27,7 +27,7 @@ index a256aab8ffea..31d260ac3450 100644
  
      /**
 diff --git a/services/core/java/com/android/server/wm/Task.java b/services/core/java/com/android/server/wm/Task.java
-index b19b8c1ce10b..708bb81ec4df 100644
+index b19b8c1ce10..708bb81ec4d 100644
 --- a/services/core/java/com/android/server/wm/Task.java
 +++ b/services/core/java/com/android/server/wm/Task.java
 @@ -307,6 +307,9 @@ class Task extends WindowContainer<WindowContainer> {
@@ -61,7 +61,7 @@ index b19b8c1ce10b..708bb81ec4df 100644
          if (intent == null) {
              mNeverRelinquishIdentity =
 diff --git a/services/core/java/com/android/server/wm/TaskSnapshotCache.java b/services/core/java/com/android/server/wm/TaskSnapshotCache.java
-index 0edfaa8b9707..69a3e81a163d 100644
+index 0edfaa8b970..69a3e81a163 100644
 --- a/services/core/java/com/android/server/wm/TaskSnapshotCache.java
 +++ b/services/core/java/com/android/server/wm/TaskSnapshotCache.java
 @@ -39,6 +39,10 @@ class TaskSnapshotCache {
@@ -109,7 +109,7 @@ index 0edfaa8b9707..69a3e81a163d 100644
      }
  }
 diff --git a/services/core/java/com/android/server/wm/TaskSnapshotController.java b/services/core/java/com/android/server/wm/TaskSnapshotController.java
-index 3c0cb17af603..a569a7729ba8 100644
+index 3c0cb17af60..a569a7729ba 100644
 --- a/services/core/java/com/android/server/wm/TaskSnapshotController.java
 +++ b/services/core/java/com/android/server/wm/TaskSnapshotController.java
 @@ -25,6 +25,8 @@ import static com.android.server.wm.WindowManagerDebugConfig.TAG_WM;
@@ -195,5 +195,5 @@ index 3c0cb17af603..a569a7729ba8 100644
              } else {
                  switch (getSnapshotMode(task)) {
 -- 
-2.25.1
+2.32.0
 

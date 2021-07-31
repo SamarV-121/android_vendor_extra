@@ -1,7 +1,7 @@
-From d93c8c7af160ebff927946752307973c4623dba1 Mon Sep 17 00:00:00 2001
+From ebc30170d3cf4b92469ed3be2d9dd2275c91a658 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 25 Sep 2020 14:30:21 -0700
-Subject: [PATCH 15/60] SystemUI: Remove QS navbar scrim
+Subject: [PATCH 15/61] SystemUI: Remove QS navbar scrim
 
 In the age of flat material design, this scrim looks outdated and
 out-of-place. It's also quite ugly in the QS edit screen, where it
@@ -22,7 +22,7 @@ Change-Id: Iaba142751aa033b30a44e23888db7e7664f0ef9f
 
 diff --git a/packages/SystemUI/res/drawable/qs_navbar_scrim.xml b/packages/SystemUI/res/drawable/qs_navbar_scrim.xml
 deleted file mode 100644
-index bbb2617db4a0..000000000000
+index bbb2617db4a..00000000000
 --- a/packages/SystemUI/res/drawable/qs_navbar_scrim.xml
 +++ /dev/null
 @@ -1,25 +0,0 @@
@@ -53,7 +53,7 @@ index bbb2617db4a0..000000000000
 -</shape>
 \ No newline at end of file
 diff --git a/packages/SystemUI/res/layout/status_bar_expanded.xml b/packages/SystemUI/res/layout/status_bar_expanded.xml
-index 1d4b98242519..75f76b431da8 100644
+index 1d4b9824251..75f76b431da 100644
 --- a/packages/SystemUI/res/layout/status_bar_expanded.xml
 +++ b/packages/SystemUI/res/layout/status_bar_expanded.xml
 @@ -92,13 +92,5 @@
@@ -71,7 +71,7 @@ index 1d4b98242519..75f76b431da8 100644
      <include layout="@layout/status_bar_expanded_plugin_frame"/>
  </com.android.systemui.statusbar.phone.NotificationPanelView>
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelViewController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelViewController.java
-index 305b07ea57f4..94e08255bace 100644
+index 305b07ea57f..94e08255bac 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelViewController.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/NotificationPanelViewController.java
 @@ -272,7 +272,6 @@ public class NotificationPanelViewController extends PanelViewController {
@@ -112,5 +112,5 @@ index 305b07ea57f4..94e08255bace 100644
          if (mAccessibilityManager.isEnabled()) {
              mView.setAccessibilityPaneTitle(determineAccessibilityPaneTitle());
 -- 
-2.25.1
+2.32.0
 

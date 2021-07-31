@@ -1,7 +1,7 @@
-From 6483746e5b5571afab629d1a485f72b79fcace2e Mon Sep 17 00:00:00 2001
+From 536816079feac18ec1c6545617ed03807a6dd709 Mon Sep 17 00:00:00 2001
 From: Cosmin Tanislav <demonsingur@gmail.com>
 Date: Sun, 16 Aug 2020 19:45:00 +0200
-Subject: [PATCH 46/60] base: Allow unlocking fingerprint only on power button
+Subject: [PATCH 46/61] base: Allow unlocking fingerprint only on power button
  press
 
 Change-Id: I2f569a8ab4d1dd2c118cfb2d1c1072ce6b4e3584
@@ -18,7 +18,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  7 files changed, 213 insertions(+), 3 deletions(-)
 
 diff --git a/core/res/res/values/lineage_config.xml b/core/res/res/values/lineage_config.xml
-index b92cd059433a..e8513573cfa4 100644
+index b92cd059433..e8513573cfa 100644
 --- a/core/res/res/values/lineage_config.xml
 +++ b/core/res/res/values/lineage_config.xml
 @@ -37,4 +37,7 @@
@@ -30,7 +30,7 @@ index b92cd059433a..e8513573cfa4 100644
 +    <bool name="config_powerButtonFingerprint">false</bool>
  </resources>
 diff --git a/core/res/res/values/lineage_symbols.xml b/core/res/res/values/lineage_symbols.xml
-index b135079cec0e..191e673d0f8f 100644
+index b135079cec0..191e673d0f8 100644
 --- a/core/res/res/values/lineage_symbols.xml
 +++ b/core/res/res/values/lineage_symbols.xml
 @@ -28,4 +28,7 @@
@@ -42,7 +42,7 @@ index b135079cec0e..191e673d0f8f 100644
 +    <java-symbol type="bool" name="config_powerButtonFingerprint" />
  </resources>
 diff --git a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
-index 1da151c9db43..df1ab8e3f333 100644
+index 1da151c9db4..df1ab8e3f33 100644
 --- a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 +++ b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 @@ -23,6 +23,7 @@ import android.app.ActivityManager;
@@ -272,7 +272,7 @@ index 1da151c9db43..df1ab8e3f333 100644
 +    }
  }
 diff --git a/services/core/java/com/android/server/biometrics/Utils.java b/services/core/java/com/android/server/biometrics/Utils.java
-index 1a81c26d8eae..2c281ef927e4 100644
+index 1a81c26d8ea..2c281ef927e 100644
 --- a/services/core/java/com/android/server/biometrics/Utils.java
 +++ b/services/core/java/com/android/server/biometrics/Utils.java
 @@ -334,4 +334,9 @@ public class Utils {
@@ -286,7 +286,7 @@ index 1a81c26d8eae..2c281ef927e4 100644
 +    }
  }
 diff --git a/services/core/java/com/android/server/biometrics/fingerprint/FingerprintService.java b/services/core/java/com/android/server/biometrics/fingerprint/FingerprintService.java
-index 5b51aa6e72ac..b303026f3a28 100644
+index 5b51aa6e72a..b303026f3a2 100644
 --- a/services/core/java/com/android/server/biometrics/fingerprint/FingerprintService.java
 +++ b/services/core/java/com/android/server/biometrics/fingerprint/FingerprintService.java
 @@ -115,6 +115,12 @@ public class FingerprintService extends BiometricServiceBase {
@@ -392,7 +392,7 @@ index 5b51aa6e72ac..b303026f3a28 100644
          JSONObject dump = new JSONObject();
          try {
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 516b1bf50f15..f9258f437ea7 100644
+index 516b1bf50f1..f9258f437ea 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -213,6 +213,7 @@ import com.android.server.ExtconUEventObserver;
@@ -484,7 +484,7 @@ index 516b1bf50f15..f9258f437ea7 100644
                  PowerManager.WAKE_REASON_POWER_BUTTON, "android.policy:POWER");
      }
 diff --git a/services/core/java/com/android/server/policy/WindowManagerPolicy.java b/services/core/java/com/android/server/policy/WindowManagerPolicy.java
-index d9b1c687f18a..2acb0b5dca7b 100644
+index d9b1c687f18..2acb0b5dca7 100644
 --- a/services/core/java/com/android/server/policy/WindowManagerPolicy.java
 +++ b/services/core/java/com/android/server/policy/WindowManagerPolicy.java
 @@ -1475,4 +1475,11 @@ public interface WindowManagerPolicy extends WindowManagerPolicyConstants {
@@ -500,5 +500,5 @@ index d9b1c687f18a..2acb0b5dca7b 100644
 +    void notifySideFpAuthenOrEnroll(boolean start);
  }
 -- 
-2.25.1
+2.32.0
 
