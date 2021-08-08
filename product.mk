@@ -1,10 +1,9 @@
+# Build fingerprint
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.build.fingerprint=google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys
+
 # Build system
 BUILD_BROKEN_DUP_RULES := true
-
-# Google Apps
-ifeq ($(WITH_GMS), true)
-$(call inherit-product, vendor/gapps/gapps.mk)
-endif
 
 # CameraGo
 PRODUCT_PACKAGES += \
@@ -13,10 +12,6 @@ PRODUCT_PACKAGES += \
 # Charger
 PRODUCT_PACKAGES += \
     product_charger_res_images
-
-# Config
-PRODUCT_PACKAGES += \
-    SimpleDeviceConfig
 
 # Debugging
 ifeq ($(WITH_DEBUGGING), true)
@@ -38,25 +33,13 @@ PRODUCT_PACKAGES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.sys.adb.shell=/system/xbin/bash
 
-# Extra
-PRODUCT_PACKAGES += \
-    extra.rc
-
-# SU
-ifeq ($(WITH_SU), true)
-PRODUCT_PACKAGES += Superuser phh-su
-endif
-
 # Disable RescueParty due to high risk of data loss
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.disable_rescue=true
 
-# Gboard side padding
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.com.google.ime.kb_pad_port_l=4 \
-    ro.com.google.ime.kb_pad_port_r=4 \
-    ro.com.google.ime.kb_pad_land_l=64 \
-    ro.com.google.ime.kb_pad_land_r=64 \
+# Extra
+PRODUCT_PACKAGES += \
+    extra.rc
 
 # Faceunlock
 TARGET_FACE_UNLOCK_SUPPORTED ?= true
@@ -74,9 +57,21 @@ PRODUCT_COPY_FILES += \
     vendor/extra/prebuilt/etc/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml \
     $(call find-copy-subdir-files,*,vendor/extra/prebuilt/fonts,$(TARGET_COPY_OUT_PRODUCT)/fonts)
 
-# StichImage
-PRODUCT_PACKAGES += \
-    StitchImage
+# Gboard side padding
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.com.google.ime.kb_pad_port_l=4 \
+    ro.com.google.ime.kb_pad_port_r=4 \
+    ro.com.google.ime.kb_pad_land_l=64 \
+    ro.com.google.ime.kb_pad_land_r=64 \
+
+# Google Apps
+ifeq ($(WITH_GMS), true)
+$(call inherit-product, vendor/gapps/common/common-vendor.mk)
+endif
+
+# IORap app launch prefetching using Perfetto traces and madvise
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.iorapd.enable=true
 
 # Overlays
 PRODUCT_PACKAGE_OVERLAYS += \
@@ -91,13 +86,16 @@ PRODUCT_PACKAGES += \
     IconShapeRoundedRect2Overlay \
     IconShapeRoundedOverlay
 
-# IORap app launch prefetching using Perfetto traces and madvise
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.iorapd.enable=true
+# StichImage
+PRODUCT_PACKAGES += \
+    StitchImage
 
-# Properties
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.build.fingerprint=google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys
+# SU
+ifeq ($(WITH_SU), true)
+PRODUCT_PACKAGES += \
+    Superuser \
+    phh-su
+endif
 
 # Updater
 PRODUCT_PROPERTY_OVERRIDES += \
