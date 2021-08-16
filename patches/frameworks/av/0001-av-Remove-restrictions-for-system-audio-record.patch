@@ -1,7 +1,7 @@
-From fc8c4fc6b1f689ced3a67b8a493fe9077a14be91 Mon Sep 17 00:00:00 2001
+From a673a556f2a68077597690d8978d345799729d56 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Tue, 24 Mar 2020 16:36:07 -0300
-Subject: [PATCH 2/6] av: Remove restrictions for system audio record
+Subject: [PATCH 1/4] av: Remove restrictions for system audio record
 
 * Give freedom to screen recorder apps
 
@@ -70,5 +70,5 @@ index b6de4be..2a6b9fb 100644
  
          // TODO if adding more player rules (currently only 2), make rule handling "generic"
 -- 
-2.31.1
+2.31.1.606.gdf6c4f722c
 
