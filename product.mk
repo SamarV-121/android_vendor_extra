@@ -82,6 +82,9 @@ PRODUCT_PACKAGES += \
     IconShapeRoundedRect2Overlay \
     IconShapeRoundedOverlay
 
+# Signing
+PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
+
 # StichImage
 PRODUCT_PACKAGES += \
     StitchImage
