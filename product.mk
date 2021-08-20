@@ -17,6 +17,9 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.disable_rescue=true
 
+## Signing
+PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
+
 ## Updater
 PRODUCT_PROPERTY_OVERRIDES += \
     lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
