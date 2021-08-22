@@ -1,7 +1,7 @@
-From d4db41581563e68baec18d6ed2f27752928ca0b9 Mon Sep 17 00:00:00 2001
+From d824f9926459f701d9d6f836f99a6aab35da2ce4 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 3 Nov 2020 22:38:49 -0800
-Subject: [PATCH 06/61] core: Remove default aspect ratio limit for old apps
+Subject: [PATCH 06/63] core: Remove default aspect ratio limit for old apps
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -57,5 +57,5 @@ index ab0ed51fb90..27016e8e3f0 100644
          float packageMaxAspectRatio = pkg.getMaxAspectRatio();
          if (packageMaxAspectRatio != 0) {
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

@@ -1,7 +1,7 @@
-From 49b080776b00f34024e4b8327532095b940cc6e5 Mon Sep 17 00:00:00 2001
+From 0b6573441be9107f039619dc29e447ecf0b81200 Mon Sep 17 00:00:00 2001
 From: cjybyjk <cjybyjk@zjnu.edu.cn>
 Date: Sat, 5 Sep 2020 17:17:04 +0800
-Subject: [PATCH 50/61] SystemUI: add app volume row to volume dialog
+Subject: [PATCH 50/63] SystemUI: add app volume row to volume dialog
 
 Signed-off-by: cjybyjk <cjybyjk@zjnu.edu.cn>
 Change-Id: Ide78f3d27c3c0077ddf96279e3cac4f60f31411e
@@ -243,5 +243,5 @@ index 4cc2cb09ac1..9d729143081 100644
      }
  }
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

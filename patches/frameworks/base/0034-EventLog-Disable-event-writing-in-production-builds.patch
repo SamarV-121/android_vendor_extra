@@ -1,7 +1,7 @@
-From f3f112444e58ce515c46cb64d71652a2e982548a Mon Sep 17 00:00:00 2001
+From e0aa3a32b25b77013808fcd4f0476a7682b4b5b1 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 21:45:18 -0700
-Subject: [PATCH 34/61] EventLog: Disable event writing in production builds
+Subject: [PATCH 34/63] EventLog: Disable event writing in production builds
 
 When opening and closing activities in Settings, a measurably
 significant amount of CPU time is spent writing to the EventLog, as
@@ -194,5 +194,5 @@ index 3b5a144a4e6..e18aa87c796 100644
        (void*) android_util_EventLog_readEventsOnWrapping
      },
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

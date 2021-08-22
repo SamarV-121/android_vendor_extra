@@ -1,7 +1,7 @@
-From 052519370567ae1a17bec98f615edf5b1c5557f8 Mon Sep 17 00:00:00 2001
+From a5465ead2ec5bea8c365edf6c02d00d93f027a03 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 29 Oct 2020 20:39:21 -0700
-Subject: [PATCH 12/61] SystemUI: Convert global actions to translucent overlay
+Subject: [PATCH 12/63] SystemUI: Convert global actions to translucent overlay
  with blur
 
 When blur is enabled, the glass blur scrim creates a nice visual effect
@@ -218,5 +218,5 @@ index 0445c9879ac..20ab40570c0 100644
          // Make blur be 0 if it is necessary to stop blur effect.
          if (scrimsVisible) {
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

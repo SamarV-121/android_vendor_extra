@@ -1,7 +1,7 @@
-From 95aa84716c0401ab24819776f7709dbee36b4c74 Mon Sep 17 00:00:00 2001
+From e97a0246e6416d19213dc79d55a8477c5c793690 Mon Sep 17 00:00:00 2001
 From: Ethan Halsall <ethan.halsall@gmail.com>
 Date: Thu, 9 Apr 2020 23:35:54 +0100
-Subject: [PATCH 24/61] base: do not use new lockscreen layout for bypass
+Subject: [PATCH 24/63] base: do not use new lockscreen layout for bypass
 
 - bypassEnabled will always evaluate to false now.
 - Introduce bypassEnabledBiometric which is only used to tell the biometric service whether we can bypass lockscreen without swipe dependant on Settings.Secure.FACE_UNLOCK_DISMISSES_KEYGUARD.
@@ -87,5 +87,5 @@ index 0827511cac3..c01132fb5b6 100644
          pw.println("  bouncerShowing: $bouncerShowing")
          pw.println("  isPulseExpanding: $isPulseExpanding")
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

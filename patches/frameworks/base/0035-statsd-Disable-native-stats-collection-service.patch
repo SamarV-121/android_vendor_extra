@@ -1,7 +1,7 @@
-From cfb16e28d92844e306e60fac1ecc744645003cf1 Mon Sep 17 00:00:00 2001
+From 5ca862c23d527ddb138d9710eac687302539cb0e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:32:17 -0700
-Subject: [PATCH 35/61] statsd: Disable native stats collection service
+Subject: [PATCH 35/63] statsd: Disable native stats collection service
 
 When opening and closing activities in Settings, a measurably
 significant amount of CPU time is spent processing and logging stats
@@ -38,5 +38,5 @@ index 605da2af0c1..b8d97f1fbb1 100644
      writepid /dev/cpuset/system-background/tasks
 +    disabled
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

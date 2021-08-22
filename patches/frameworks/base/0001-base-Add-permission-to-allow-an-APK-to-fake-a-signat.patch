@@ -1,7 +1,7 @@
-From 3a1d3593c46d74f8bd3d70b84b6b8aaa43da06b9 Mon Sep 17 00:00:00 2001
+From ed86aeab238de6634aada0668d7c374e1cc16fff Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Bernhard=20Rosenkr=C3=A4nzer?= <bero@lindev.ch>
 Date: Tue, 29 Aug 2017 00:34:27 +0200
-Subject: [PATCH 01/61] base: Add permission to allow an APK to fake a
+Subject: [PATCH 01/63] base: Add permission to allow an APK to fake a
  signature.
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -140,5 +140,5 @@ index 518c1415698..a97a48b606d 100644
      public void checkPackageStartable(String packageName, int userId) {
          final int callingUid = Binder.getCallingUid();
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

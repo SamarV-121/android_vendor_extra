@@ -1,7 +1,7 @@
-From 0e4daadad60c13cb38adbfbe8637fa32e97cd914 Mon Sep 17 00:00:00 2001
+From 99c1152c44a8e1c1b24debd0783a9fb5f21b6a02 Mon Sep 17 00:00:00 2001
 From: Hans Boehm <hboehm@google.com>
 Date: Thu, 13 May 2021 17:11:34 -0700
-Subject: [PATCH 60/61] Fix error formatting issues
+Subject: [PATCH 60/63] Fix error formatting issues
 
 I missed a couple of CREATE_ERROR calls the first time around.
 Unfortunately, type checking is loose enough to miss that.
@@ -36,5 +36,5 @@ index 011e8f8f1b8..7f90efb3e12 100644
        if (new_fd != session_socket) {
            // Move new_fd back to the old value, so that we don't have to change Java-level data
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

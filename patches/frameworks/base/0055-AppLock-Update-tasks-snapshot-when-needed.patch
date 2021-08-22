@@ -1,7 +1,7 @@
-From e1e153be565c524a992b6bbaa0c50325ab25fa35 Mon Sep 17 00:00:00 2001
+From 24f57a320a65bb9ffbdb0a8ea0206e6050a6703c Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhsv09@gmail.com>
 Date: Tue, 15 Jun 2021 19:37:18 -0300
-Subject: [PATCH 55/61] AppLock: Update tasks snapshot when needed
+Subject: [PATCH 55/63] AppLock: Update tasks snapshot when needed
 
 * After 15 seconds timeout or when device is locked
 
@@ -195,5 +195,5 @@ index 3c0cb17af60..a569a7729ba 100644
              } else {
                  switch (getSnapshotMode(task)) {
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

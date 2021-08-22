@@ -1,7 +1,7 @@
-From b57402b608a30f480bd8a77330b72c73f3272dda Mon Sep 17 00:00:00 2001
+From 75eb1d8f28bf12c7996d2e3b007a4c450a1fd481 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sat, 27 Mar 2021 20:48:48 -0300
-Subject: [PATCH 45/61] LockSettingsService: Fix face removal when disabling
+Subject: [PATCH 45/63] LockSettingsService: Fix face removal when disabling
  security
 
 Change-Id: I291e73b292263784893e1a2d4fc21145acfec9bd
@@ -33,5 +33,5 @@ index 659e7efe7b2..b254c08c731 100644
                  try {
                      latch.await(10000, TimeUnit.MILLISECONDS);
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

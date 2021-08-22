@@ -1,7 +1,7 @@
-From 945727e31547ad37861af6c8da46702b15babf96 Mon Sep 17 00:00:00 2001
+From e22c3df1afb8215bcc58a512efe0e40a9c81a1ba Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 3 Nov 2020 13:17:29 -0800
-Subject: [PATCH 20/61] SystemUI: Restore typographic clock face
+Subject: [PATCH 20/63] SystemUI: Restore typographic clock face
 
 This reverts commits 583067c4e4799b0a633d8e861698c8fc2a5c7a6f and
 37fe8022174fc809ef4622f7d6c69f9bdff06913.
@@ -729,5 +729,5 @@ index 00000000000..c84c598498d
 +    }
 +}
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

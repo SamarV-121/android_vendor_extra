@@ -1,7 +1,7 @@
-From cd6e32f978020cc234254390503ace58e26acb12 Mon Sep 17 00:00:00 2001
+From f8b36fb155c030919c5f8972a2c616b5e33f6aba Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Mar 2021 01:58:18 -0300
-Subject: [PATCH 28/61] FaceService: Nuke useless call to getAuthenticatorId
+Subject: [PATCH 28/63] FaceService: Nuke useless call to getAuthenticatorId
 
 That value is static, so the call isn't needed. That fixes also a logspam:
 
@@ -47,5 +47,5 @@ index e43f4f9e3c3..74363751c73 100644
                  mCustomFaceService.callForBind(userId);
                  Slog.w(TAG, "updateActiveGroup(): Face service not started!");
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

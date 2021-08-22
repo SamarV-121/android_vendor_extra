@@ -1,7 +1,7 @@
-From f9299061e09438ed30f78a15ba81960c86a5c549 Mon Sep 17 00:00:00 2001
+From a0e52449d0f0e9a4f45ae3168b28f87736a9c895 Mon Sep 17 00:00:00 2001
 From: Hans Boehm <hboehm@google.com>
 Date: Mon, 19 Jul 2021 16:49:19 -0700
-Subject: [PATCH 61/61] More consistently retry system calls on EINTR
+Subject: [PATCH 61/63] More consistently retry system calls on EINTR
 
 We were not retrying an accept() call om EINTR, resulting in occasional
 zygote failures. This fixes that, and a few other calls documented
@@ -66,5 +66,5 @@ index 7f90efb3e12..caba7705ab3 100644
        // If we ever return, we effectively reuse the old Java ZygoteConnection.
        // None of its state needs to change.
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

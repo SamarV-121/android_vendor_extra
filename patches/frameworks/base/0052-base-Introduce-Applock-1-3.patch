@@ -1,7 +1,7 @@
-From 5ccb63a99dc54a119d0fadc08ba3c0bc85480ef4 Mon Sep 17 00:00:00 2001
+From 718eeb423c3daa04289f9969e2066247a45d223d Mon Sep 17 00:00:00 2001
 From: rituj <ritujbeniwal@gmail.com>
 Date: Thu, 30 Apr 2020 19:13:56 +0530
-Subject: [PATCH 52/61] base: Introduce Applock [1/3]
+Subject: [PATCH 52/63] base: Introduce Applock [1/3]
 
 * Includes applock 1.1 and more
 * Built upon the initial commit by "Anass Karbila <anaskarbila@aospa.co>"
@@ -2163,5 +2163,5 @@ index 5c12f204325..7be4cc46c27 100644
              SignedConfigService.registerUpdateReceiver(mSystemContext);
              t.traceEnd();
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

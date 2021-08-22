@@ -1,7 +1,7 @@
-From 7d5b3fd284106b319457c756cefd641bdb03c849 Mon Sep 17 00:00:00 2001
+From 79c1c77fc4fcc307a8c1eac826138eaec31cff93 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:58:24 -0700
-Subject: [PATCH 40/61] PackageManagerService: Replace ArrayMap with HashMap
+Subject: [PATCH 40/63] PackageManagerService: Replace ArrayMap with HashMap
  for performance
 
 When opening and closing activities in Settings, a significant amount of
@@ -569,5 +569,5 @@ index 755ea6e43a0..02efbde0906 100644
                  List<RuntimePermissionsState.PermissionState> permissions =
                          packagePermissions.get(packageName);
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

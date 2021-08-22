@@ -1,7 +1,7 @@
-From 17fb2a69a7d1424b3782f4731278f7b0982c8749 Mon Sep 17 00:00:00 2001
+From cfeccd103b004464543e669a58082969c9780b66 Mon Sep 17 00:00:00 2001
 From: Quallenauge <Hamsi2k@freenet.de>
 Date: Mon, 21 Jun 2021 23:40:28 +0100
-Subject: [PATCH 57/61] zygote: Use tmpArgBuffer instead of argsBuffer to
+Subject: [PATCH 57/63] zygote: Use tmpArgBuffer instead of argsBuffer to
  prevent NPE.
 
 Change-Id: I724605c8ee7b1437d7cbf470f0fc33cc0efe4e1c
@@ -23,5 +23,5 @@ index 52ceeec1bf3..26d4293bd3b 100644
                      // TODO (chriswailes): Should this only be run for debug builds?
                      validateUsapCommand(args);
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

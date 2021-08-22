@@ -1,7 +1,7 @@
-From 4070c3e4e7b27e6f554ab715820689aabc74fce7 Mon Sep 17 00:00:00 2001
+From 2efd48d739cf42f296e9e776e998b2aad0dbf7fc Mon Sep 17 00:00:00 2001
 From: cjybyjk <cjybyjk@zjnu.edu.cn>
 Date: Sat, 5 Sep 2020 08:44:29 +0800
-Subject: [PATCH 49/61] audio: support set volume for app [2/2]
+Subject: [PATCH 49/63] audio: support set volume for app [2/2]
 
 Signed-off-by: cjybyjk <cjybyjk@zjnu.edu.cn>
 Change-Id: If7c467ba8c2332a1fc1efe8068fd4838dcca60f8
@@ -290,5 +290,5 @@ index 842ab7c8d15..48036c9704b 100644
  
      /**
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

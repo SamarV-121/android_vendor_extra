@@ -1,7 +1,7 @@
-From 8a9266a878525eeb83ff80b7a73ffa7aece24c6a Mon Sep 17 00:00:00 2001
+From 15f9b9759fffb00bf01deb240f59a9747bd2d72c Mon Sep 17 00:00:00 2001
 From: Egor Pasko <pasko@google.com>
 Date: Tue, 8 Jun 2021 19:01:38 +0200
-Subject: [PATCH 58/61] Allow app zygote preload to retain files across fork
+Subject: [PATCH 58/63] Allow app zygote preload to retain files across fork
 
 The bug proposes to 'move' the /proc/self/fd/ readlink/stat/etc checks
 performed by the FileDescriptorAllowlist from before-fork to an earlier
@@ -419,5 +419,5 @@ index 2caf1575981..62bb82e39eb 100644
    std::unordered_map<int, FileDescriptorInfo*> open_fd_map_;
  
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

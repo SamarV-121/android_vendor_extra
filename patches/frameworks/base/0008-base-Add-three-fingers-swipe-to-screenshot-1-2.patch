@@ -1,7 +1,7 @@
-From d3f2ff482a4f6eae8d936078bf0ce24ce795aead Mon Sep 17 00:00:00 2001
+From 8d501b9c2edf9bab33efd13e3eeb70fc747d72fa Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Sun, 9 Aug 2015 01:23:33 +0800
-Subject: [PATCH 08/61] base: Add three-fingers-swipe to screenshot [1/2]
+Subject: [PATCH 08/63] base: Add three-fingers-swipe to screenshot [1/2]
 
 The feature is ported from Oppo ColorOS.
 With the options on, users can swipe down
@@ -280,5 +280,5 @@ index 2e58c98da57..7fc3205c26e 100644
              boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
                      Settings.Secure.WAKE_GESTURE_ENABLED, 0,
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

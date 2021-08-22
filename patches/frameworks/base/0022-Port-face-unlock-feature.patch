@@ -1,7 +1,7 @@
-From 40d5dfde16a8c56b888dc75606cbfb780b643a75 Mon Sep 17 00:00:00 2001
+From f2a018cfc83342dc5ddae60e65e61e218c3d9838 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Feb 2021 17:04:10 -0300
-Subject: [PATCH 22/61] Port face unlock feature
+Subject: [PATCH 22/63] Port face unlock feature
 
 From motorola/nio_retcn/nio:11/RRN31.Q1-20-17-1/1cbc0:user/release-keys
 
@@ -894,5 +894,5 @@ index e5a1898459a..e43f4f9e3c3 100644
          // output, which we will drop.  The second is for binary data, which
          // will be the protobuf data.
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 
