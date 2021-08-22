@@ -14,9 +14,13 @@
 
 LOCAL_PATH := $(call my-dir)
 
-# CameraGo
+# Camera
 include $(CLEAR_VARS)
+ifeq ($(TARGET_SHIP_GCAM_GO),true)
 LOCAL_MODULE := CameraGo
+else
+LOCAL_MODULE := OpenCamera
+endif
 LOCAL_SRC_FILES := apk/$(LOCAL_MODULE).apk
 LOCAL_CERTIFICATE := PRESIGNED
 LOCAL_MODULE_CLASS := APPS

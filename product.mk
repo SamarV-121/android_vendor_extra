@@ -5,9 +5,14 @@ PRODUCT_PRODUCT_PROPERTIES += \
 # Build system
 BUILD_BROKEN_DUP_RULES := true
 
-# CameraGo
+# Camera
+ifeq ($(TARGET_SHIP_GCAM_GO),true)
 PRODUCT_PACKAGES += \
     CameraGo
+else
+PRODUCT_PACKAGES += \
+    OpenCamera
+endif
 
 # Charger
 PRODUCT_COPY_FILES += \
