@@ -10,8 +10,8 @@ PRODUCT_PACKAGES += \
     CameraGo
 
 # Charger
-PRODUCT_PACKAGES += \
-    product_charger_res_images
+PRODUCT_COPY_FILES += \
+    $(call find-copy-subdir-files,*,vendor/extra/charger,$(TARGET_COPY_OUT_PRODUCT)/etc/res)
 
 # Debugging
 ifeq ($(WITH_DEBUGGING), true)
