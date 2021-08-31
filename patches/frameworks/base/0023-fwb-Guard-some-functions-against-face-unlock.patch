@@ -1,4 +1,4 @@
-From def8d5abb6271fb96e234fdf3ef322830d38181c Mon Sep 17 00:00:00 2001
+From ba7813a4a83652951097f10376095611d43289d5 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 27 Mar 2020 22:48:17 -0300
 Subject: [PATCH 23/63] fwb: Guard some functions against face unlock
@@ -10,7 +10,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
-index c79e9555337..1da151c9db4 100644
+index c79e9555..1da151c9 100644
 --- a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 +++ b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 @@ -663,11 +663,13 @@ public abstract class BiometricServiceBase extends SystemService

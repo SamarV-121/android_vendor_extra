@@ -1,7 +1,7 @@
-From 0a7fc47db60aa4606071624cbe1caff8cffd2f94 Mon Sep 17 00:00:00 2001
+From 9bae2fa6256aa434429bcabab98965d9a5949cfe Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Fri, 8 Jan 2021 14:19:27 -0800
-Subject: [PATCH 07/11] Sync upstream fts.c.
+Subject: [PATCH 07/19] Sync upstream fts.c.
 
 I realize that we can probably clean up more of our half-forked code by
 reusing the same *-compat.h headers we use for the clean upstream code,
@@ -380,5 +380,5 @@ index 8888ab18a..34de9923c 100644
 +	return __fts_open(argv, options, compar);
  }
 -- 
-2.31.1
+2.32.0
 

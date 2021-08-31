@@ -1,4 +1,4 @@
-From 25ee977411cb7be70adc812d027c83c3c00413cc Mon Sep 17 00:00:00 2001
+From f52f59cedfcee6dd9f131cce0a3eae7781412a9e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 29 Oct 2020 20:36:31 -0700
 Subject: [PATCH 05/63] graphics: Adjust ripple animation for immediate
@@ -19,7 +19,7 @@ Change-Id: I6585cced2b3f0a6dbf89a4dd8ff6a3326321a166
  1 file changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/graphics/java/android/graphics/drawable/RippleForeground.java b/graphics/java/android/graphics/drawable/RippleForeground.java
-index 0f376957c8f..10c66ae8f74 100644
+index 0f376957..10c66ae8 100644
 --- a/graphics/java/android/graphics/drawable/RippleForeground.java
 +++ b/graphics/java/android/graphics/drawable/RippleForeground.java
 @@ -44,13 +44,13 @@ class RippleForeground extends RippleComponent {

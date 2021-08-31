@@ -1,4 +1,4 @@
-From 99c195fb5e5e18e2443003dc4c9485cde7d38581 Mon Sep 17 00:00:00 2001
+From dde01d32177d09107d00a8a2f7a55f136e507708 Mon Sep 17 00:00:00 2001
 From: jie shen <jie.shen@unisoc.com>
 Date: Wed, 29 Jul 2020 10:27:51 +0800
 Subject: [PATCH 26/63] Add isFaceAuthEnabledForUser checks in
@@ -16,7 +16,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt
-index 74d9f5402e3..bfe0684b541 100644
+index 74d9f540..bfe0684b 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardLiftController.kt
 @@ -84,7 +84,9 @@ class KeyguardLiftController constructor(

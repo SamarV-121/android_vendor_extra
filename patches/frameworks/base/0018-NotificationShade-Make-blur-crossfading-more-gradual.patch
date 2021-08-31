@@ -1,4 +1,4 @@
-From ec4a8b049e34b0f99c4d6c57c78e29068cccc925 Mon Sep 17 00:00:00 2001
+From 5982179840cc39cca31bcd45129fd15255cce25a Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 18 Sep 2020 09:16:19 -0700
 Subject: [PATCH 18/63] NotificationShade: Make blur crossfading more gradual
@@ -11,7 +11,7 @@ Change-Id: Ia4695b5783309c8fd260f3be95a0e314cf0d5e3d
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
-index 5bec68549c1..cf34a5b7497 100644
+index 5bec6854..cf34a5b7 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 @@ -69,7 +69,7 @@ class NotificationShadeDepthController @Inject constructor(

@@ -1,4 +1,4 @@
-From cb7fefdf3b4d36f6bbb85eac4b4f4c25a92d1022 Mon Sep 17 00:00:00 2001
+From b6c7a9d9dc5a30f81eb855669778594e033ef5a3 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Tue, 13 Aug 2019 09:08:00 -0300
 Subject: [PATCH 19/63] fwb: Port long screenshot implementation from Asus
@@ -27,7 +27,7 @@ Signed-off-by: DennySPb <dennyspb@gmail.com>
  create mode 100644 core/java/com/android/internal/custom/screenshot/StitchImageUtility.java
 
 diff --git a/core/java/android/view/IWindowManager.aidl b/core/java/android/view/IWindowManager.aidl
-index f30c87fafa0..a70b129740f 100644
+index f30c87fa..a70b1297 100644
 --- a/core/java/android/view/IWindowManager.aidl
 +++ b/core/java/android/view/IWindowManager.aidl
 @@ -767,4 +767,10 @@ interface IWindowManager
@@ -43,7 +43,7 @@ index f30c87fafa0..a70b129740f 100644
  }
 diff --git a/core/java/com/android/internal/custom/screenshot/StitchImageUtility.java b/core/java/com/android/internal/custom/screenshot/StitchImageUtility.java
 new file mode 100644
-index 00000000000..247e33dce7d
+index 00000000..247e33dc
 --- /dev/null
 +++ b/core/java/com/android/internal/custom/screenshot/StitchImageUtility.java
 @@ -0,0 +1,90 @@
@@ -138,7 +138,7 @@ index 00000000000..247e33dce7d
 +    }
 +}
 diff --git a/core/java/com/android/internal/util/ScreenshotHelper.java b/core/java/com/android/internal/util/ScreenshotHelper.java
-index b79c25a3927..b7f93ed6ce2 100644
+index b79c25a3..b7f93ed6 100644
 --- a/core/java/com/android/internal/util/ScreenshotHelper.java
 +++ b/core/java/com/android/internal/util/ScreenshotHelper.java
 @@ -27,6 +27,8 @@ import android.os.UserHandle;
@@ -245,7 +245,7 @@ index b79c25a3927..b7f93ed6ce2 100644
                  synchronized (mScreenshotLock) {
                      if (mScreenshotConnection != null) {
 diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
-index 6bee19745c8..d77e46c0c35 100644
+index 6bee1974..d77e46c0 100644
 --- a/packages/SystemUI/AndroidManifest.xml
 +++ b/packages/SystemUI/AndroidManifest.xml
 @@ -276,6 +276,9 @@
@@ -259,7 +259,7 @@ index 6bee19745c8..d77e46c0c35 100644
          android:name=".SystemUIApplication"
          android:persistent="true"
 diff --git a/packages/SystemUI/res/values/config.xml b/packages/SystemUI/res/values/config.xml
-index 367fe72d4da..7aacd867a98 100644
+index 367fe72d..7aacd867 100644
 --- a/packages/SystemUI/res/values/config.xml
 +++ b/packages/SystemUI/res/values/config.xml
 @@ -585,4 +585,7 @@
@@ -271,7 +271,7 @@ index 367fe72d4da..7aacd867a98 100644
 +    <string name="config_stitchEditor">com.asus.stitchimage/com.asus.stitchimage.editor.ScreenshotEditorActivity</string>
  </resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
-index 0851858ed31..76b2552cb38 100644
+index 0851858e..76b2552c 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 @@ -97,6 +97,7 @@ import android.view.ViewGroup;
@@ -297,7 +297,7 @@ index 0851858ed31..76b2552cb38 100644
                      mUiEventLogger.log(GlobalActionsEvent.GA_SCREENSHOT_PRESS);
                  }
 diff --git a/packages/SystemUI/src/com/android/systemui/screenshot/SaveImageInBackgroundTask.java b/packages/SystemUI/src/com/android/systemui/screenshot/SaveImageInBackgroundTask.java
-index be396b26135..80ae9701111 100644
+index be396b26..80ae9701 100644
 --- a/packages/SystemUI/src/com/android/systemui/screenshot/SaveImageInBackgroundTask.java
 +++ b/packages/SystemUI/src/com/android/systemui/screenshot/SaveImageInBackgroundTask.java
 @@ -327,7 +327,7 @@ class SaveImageInBackgroundTask extends AsyncTask<Void, Void, Void> {
@@ -310,7 +310,7 @@ index be396b26135..80ae9701111 100644
          if (!TextUtils.isEmpty(editorPackage)) {
              editIntent.setComponent(ComponentName.unflattenFromString(editorPackage));
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/policy/CastControllerImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/policy/CastControllerImpl.java
-index da1ef2f0f65..ac8655b5ee4 100644
+index da1ef2f0..ac8655b5 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/policy/CastControllerImpl.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/policy/CastControllerImpl.java
 @@ -48,6 +48,8 @@ import javax.inject.Inject;
@@ -334,7 +334,7 @@ index da1ef2f0f65..ac8655b5ee4 100644
                  final CastDevice device = new CastDevice();
                  device.id = mProjection.getPackageName();
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 54e7a4739b5..516b1bf50f1 100644
+index 54e7a473..516b1bf5 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -6567,4 +6567,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -348,7 +348,7 @@ index 54e7a4739b5..516b1bf50f1 100644
 +    }
  }
 diff --git a/services/core/java/com/android/server/policy/WindowManagerPolicy.java b/services/core/java/com/android/server/policy/WindowManagerPolicy.java
-index cadbe51c804..d9b1c687f18 100644
+index cadbe51c..d9b1c687 100644
 --- a/services/core/java/com/android/server/policy/WindowManagerPolicy.java
 +++ b/services/core/java/com/android/server/policy/WindowManagerPolicy.java
 @@ -1469,4 +1469,10 @@ public interface WindowManagerPolicy extends WindowManagerPolicyConstants {
@@ -363,7 +363,7 @@ index cadbe51c804..d9b1c687f18 100644
 +    void takeAlternativeScreenshot();
  }
 diff --git a/services/core/java/com/android/server/uri/UriGrantsManagerService.java b/services/core/java/com/android/server/uri/UriGrantsManagerService.java
-index e8a0379473d..2a25c4320bf 100644
+index e8a03794..2a25c432 100644
 --- a/services/core/java/com/android/server/uri/UriGrantsManagerService.java
 +++ b/services/core/java/com/android/server/uri/UriGrantsManagerService.java
 @@ -113,6 +113,8 @@ import java.util.Iterator;
@@ -392,7 +392,7 @@ index e8a0379473d..2a25c4320bf 100644
                  Slog.w(TAG, "For security reasons, the system cannot issue a Uri permission"
                          + " grant to " + grantUri + "; use startActivityAsCaller() instead");
 diff --git a/services/core/java/com/android/server/wm/DisplayPolicy.java b/services/core/java/com/android/server/wm/DisplayPolicy.java
-index 97e4a9595da..0c6afbdc413 100644
+index 97e4a959..0c6afbdc 100644
 --- a/services/core/java/com/android/server/wm/DisplayPolicy.java
 +++ b/services/core/java/com/android/server/wm/DisplayPolicy.java
 @@ -4124,10 +4124,12 @@ public class DisplayPolicy {
@@ -410,7 +410,7 @@ index 97e4a9595da..0c6afbdc413 100644
      }
  
 diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
-index 355a531496f..d9f20d0288a 100644
+index 355a5314..d9f20d02 100644
 --- a/services/core/java/com/android/server/wm/WindowManagerService.java
 +++ b/services/core/java/com/android/server/wm/WindowManagerService.java
 @@ -8284,4 +8284,9 @@ public class WindowManagerService extends IWindowManager.Stub

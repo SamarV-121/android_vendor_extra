@@ -1,4 +1,4 @@
-From b939bee48134e2bafaa773d0ce55dea92e8e4ab4 Mon Sep 17 00:00:00 2001
+From d3c4ba5f57eba9867b591d6fd0f636df4f65cc40 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Wed, 24 Mar 2021 18:56:33 -0700
 Subject: [PATCH 37/63] ThemedResourceCache: Replace ArrayMap with HashMap for
@@ -100,7 +100,7 @@ Change-Id: I39e1c4b03fe0e60f933f02e253d2d3c4a483146f
  1 file changed, 5 insertions(+), 8 deletions(-)
 
 diff --git a/core/java/android/content/res/ThemedResourceCache.java b/core/java/android/content/res/ThemedResourceCache.java
-index 3270944ce7e..e0701b90d6f 100644
+index 3270944c..e0701b90 100644
 --- a/core/java/android/content/res/ThemedResourceCache.java
 +++ b/core/java/android/content/res/ThemedResourceCache.java
 @@ -22,10 +22,10 @@ import android.compat.annotation.UnsupportedAppUsage;

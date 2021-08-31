@@ -1,4 +1,4 @@
-From b987eb53070a7900733bbdc2b69204f2c7e066f7 Mon Sep 17 00:00:00 2001
+From 1ba866e9fbf2c2bb530ece73977ffe2c0ac9ae59 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 6 Apr 2021 15:55:54 -0700
 Subject: [PATCH 32/63] Revert "Pre-emptively take a snapshot when finishing an
@@ -14,7 +14,7 @@ Change-Id: Ib161679f1f3b83787f90b8ef7dcf46d246bb7c57
  1 file changed, 11 deletions(-)
 
 diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
-index 92dbfa4f173..e01b685e5b0 100644
+index 92dbfa4f..e01b685e 100644
 --- a/services/core/java/com/android/server/wm/ActivityRecord.java
 +++ b/services/core/java/com/android/server/wm/ActivityRecord.java
 @@ -315,8 +315,6 @@ import com.android.server.wm.SurfaceAnimator.AnimationType;

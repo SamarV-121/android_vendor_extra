@@ -1,4 +1,4 @@
-From cfa1c67a7fd9c571d14f1acdd07382179f0566de Mon Sep 17 00:00:00 2001
+From d2914851cbbc386219a4901cab12638e636ae2d8 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Wed, 23 Sep 2020 16:12:05 -0700
 Subject: [PATCH 04/63] QS: Remove divider between QS tiles and media player
@@ -24,7 +24,7 @@ Change-Id: Ie3d9e0070c974b598a8784225375882b4b67173e
 
 diff --git a/packages/SystemUI/res-keyguard/layout/qs_media_divider.xml b/packages/SystemUI/res-keyguard/layout/qs_media_divider.xml
 deleted file mode 100644
-index 1be489cdc70..00000000000
+index 1be489cd..00000000
 --- a/packages/SystemUI/res-keyguard/layout/qs_media_divider.xml
 +++ /dev/null
 @@ -1,7 +0,0 @@
@@ -37,7 +37,7 @@ index 1be489cdc70..00000000000
 -</View>
 \ No newline at end of file
 diff --git a/packages/SystemUI/res/layout/qs_panel.xml b/packages/SystemUI/res/layout/qs_panel.xml
-index 4527c6c793d..f8629aecfd2 100644
+index 4527c6c7..f8629aec 100644
 --- a/packages/SystemUI/res/layout/qs_panel.xml
 +++ b/packages/SystemUI/res/layout/qs_panel.xml
 @@ -63,8 +63,6 @@
@@ -50,7 +50,7 @@ index 4527c6c793d..f8629aecfd2 100644
      </com.android.systemui.qs.NonInterceptingScrollView>
  
 diff --git a/packages/SystemUI/src/com/android/systemui/qs/QSAnimator.java b/packages/SystemUI/src/com/android/systemui/qs/QSAnimator.java
-index a86e0a0d97d..c674cc27507 100644
+index a86e0a0d..c674cc27 100644
 --- a/packages/SystemUI/src/com/android/systemui/qs/QSAnimator.java
 +++ b/packages/SystemUI/src/com/android/systemui/qs/QSAnimator.java
 @@ -314,16 +314,10 @@ public class QSAnimator implements Callback, PageListener, Listener, OnLayoutCha
@@ -71,7 +71,7 @@ index a86e0a0d97d..c674cc27507 100644
              float px = 0;
              float py = 1;
 diff --git a/packages/SystemUI/src/com/android/systemui/qs/QSPanel.java b/packages/SystemUI/src/com/android/systemui/qs/QSPanel.java
-index 6d6e03b400e..53491998cca 100644
+index 6d6e03b4..53491998 100644
 --- a/packages/SystemUI/src/com/android/systemui/qs/QSPanel.java
 +++ b/packages/SystemUI/src/com/android/systemui/qs/QSPanel.java
 @@ -128,8 +128,6 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne

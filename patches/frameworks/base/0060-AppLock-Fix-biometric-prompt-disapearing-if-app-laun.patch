@@ -1,0 +1,44 @@
+From b94bb00f58749963a644eb148648469a024a131c Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhsv09@gmail.com>
+Date: Mon, 12 Jul 2021 21:24:55 -0300
+Subject: [PATCH 60/63] AppLock: Fix biometric prompt disapearing if app
+ launched from resolver
+
+Related issues:
+
+https://github.com/PixelExperience/android-issues/issues/248
+https://github.com/PixelExperience/android-issues/issues/302
+
+Change-Id: Iadeae0ebc2c9e719589b3bb1ac318c8743f5bc99
+---
+ services/core/java/com/android/server/wm/AppLockService.java | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/wm/AppLockService.java b/services/core/java/com/android/server/wm/AppLockService.java
+index 1d931cd5..cb7a16d4 100644
+--- a/services/core/java/com/android/server/wm/AppLockService.java
++++ b/services/core/java/com/android/server/wm/AppLockService.java
+@@ -484,9 +484,10 @@ public class AppLockService extends SystemService {
+ 
+     public void launchBeforeActivity(String packageName) {
+         if (DEBUG_APPLOCK) Slog.v(TAG_APPLOCK, "launchBeforeActivity(" + packageName + ")");
++        final int delay = mForegroundApp == "android" ? 1000 : 0;
+         AppLockContainer cont = getAppLockContainer(packageName);
+         if (cont != null) {
+-            DisplayThread.getHandler().post(() -> {
++            DisplayThread.getHandler().postDelayed(() -> {
+                 mCurrent = cont;
+                 if (mKeyguardShown) {
+                     mLaunchAfterKeyguard = true;
+@@ -500,7 +501,7 @@ public class AppLockService extends SystemService {
+                     .setConfirmationRequired(false)
+                     .build();
+                 startBiometricPrompt();
+-            });
++            }, delay);
+         }
+     }
+ 
+-- 
+2.31.1.606.gdf6c4f722c
+

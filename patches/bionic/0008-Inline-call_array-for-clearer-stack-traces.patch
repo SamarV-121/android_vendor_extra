@@ -1,7 +1,7 @@
-From b179fcf051330d92b267ac8363b8432d85c53714 Mon Sep 17 00:00:00 2001
+From 4afe6baa9947d2864859df19ee556fd71d9a2a82 Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Tue, 19 Jan 2021 09:41:23 -0800
-Subject: [PATCH 08/11] Inline call_array for clearer stack traces.
+Subject: [PATCH 08/19] Inline call_array for clearer stack traces.
 
 No-one seems to understand that a crash in a random .so from call_array()
 in the linker isn't a linker bug. They _seem_ to understand (or at least
@@ -45,5 +45,5 @@ index 4f67003b8..45c7d015e 100644
      return;
    }
 -- 
-2.31.1
+2.32.0
 

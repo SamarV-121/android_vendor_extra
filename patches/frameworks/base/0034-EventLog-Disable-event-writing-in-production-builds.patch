@@ -1,4 +1,4 @@
-From e0aa3a32b25b77013808fcd4f0476a7682b4b5b1 Mon Sep 17 00:00:00 2001
+From c9bc26c7cd9913622e6a6e60dde15911f96b70e0 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 21:45:18 -0700
 Subject: [PATCH 34/63] EventLog: Disable event writing in production builds
@@ -25,7 +25,7 @@ Change-Id: I3505c460f234d9a5038bd1f9d41ce911697ca76e
  2 files changed, 72 insertions(+), 17 deletions(-)
 
 diff --git a/core/java/android/util/EventLog.java b/core/java/android/util/EventLog.java
-index ead4e46cd28..5f836ab70cd 100644
+index ead4e46c..5f836ab7 100644
 --- a/core/java/android/util/EventLog.java
 +++ b/core/java/android/util/EventLog.java
 @@ -20,6 +20,7 @@ import android.annotation.NonNull;
@@ -166,7 +166,7 @@ index ead4e46cd28..5f836ab70cd 100644
              throws IOException;
  
 diff --git a/core/jni/android_util_EventLog.cpp b/core/jni/android_util_EventLog.cpp
-index 3b5a144a4e6..e18aa87c796 100644
+index 3b5a144a..e18aa87c 100644
 --- a/core/jni/android_util_EventLog.cpp
 +++ b/core/jni/android_util_EventLog.cpp
 @@ -69,16 +69,16 @@ static void android_util_EventLog_readEventsOnWrapping(JNIEnv* env, jobject claz

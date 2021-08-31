@@ -1,7 +1,7 @@
-From 6627b11858a67928278a2500caa91ca0eef540f9 Mon Sep 17 00:00:00 2001
+From 30f3d992d053d42805caad217ab7f2612f21ae7b Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Thu, 16 Apr 2020 16:12:03 -0700
-Subject: [PATCH 01/11] tmpfile(3): use O_TMPFILE where available.
+Subject: [PATCH 01/19] tmpfile(3): use O_TMPFILE where available.
 
 This also removes the ScopedSignalBlocker, which doesn't seem to have
 made any sense since threads were invented.
@@ -105,5 +105,5 @@ index 4378e84ab..d7ce897e1 100644
  
  FILE* tmpfile() {
 -- 
-2.31.1
+2.32.0
 

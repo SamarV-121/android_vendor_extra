@@ -1,0 +1,166 @@
+From 61a542e431e6044a99dd8500b0a69b88c578b2b5 Mon Sep 17 00:00:00 2001
+From: Pranav Kapoor <pranavkapoor001@gmail.com>
+Date: Thu, 8 Apr 2021 20:39:37 +0530
+Subject: [PATCH 7/8] Settings: Add option to instantly lock app on closing
+ [2/2]
+
+Signed-off-by: Pranav Kapoor <pranavkapoor001@gmail.com>
+Change-Id: I5b2ed599915d1f79bf711b96d6788c307cca4cc3
+Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
+---
+ res/values/cm_arrays.xml                      | 12 ++++++
+ res/values/cm_strings.xml                     | 11 ++++--
+ res/xml/security_settings_applock.xml         | 13 ++++---
+ .../security/applock/AppLockSettings.java     | 38 +++++++++++++++----
+ 4 files changed, 58 insertions(+), 16 deletions(-)
+
+diff --git a/res/values/cm_arrays.xml b/res/values/cm_arrays.xml
+index aeb0be1..01f0ede 100644
+--- a/res/values/cm_arrays.xml
++++ b/res/values/cm_arrays.xml
+@@ -49,4 +49,16 @@
+     <!-- Override supported color mode labels.
+          NOTE: This list must have the exact same items count as config_availableColorModes -->
+     <string-array name="available_vendor_color_modes" translatable="false" />
++
++    <!-- App Lock -->
++    <string-array name="applock_lock_after_entries">
++        <item>@string/applock_lock_after_instantly</item>
++        <item>@string/applock_lock_after_15_seconds</item>
++        <item>@string/applock_lock_after_screen_off</item>
++    </string-array>
++    <string-array name="applock_lock_after_values">
++        <item>0</item>
++        <item>15</item>
++        <item>-1</item>
++    </string-array>
+ </resources>
+diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
+index f188138..977b6ae 100644
+--- a/res/values/cm_strings.xml
++++ b/res/values/cm_strings.xml
+@@ -177,9 +177,14 @@
+     <string name="applock_unlocked">Unlocked</string>
+     <string name="applock_locked_apps">Locked apps</string>
+     <string name="applock_unlocked_apps">Unlocked apps</string>
+-    <string name="applock_show_only_on_wake">Authenticate only once</string>
+-    <string name="applock_show_only_on_wake_on_summary">Once authenticated, an app stays unlocked until the screen turns off</string>
+-    <string name="applock_show_only_on_wake_off_summary">Once authenticated, an app stays unlocked for 15 seconds after exiting</string>
++    <string name="applock_lock_after_title">Lock app after</string>
++    <string name="applock_lock_after_instantly">Instantly</string>
++    <string name="applock_lock_after_15_seconds">15 Seconds</string>
++    <string name="applock_lock_after_screen_off">Screen off</string>
++    <string name="applock_lock_after_summary">App will be locked after selected timeout</string>
++    <string name="applock_lock_after_instantly_summary">App will be locked instantly when closed</string>
++    <string name="applock_lock_after_15_seconds_summary">App will be locked 15 seconds after closing</string>
++    <string name="applock_lock_after_screen_off_summary">App will be locked when screen is turned off</string>
+     <string name="applock_notification_info">You can show/hide the notification content on a per-app basis by clicking on the notification icon shown on each locked apps\' preference</string>
+     <string name="applock_show_notif">Showing notification content</string>
+     <string name="applock_hide_notif">Hiding notification content</string>
+diff --git a/res/xml/security_settings_applock.xml b/res/xml/security_settings_applock.xml
+index 05b5ac7..e221990 100644
+--- a/res/xml/security_settings_applock.xml
++++ b/res/xml/security_settings_applock.xml
+@@ -21,12 +21,13 @@
+     android:title="@string/applock_title"
+     settings:keywords="@string/keywords_applock_settings">
+ 
+-    <SwitchPreference
+-        android:key="show_only_on_wake"
+-        android:title="@string/applock_show_only_on_wake"
+-        android:defaultValue="false"
+-        android:summaryOn="@string/applock_show_only_on_wake_on_summary"
+-        android:summaryOff="@string/applock_show_only_on_wake_off_summary"
++    <ListPreference
++        android:key="applock_lock_after"
++        android:defaultValue="0"
++        android:entries="@array/applock_lock_after_entries"
++        android:entryValues="@array/applock_lock_after_values"
++        android:summary="%s"
++        android:title="@string/applock_lock_after_title"
+         android:order="-999" />
+ 
+     <Preference
+diff --git a/src/com/android/settings/security/applock/AppLockSettings.java b/src/com/android/settings/security/applock/AppLockSettings.java
+index ca6045a..d572985 100644
+--- a/src/com/android/settings/security/applock/AppLockSettings.java
++++ b/src/com/android/settings/security/applock/AppLockSettings.java
+@@ -38,7 +38,7 @@ import android.widget.SearchView;
+ import androidx.lifecycle.ViewModelProviders;
+ import androidx.preference.Preference;
+ import androidx.preference.PreferenceScreen;
+-import androidx.preference.SwitchPreference;
++import androidx.preference.ListPreference;
+ 
+ import com.android.settings.biometrics.BiometricEnrollBase;
+ import com.android.settings.R;
+@@ -86,7 +86,7 @@ public class AppLockSettings extends SubSettings {
+     public static class AppLockSettingsFragment extends SettingsPreferenceFragment
+             implements SearchView.OnQueryTextListener, SearchView.OnCloseListener {
+ 
+-        private final String KEY_SHOW_ON_WAKE = "show_only_on_wake";
++        private final String KEY_LOCK_AFTER = "applock_lock_after";
+         private final String KEY_LOCKED_APPS = "locked_apps";
+         private final String KEY_UNLOCKED_APPS = "unlocked_apps";
+         private final String KEY_NOTIFICATION_HELP = "applock_notification_info";
+@@ -101,7 +101,7 @@ public class AppLockSettings extends SubSettings {
+         private SearchView mSearchView;
+         private SearchFilter mSearchFilter;
+         private PreferenceScreen mPreferenceScreen;
+-        private SwitchPreference mShowOnlyOnWake;
++        private ListPreference lockTimeoutPref;
+         private Preference mLocked;
+         private Preference mUnlocked;
+         private Preference mNotifInfo;
+@@ -164,14 +164,15 @@ public class AppLockSettings extends SubSettings {
+             mAppLockManager = Utils.getAppLockManager(getPrefContext());
+             mPreferenceScreen = getPreferenceScreen();
+ 
+-            mShowOnlyOnWake = mPreferenceScreen.findPreference(KEY_SHOW_ON_WAKE);
++            lockTimeoutPref = mPreferenceScreen.findPreference(KEY_LOCK_AFTER);
+             mLocked = mPreferenceScreen.findPreference(KEY_LOCKED_APPS);
+             mUnlocked = mPreferenceScreen.findPreference(KEY_UNLOCKED_APPS);
+             mNotifInfo = mPreferenceScreen.findPreference(KEY_NOTIFICATION_HELP);
+ 
+-            mShowOnlyOnWake.setChecked(mAppLockManager.getShowOnlyOnWake());
+-            mShowOnlyOnWake.setOnPreferenceChangeListener((preference, checked) -> {
+-                mAppLockManager.setShowOnlyOnWake((boolean) checked);
++            lockTimeoutPref.setValue(String.valueOf(mAppLockManager.getLockTimeout()));
++            setLockTimeoutSummary();
++            lockTimeoutPref.setOnPreferenceChangeListener((preference, lockTimeout) -> {
++                mAppLockManager.setLockTimeout(Integer.parseInt((String) lockTimeout));
+                 return true;
+             });
+ 
+@@ -443,5 +444,28 @@ public class AppLockSettings extends SubSettings {
+                 updatePreferencesPostSearch((ArrayList<AppLockInfo>) results.values);
+             }
+         }
++
++        private void setLockTimeoutSummary() {
++                lockTimeoutPref.setSummaryProvider(new Preference.SummaryProvider<ListPreference>() {
++                private String summaryText = "";
++
++                @Override
++                public CharSequence provideSummary(ListPreference preference) {
++                    final int selectedLockTimeout = Integer.parseInt(preference.getValue());
++                    switch (selectedLockTimeout) {
++                        case 0:
++                            summaryText = String.valueOf(getText(R.string.applock_lock_after_instantly_summary));
++                            break;
++                        case 15:
++                            summaryText = String.valueOf(getText(R.string.applock_lock_after_15_seconds_summary));
++                            break;
++                        case -1:
++                            summaryText = String.valueOf(getText(R.string.applock_lock_after_screen_off_summary));
++                            break;
++                    }
++                    return summaryText;
++                  }
++                });
++        }
+     }
+ }
+-- 
+2.32.0
+

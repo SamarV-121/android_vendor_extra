@@ -1,7 +1,7 @@
-From 0162de7cafb68ad44c05f28af79a3d06575780b1 Mon Sep 17 00:00:00 2001
+From 6e3e64ff445d84a55db9c44f288f4dfea79df3aa Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Tue, 26 Jan 2021 14:17:20 -0800
-Subject: [PATCH 09/11] Sync libm with upstream FreeBSD.
+Subject: [PATCH 09/19] Sync libm with upstream FreeBSD.
 
 Upstream SHA 78599c32efed3247d165302a1fbe8d9203e38974.
 
@@ -2120,5 +2120,5 @@ index 8527e16ba..1fd46e809 100644
  #include <math.h>
  
 -- 
-2.31.1
+2.32.0
 

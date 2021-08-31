@@ -1,7 +1,7 @@
-From d1932b2cf1ee7361fe80cc02b54979f226855d9a Mon Sep 17 00:00:00 2001
+From 3d4fc8601b23d9b4f8aed3ed375b8ba84d4a8f6f Mon Sep 17 00:00:00 2001
 From: Hans Boehm <hboehm@google.com>
 Date: Fri, 12 Feb 2021 20:17:20 -0800
-Subject: [PATCH 02/27] Add nativeZygoteJitEnabled
+Subject: [PATCH 2/7] Add nativeZygoteJitEnabled
 
 ... to allow the zygote to check whether it needs to keep the jit thread
 around.
@@ -81,5 +81,5 @@ index c37b8bb51c..bc19503232 100644
    NATIVE_METHOD(ZygoteHooks, stopZygoteNoThreadCreation, "()V"),
  };
 -- 
-2.31.1
+2.32.0
 

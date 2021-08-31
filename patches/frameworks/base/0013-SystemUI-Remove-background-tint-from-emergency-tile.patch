@@ -1,4 +1,4 @@
-From c8c7384df0b725d817c390a59b092eb95755fb64 Mon Sep 17 00:00:00 2001
+From 4a4b01dadc01132b39bfb1e40cf190f4e724d399 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Fri, 6 Nov 2020 13:28:56 -0800
 Subject: [PATCH 13/63] SystemUI: Remove background tint from emergency tile
@@ -12,7 +12,7 @@ Change-Id: I08b46bb8127551ad438f2643a383c7d88ded36bd
  1 file changed, 2 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
-index 70256931964..0851858ed31 100644
+index 70256931..0851858e 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 @@ -939,8 +939,6 @@ public class GlobalActionsDialog implements DialogInterface.OnDismissListener,

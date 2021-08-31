@@ -1,7 +1,7 @@
-From 900f66b25e8f8ae70609db9bb80a84e1a8fbddbb Mon Sep 17 00:00:00 2001
+From 0ed97391b5edbd8415a064e7f7fc9f1536ab2f4a Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Fri, 31 Jul 2020 12:59:48 -0700
-Subject: [PATCH 04/11] Sync with upstream NetBSD.
+Subject: [PATCH 04/19] Sync with upstream NetBSD.
 
 Test: treehugger
 Change-Id: Ia88698f032c017fabc8d24bab12f33ed0b55e65e
@@ -52,5 +52,5 @@ index 0468026dc..6e3e22348 100644
  	xseed[1] = temp[1];
  	xseed[2] = (unsigned short) accu;
 -- 
-2.31.1
+2.32.0
 

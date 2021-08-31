@@ -1,4 +1,4 @@
-From f8b36fb155c030919c5f8972a2c616b5e33f6aba Mon Sep 17 00:00:00 2001
+From b7a5648c1896e0b12d12c488350d3712a604bccb Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Mar 2021 01:58:18 -0300
 Subject: [PATCH 28/63] FaceService: Nuke useless call to getAuthenticatorId
@@ -30,7 +30,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 1 insertion(+), 5 deletions(-)
 
 diff --git a/services/core/java/com/android/server/biometrics/face/FaceService.java b/services/core/java/com/android/server/biometrics/face/FaceService.java
-index e43f4f9e3c3..74363751c73 100644
+index e43f4f9e..74363751 100644
 --- a/services/core/java/com/android/server/biometrics/face/FaceService.java
 +++ b/services/core/java/com/android/server/biometrics/face/FaceService.java
 @@ -1185,11 +1185,7 @@ public class FaceService extends BiometricServiceBase {

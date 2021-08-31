@@ -1,4 +1,4 @@
-From 4a03f74dc3a476ff081999c4eccde3b75b273221 Mon Sep 17 00:00:00 2001
+From cfd56712bd01e982138b15a4535d43739d9f5be0 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Sun, 13 Dec 2020 19:45:47 -0800
 Subject: [PATCH 16/63] SystemUI: Improve volume panel expansion/contraction
@@ -16,7 +16,7 @@ Change-Id: I31c2fe3da2a237addbb6052bdf83f53949ee13e3
  1 file changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
-index b0ecd105b34..4cc2cb09ac1 100644
+index b0ecd105..4cc2cb09 100644
 --- a/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
 +++ b/packages/SystemUI/src/com/android/systemui/volume/VolumeDialogImpl.java
 @@ -613,9 +613,8 @@ public class VolumeDialogImpl implements VolumeDialog,

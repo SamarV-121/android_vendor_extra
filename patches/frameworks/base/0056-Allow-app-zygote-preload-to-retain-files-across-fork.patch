@@ -1,0 +1,423 @@
+From a83da428c946531decb53a7eb04a349f4a95ba8c Mon Sep 17 00:00:00 2001
+From: Egor Pasko <pasko@google.com>
+Date: Tue, 8 Jun 2021 19:01:38 +0200
+Subject: [PATCH 56/63] Allow app zygote preload to retain files across fork
+
+The bug proposes to 'move' the /proc/self/fd/ readlink/stat/etc checks
+performed by the FileDescriptorAllowlist from before-fork to an earlier
+stage.
+
+The original aim was to allow the app zygote Preload hook to open
+ashmem/memfd read-only regions to save more RAM (around 5MiB on aarch64)
+via sharing more across processes. Potentially other files/sockets can
+be opened - the app zygote takes responsibility of managing file
+descriptor access controls across its own processes. App Zygote Preload
+does not run 3rd party code.
+
+Unfortunately a straightforward move of the checks to
+just-before-preload has disadvantages:
+* opens more codepaths for potential accidental misuse (the zygote
+  accepts commands between preload and fork, there are valid usecases
+  for extending these commands)
+* this way FileDescriptorAllowlist would need to support more file
+  descriptor types (sockets and maybe pipes), which is not needed now
+  because these FDs are closed right before forking
+
+The solution proposed here is to:
+1. Determine the set of file descriptors open before preload
+2. Run the preload hook
+3. Determine FDs opened by the hook and allow them to remain open across
+   fork
+4. Hypothetical new attempts to preload (if ever supported) will not
+   affect the allowed FDs - the preload will be able to toss its own FDs
+   the way it wants, but not open the new-new ones
+
+Bug: 184808875
+Test: Manual: unreleased Chrome patch: while in app zygote preload,
+      create ashmem region, passes it to 'untrusted_app' (=browser
+      process), and call mmap(2) on it.
+Change-Id: Ie302eabca83a0e4f409cb131e4308b73e5f6a580
+---
+ .../android/internal/os/AppZygoteInit.java    |  2 +
+ core/java/com/android/internal/os/Zygote.java | 30 ++++++++
+ core/jni/com_android_internal_os_Zygote.cpp   | 62 +++++++++++++++--
+ core/jni/fd_utils.cpp                         | 68 ++++++++++---------
+ core/jni/fd_utils.h                           | 13 +++-
+ 5 files changed, 136 insertions(+), 39 deletions(-)
+
+diff --git a/core/java/com/android/internal/os/AppZygoteInit.java b/core/java/com/android/internal/os/AppZygoteInit.java
+index 0e83e41a..f925afc2 100644
+--- a/core/java/com/android/internal/os/AppZygoteInit.java
++++ b/core/java/com/android/internal/os/AppZygoteInit.java
+@@ -91,7 +91,9 @@ class AppZygoteInit {
+                     } else {
+                         Constructor<?> ctor = cl.getConstructor();
+                         ZygotePreload preloadObject = (ZygotePreload) ctor.newInstance();
++                        Zygote.markOpenedFilesBeforePreload();
+                         preloadObject.doPreload(appInfo);
++                        Zygote.allowFilesOpenedByPreload();
+                     }
+                 } catch (ReflectiveOperationException e) {
+                     Log.e(TAG, "AppZygote application preload failed for "
+diff --git a/core/java/com/android/internal/os/Zygote.java b/core/java/com/android/internal/os/Zygote.java
+index 26d4293b..bd703553 100644
+--- a/core/java/com/android/internal/os/Zygote.java
++++ b/core/java/com/android/internal/os/Zygote.java
+@@ -498,6 +498,36 @@ public final class Zygote {
+         }
+     }
+ 
++    /**
++     * Scans file descriptors in /proc/self/fd/, stores their metadata from readlink(2)/stat(2) when
++     * available. Saves this information in a global on native side, to be used by subsequent call
++     * to allowFilesOpenedByPreload(). Fatally fails if the FDs are of unsupported type and are not
++     * explicitly allowed. Ignores repeated invocations.
++     *
++     * Inspecting the FDs is more permissive than in forkAndSpecialize() because preload is invoked
++     * earlier and hence needs to allow a few open sockets. The checks in forkAndSpecialize()
++     * enforce that these sockets are closed when forking.
++     */
++    static void markOpenedFilesBeforePreload() {
++        nativeMarkOpenedFilesBeforePreload();
++    }
++
++    private static native void nativeMarkOpenedFilesBeforePreload();
++
++    /**
++     * By scanning /proc/self/fd/ determines file descriptor numbers in this process opened since
++     * the first call to markOpenedFilesBeforePreload(). These FDs are treated as 'owned' by the
++     * custom preload of the App Zygote - the app is responsible for not sharing data with its other
++     * processes using these FDs, including by lseek(2). File descriptor types and file names are
++     * not checked. Changes in FDs recorded by markOpenedFilesBeforePreload() are not expected and
++     * kill the current process.
++     */
++    static void allowFilesOpenedByPreload() {
++        nativeAllowFilesOpenedByPreload();
++    }
++
++    private static native void nativeAllowFilesOpenedByPreload();
++
+     /**
+      * Installs a seccomp filter that limits setresuid()/setresgid() to the passed-in range
+      * @param uidGidMin The smallest allowed uid/gid
+diff --git a/core/jni/com_android_internal_os_Zygote.cpp b/core/jni/com_android_internal_os_Zygote.cpp
+index c57e5001..226edbf2 100644
+--- a/core/jni/com_android_internal_os_Zygote.cpp
++++ b/core/jni/com_android_internal_os_Zygote.cpp
+@@ -36,9 +36,11 @@
+ #include <sys/types.h>
+ #include <dirent.h>
+ 
++#include <algorithm>
+ #include <array>
+ #include <atomic>
+ #include <functional>
++#include <iterator>
+ #include <list>
+ #include <optional>
+ #include <sstream>
+@@ -1940,6 +1942,9 @@ void zygote::ZygoteFailure(JNIEnv* env,
+   __builtin_unreachable();
+ }
+ 
++static std::set<int>* gPreloadFds = nullptr;
++static bool gPreloadFdsExtracted = false;
++
+ // Utility routine to fork a process from the zygote.
+ NO_PAC_FUNC
+ pid_t zygote::ForkCommon(JNIEnv* env, bool is_system_server,
+@@ -1966,9 +1971,12 @@ pid_t zygote::ForkCommon(JNIEnv* env, bool is_system_server,
+   __android_log_close();
+   AStatsSocket_close();
+ 
+-  // If this is the first fork for this zygote, create the open FD table.  If
+-  // it isn't, we just need to check whether the list of open files has changed
+-  // (and it shouldn't in the normal case).
++  // If this is the first fork for this zygote, create the open FD table,
++  // verifying that files are of supported type and allowlisted.  Otherwise (not
++  // the first fork), check that the open files have not changed.  Newly open
++  // files are not expected, and will be disallowed in the future.  Currently
++  // they are allowed if they pass the same checks as in the
++  // FileDescriptorTable::Create() above.
+   if (gOpenFdTable == nullptr) {
+     gOpenFdTable = FileDescriptorTable::Create(fds_to_ignore, fail_fn);
+   } else {
+@@ -2065,7 +2073,12 @@ static jint com_android_internal_os_Zygote_nativeForkAndSpecialize(
+         fds_to_ignore.push_back(gSystemServerSocketFd);
+     }
+ 
+-    pid_t pid = zygote::ForkCommon(env, false, fds_to_close, fds_to_ignore, true);
++    if (gPreloadFds && gPreloadFdsExtracted) {
++        fds_to_ignore.insert(fds_to_ignore.end(), gPreloadFds->begin(), gPreloadFds->end());
++    }
++
++    pid_t pid = zygote::ForkCommon(env, /* is_system_server= */ false, fds_to_close, fds_to_ignore,
++                                   true);
+ 
+     if (pid == 0) {
+       SpecializeCommon(env, uid, gid, gids, runtime_flags, rlimits,
+@@ -2207,6 +2220,10 @@ int zygote::forkApp(JNIEnv* env,
+       }
+       fds_to_ignore.push_back(gSystemServerSocketFd);
+   }
++  if (gPreloadFds && gPreloadFdsExtracted) {
++      fds_to_ignore.insert(fds_to_ignore.end(), gPreloadFds->begin(), gPreloadFds->end());
++  }
++
+   return zygote::ForkCommon(env, /* is_system_server= */ false, fds_to_close,
+                             fds_to_ignore, is_priority_fork == JNI_TRUE, purge);
+ }
+@@ -2473,6 +2490,35 @@ static jboolean com_android_internal_os_Zygote_nativeSupportsTaggedPointers(JNIE
+ #endif
+ }
+ 
++static void com_android_internal_os_Zygote_nativeMarkOpenedFilesBeforePreload(JNIEnv* env, jclass) {
++    // Ignore invocations when too early or too late.
++    if (gPreloadFds) {
++        return;
++    }
++
++    // App Zygote Preload starts soon. Save FDs remaining open.  After the
++    // preload finishes newly open files will be determined.
++    auto fail_fn = std::bind(zygote::ZygoteFailure, env, "zygote", nullptr, _1);
++    gPreloadFds = GetOpenFds(fail_fn).release();
++}
++
++static void com_android_internal_os_Zygote_nativeAllowFilesOpenedByPreload(JNIEnv* env, jclass) {
++    // Ignore invocations when too early or too late.
++    if (!gPreloadFds || gPreloadFdsExtracted) {
++        return;
++    }
++
++    // Find the newly open FDs, if any.
++    auto fail_fn = std::bind(zygote::ZygoteFailure, env, "zygote", nullptr, _1);
++    std::unique_ptr<std::set<int>> current_fds = GetOpenFds(fail_fn);
++    auto difference = std::make_unique<std::set<int>>();
++    std::set_difference(current_fds->begin(), current_fds->end(), gPreloadFds->begin(),
++                        gPreloadFds->end(), std::inserter(*difference, difference->end()));
++    delete gPreloadFds;
++    gPreloadFds = difference.release();
++    gPreloadFdsExtracted = true;
++}
++
+ static const JNINativeMethod gMethods[] = {
+         {"nativeForkAndSpecialize",
+          "(II[II[[IILjava/lang/String;Ljava/lang/String;[I[IZLjava/lang/String;Ljava/lang/"
+@@ -2515,8 +2561,14 @@ static const JNINativeMethod gMethods[] = {
+          (void*)com_android_internal_os_Zygote_nativeBoostUsapPriority},
+         {"nativeParseSigChld", "([BI[I)I",
+          (void*)com_android_internal_os_Zygote_nativeParseSigChld},
++
+         {"nativeSupportsTaggedPointers", "()Z",
+          (void*)com_android_internal_os_Zygote_nativeSupportsTaggedPointers},
++
++        {"nativeMarkOpenedFilesBeforePreload", "()V",
++         (void*)com_android_internal_os_Zygote_nativeMarkOpenedFilesBeforePreload},
++        {"nativeAllowFilesOpenedByPreload", "()V",
++         (void*)com_android_internal_os_Zygote_nativeAllowFilesOpenedByPreload},
+ };
+ 
+ int register_com_android_internal_os_Zygote(JNIEnv* env) {
+@@ -2529,4 +2581,4 @@ int register_com_android_internal_os_Zygote(JNIEnv* env) {
+ 
+   return RegisterMethodsOrDie(env, "com/android/internal/os/Zygote", gMethods, NELEM(gMethods));
+ }
+-}  // namespace android
++}  // namespace android
+\ No newline at end of file
+diff --git a/core/jni/fd_utils.cpp b/core/jni/fd_utils.cpp
+index 49d75dc3..d555ed9c 100644
+--- a/core/jni/fd_utils.cpp
++++ b/core/jni/fd_utils.cpp
+@@ -60,7 +60,6 @@ static const char* kPathWhitelist[] = {
+ 
+ static const char kFdPath[] = "/proc/self/fd";
+ 
+-// static
+ FileDescriptorWhitelist* FileDescriptorWhitelist::Get() {
+   if (instance_ == nullptr) {
+     instance_ = new FileDescriptorWhitelist();
+@@ -173,8 +172,8 @@ class FileDescriptorInfo {
+   // Create a FileDescriptorInfo for a given file descriptor.
+   static FileDescriptorInfo* CreateFromFd(int fd, fail_fn_t fail_fn);
+ 
+-  // Checks whether the file descriptor associated with this object
+-  // refers to the same description.
++  // Checks whether the file descriptor associated with this object refers to
++  // the same description.
+   bool RefersToSameFile() const;
+ 
+   void ReopenOrDetach(fail_fn_t fail_fn) const;
+@@ -189,8 +188,10 @@ class FileDescriptorInfo {
+   const bool is_sock;
+ 
+  private:
++  // Constructs for sockets.
+   explicit FileDescriptorInfo(int fd);
+ 
++  // Constructs for non-socket file descriptors.
+   FileDescriptorInfo(struct stat stat, const std::string& file_path, int fd, int open_flags,
+                      int fd_flags, int fs_flags, off_t offset);
+ 
+@@ -208,7 +209,6 @@ class FileDescriptorInfo {
+   DISALLOW_COPY_AND_ASSIGN(FileDescriptorInfo);
+ };
+ 
+-// static
+ FileDescriptorInfo* FileDescriptorInfo::CreateFromFd(int fd, fail_fn_t fail_fn) {
+   struct stat f_stat;
+   // This should never happen; the zygote should always have the right set
+@@ -470,42 +470,28 @@ void FileDescriptorInfo::DetachSocket(fail_fn_t fail_fn) const {
+   }
+ }
+ 
+-// static
++// TODO: Move the definitions here and eliminate the forward declarations. They
++// temporarily help making code reviews easier.
++static int ParseFd(dirent* dir_entry, int dir_fd);
++static std::unique_ptr<std::set<int>> GetOpenFdsIgnoring(const std::vector<int>& fds_to_ignore,
++                                                         fail_fn_t fail_fn);
++
+ FileDescriptorTable* FileDescriptorTable::Create(const std::vector<int>& fds_to_ignore,
+                                                  fail_fn_t fail_fn) {
+-  DIR* proc_fd_dir = opendir(kFdPath);
+-  if (proc_fd_dir == nullptr) {
+-    fail_fn(std::string("Unable to open directory ").append(kFdPath));
+-  }
+-
+-  int dir_fd = dirfd(proc_fd_dir);
+-  dirent* dir_entry;
++  std::unique_ptr<std::set<int>> open_fds = GetOpenFdsIgnoring(fds_to_ignore, fail_fn);
+ 
+   std::unordered_map<int, FileDescriptorInfo*> open_fd_map;
+-  while ((dir_entry = readdir(proc_fd_dir)) != nullptr) {
+-    const int fd = ParseFd(dir_entry, dir_fd);
+-    if (fd == -1) {
+-      continue;
+-    }
+-
+-    if (std::find(fds_to_ignore.begin(), fds_to_ignore.end(), fd) != fds_to_ignore.end()) {
+-      continue;
+-    }
++  for (auto fd : *open_fds) {
+ 
+     open_fd_map[fd] = FileDescriptorInfo::CreateFromFd(fd, fail_fn);
+   }
+ 
+-  if (closedir(proc_fd_dir) == -1) {
+-    fail_fn("Unable to close directory");
+-  }
+-
+   return new FileDescriptorTable(open_fd_map);
+ }
+ 
+-void FileDescriptorTable::Restat(const std::vector<int>& fds_to_ignore, fail_fn_t fail_fn) {
+-  std::set<int> open_fds;
++static std::unique_ptr<std::set<int>> GetOpenFdsIgnoring(const std::vector<int>& fds_to_ignore,
++                                                         fail_fn_t fail_fn) {
+ 
+-  // First get the list of open descriptors.
+   DIR* proc_fd_dir = opendir(kFdPath);
+   if (proc_fd_dir == nullptr) {
+     fail_fn(android::base::StringPrintf("Unable to open directory %s: %s",
+@@ -513,6 +499,7 @@ void FileDescriptorTable::Restat(const std::vector<int>& fds_to_ignore, fail_fn_
+                                         strerror(errno)));
+   }
+ 
++  auto result = std::make_unique<std::set<int>>();
+   int dir_fd = dirfd(proc_fd_dir);
+   dirent* dir_entry;
+   while ((dir_entry = readdir(proc_fd_dir)) != nullptr) {
+@@ -525,14 +512,26 @@ void FileDescriptorTable::Restat(const std::vector<int>& fds_to_ignore, fail_fn_
+       continue;
+     }
+ 
+-    open_fds.insert(fd);
++    result->insert(fd);
+   }
+ 
+   if (closedir(proc_fd_dir) == -1) {
+     fail_fn(android::base::StringPrintf("Unable to close directory: %s", strerror(errno)));
+   }
++  return result;
++}
+ 
+-  RestatInternal(open_fds, fail_fn);
++std::unique_ptr<std::set<int>> GetOpenFds(fail_fn_t fail_fn) {
++  const std::vector<int> nothing_to_ignore;
++  return GetOpenFdsIgnoring(nothing_to_ignore, fail_fn);
++}
++
++void FileDescriptorTable::Restat(const std::vector<int>& fds_to_ignore, fail_fn_t fail_fn) {
++  std::unique_ptr<std::set<int>> open_fds = GetOpenFdsIgnoring(fds_to_ignore, fail_fn);
++
++  // Check that the files did not change, and leave only newly opened FDs in
++  // |open_fds|.
++  RestatInternal(*open_fds, fail_fn);
+ }
+ 
+ // Reopens all file descriptors that are contained in the table.
+@@ -553,6 +552,12 @@ FileDescriptorTable::FileDescriptorTable(
+     : open_fd_map_(map) {
+ }
+ 
++FileDescriptorTable::~FileDescriptorTable() {
++    for (auto& it : open_fd_map_) {
++        delete it.second;
++    }
++}
++
+ void FileDescriptorTable::RestatInternal(std::set<int>& open_fds, fail_fn_t fail_fn) {
+   // ART creates a file through memfd for optimization purposes. We make sure
+   // there is at most one being created.
+@@ -623,8 +628,7 @@ void FileDescriptorTable::RestatInternal(std::set<int>& open_fds, fail_fn_t fail
+   }
+ }
+ 
+-// static
+-int FileDescriptorTable::ParseFd(dirent* dir_entry, int dir_fd) {
++static int ParseFd(dirent* dir_entry, int dir_fd) {
+   char* end;
+   const int fd = strtol(dir_entry->d_name, &end, 10);
+   if ((*end) != '\0') {
+diff --git a/core/jni/fd_utils.h b/core/jni/fd_utils.h
+index 2caf1575..62bb82e3 100644
+--- a/core/jni/fd_utils.h
++++ b/core/jni/fd_utils.h
+@@ -71,6 +71,9 @@ class FileDescriptorWhitelist {
+   DISALLOW_COPY_AND_ASSIGN(FileDescriptorWhitelist);
+ };
+ 
++// Returns the set of file descriptors currently open by the process.
++std::unique_ptr<std::set<int>> GetOpenFds(fail_fn_t fail_fn);
++
+ // A FileDescriptorTable is a collection of FileDescriptorInfo objects
+ // keyed by their FDs.
+ class FileDescriptorTable {
+@@ -81,6 +84,14 @@ class FileDescriptorTable {
+   static FileDescriptorTable* Create(const std::vector<int>& fds_to_ignore,
+                                      fail_fn_t fail_fn);
+ 
++  ~FileDescriptorTable();
++
++  // Checks that the currently open FDs did not change their metadata from
++  // stat(2), readlink(2) etc. Ignores FDs from |fds_to_ignore|.
++  //
++  // Temporary: allows newly open FDs if they pass the same checks as in
++  // Create(). This will be further restricted. See TODOs in the
++  // implementation.
+   void Restat(const std::vector<int>& fds_to_ignore, fail_fn_t fail_fn);
+ 
+   // Reopens all file descriptors that are contained in the table. Returns true
+@@ -93,8 +104,6 @@ class FileDescriptorTable {
+ 
+   void RestatInternal(std::set<int>& open_fds, fail_fn_t fail_fn);
+ 
+-  static int ParseFd(dirent* e, int dir_fd);
+-
+   // Invariant: All values in this unordered_map are non-NULL.
+   std::unordered_map<int, FileDescriptorInfo*> open_fd_map_;
+ 
+-- 
+2.31.1.606.gdf6c4f722c
+

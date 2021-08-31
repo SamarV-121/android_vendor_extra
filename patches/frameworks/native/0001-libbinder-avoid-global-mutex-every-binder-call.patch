@@ -1,0 +1,158 @@
+From 06b9a21c4f7e83b552aabcb504a6f05066033884 Mon Sep 17 00:00:00 2001
+From: Steven Moreland <smoreland@google.com>
+Date: Tue, 21 Jul 2020 02:21:48 +0000
+Subject: [PATCH 1/4] libbinder: avoid global mutex every binder call
+
+We can't get rid of a mutex (or similar) for the rarer
+ProcessState::selfOrNull access, but for ProcessState::self() accesses,
+which happen at least once every binder call, we can use the very fast
+once flags.
+
+Bug: 161336582
+Test: boots
+Change-Id: I66fee6be0260f59f80a85328228776de7e68c7fb
+---
+ libs/binder/ProcessState.cpp              | 60 ++++++++++++++---------
+ libs/binder/Static.cpp                    |  5 --
+ libs/binder/Static.h                      |  4 --
+ libs/binder/include/binder/ProcessState.h |  4 ++
+ 4 files changed, 40 insertions(+), 33 deletions(-)
+
+diff --git a/libs/binder/ProcessState.cpp b/libs/binder/ProcessState.cpp
+index 4b773e8..b9a5fbd 100644
+--- a/libs/binder/ProcessState.cpp
++++ b/libs/binder/ProcessState.cpp
+@@ -32,6 +32,7 @@
+ 
+ #include <errno.h>
+ #include <fcntl.h>
++#include <mutex>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+@@ -73,38 +74,49 @@ protected:
+ 
+ sp<ProcessState> ProcessState::self()
+ {
+-    Mutex::Autolock _l(gProcessMutex);
+-    if (gProcess != nullptr) {
+-        return gProcess;
+-    }
+-    gProcess = new ProcessState(kDefaultDriver);
+-    return gProcess;
++    return init(kDefaultDriver, false /*requireDefault*/);
+ }
+ 
+ sp<ProcessState> ProcessState::initWithDriver(const char* driver)
+ {
+-    Mutex::Autolock _l(gProcessMutex);
+-    if (gProcess != nullptr) {
+-        // Allow for initWithDriver to be called repeatedly with the same
+-        // driver.
+-        if (!strcmp(gProcess->getDriverName().c_str(), driver)) {
+-            return gProcess;
+-        }
+-        LOG_ALWAYS_FATAL("ProcessState was already initialized.");
+-    }
+-
+-    if (access(driver, R_OK) == -1) {
+-        ALOGE("Binder driver %s is unavailable. Using /dev/binder instead.", driver);
+-        driver = "/dev/binder";
+-    }
+-
+-    gProcess = new ProcessState(driver);
+-    return gProcess;
++    return init(driver, true /*requireDefault*/);
+ }
+ 
+ sp<ProcessState> ProcessState::selfOrNull()
+ {
+-    Mutex::Autolock _l(gProcessMutex);
++    return init(nullptr, false /*requireDefault*/);
++}
++
++sp<ProcessState> ProcessState::init(const char *driver, bool requireDefault)
++{
++    [[clang::no_destroy]] static sp<ProcessState> gProcess;
++    [[clang::no_destroy]] static std::mutex gProcessMutex;
++
++    if (driver == nullptr) {
++        std::lock_guard<std::mutex> l(gProcessMutex);
++        return gProcess;
++    }
++
++    [[clang::no_destroy]] static std::once_flag gProcessOnce;
++    std::call_once(gProcessOnce, [&](){
++        if (access(driver, R_OK) == -1) {
++            ALOGE("Binder driver %s is unavailable. Using /dev/binder instead.", driver);
++            driver = "/dev/binder";
++        }
++
++        std::lock_guard<std::mutex> l(gProcessMutex);
++        gProcess = new ProcessState(driver);
++    });
++
++    if (requireDefault) {
++        // Detect if we are trying to initialize with a different driver, and
++        // consider that an error. ProcessState will only be initialized once above.
++        LOG_ALWAYS_FATAL_IF(gProcess->getDriverName() != driver,
++                            "ProcessState was already initialized with %s,"
++                            " can't initialize with %s.",
++                            gProcess->getDriverName().c_str(), driver);
++    }
++
+     return gProcess;
+ }
+ 
+diff --git a/libs/binder/Static.cpp b/libs/binder/Static.cpp
+index 779ed41..db0f1c7 100644
+--- a/libs/binder/Static.cpp
++++ b/libs/binder/Static.cpp
+@@ -68,9 +68,4 @@ TextOutput& alog(*new LogTextOutput());
+ TextOutput& aout(*new FdTextOutput(STDOUT_FILENO));
+ TextOutput& aerr(*new FdTextOutput(STDERR_FILENO));
+ 
+-// ------------ ProcessState.cpp
+-
+-Mutex& gProcessMutex = *new Mutex;
+-sp<ProcessState> gProcess;
+-
+ }   // namespace android
+diff --git a/libs/binder/Static.h b/libs/binder/Static.h
+index f8e0ee5..83524e8 100644
+--- a/libs/binder/Static.h
++++ b/libs/binder/Static.h
+@@ -27,8 +27,4 @@ namespace android {
+ // For TextStream.cpp
+ extern Vector<int32_t> gTextBuffers;
+ 
+-// For ProcessState.cpp
+-extern Mutex& gProcessMutex;
+-extern sp<ProcessState> gProcess;
+-
+ }   // namespace android
+diff --git a/libs/binder/include/binder/ProcessState.h b/libs/binder/include/binder/ProcessState.h
+index e57ff1c..9f5346a 100644
+--- a/libs/binder/include/binder/ProcessState.h
++++ b/libs/binder/include/binder/ProcessState.h
+@@ -42,6 +42,8 @@ public:
+      * any call to ProcessState::self(). The default is /dev/vndbinder
+      * for processes built with the VNDK and /dev/binder for those
+      * which are not.
++     *
++     * If this is called with nullptr, the behavior is the same as selfOrNull.
+      */
+     static  sp<ProcessState>    initWithDriver(const char *driver);
+ 
+@@ -90,6 +92,8 @@ public:
+             void setCallRestriction(CallRestriction restriction);
+ 
+ private:
++    static  sp<ProcessState>    init(const char *defaultDriver, bool requireDefault);
++
+     friend class IPCThreadState;
+     
+             explicit            ProcessState(const char* driver);
+-- 
+2.32.0
+

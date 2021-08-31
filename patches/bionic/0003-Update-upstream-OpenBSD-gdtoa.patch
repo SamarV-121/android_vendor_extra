@@ -1,7 +1,7 @@
-From 8e39a61217ac6c61900e2dfc8b4261daefaaad23 Mon Sep 17 00:00:00 2001
+From a8e9bdcd005c93b32781f3b1caa76395988de504 Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Fri, 5 Jun 2020 16:56:53 -0700
-Subject: [PATCH 03/11] Update upstream OpenBSD gdtoa.
+Subject: [PATCH 03/19] Update upstream OpenBSD gdtoa.
 
 Also add a test for the bug that this fixes.
 
@@ -281,5 +281,5 @@ index 75abbd235..f6eca05f4 100644
    char buf[BUFSIZ];
    wint_t wc = L'a';
 -- 
-2.31.1
+2.32.0
 

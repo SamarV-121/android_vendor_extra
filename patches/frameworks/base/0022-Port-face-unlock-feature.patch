@@ -1,4 +1,4 @@
-From f2a018cfc83342dc5ddae60e65e61e218c3d9838 Mon Sep 17 00:00:00 2001
+From 2bae3cb74355d4dd2f73357e069345be481f6685 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Feb 2021 17:04:10 -0300
 Subject: [PATCH 22/63] Port face unlock feature
@@ -18,7 +18,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  create mode 100644 services/core/java/com/android/server/biometrics/face/CustomFaceService.java
 
 diff --git a/packages/SystemUI/Android.bp b/packages/SystemUI/Android.bp
-index c78630c05f0..7e481112aac 100644
+index c78630c0..7e481112 100644
 --- a/packages/SystemUI/Android.bp
 +++ b/packages/SystemUI/Android.bp
 @@ -73,6 +73,7 @@ android_library {
@@ -30,7 +30,7 @@ index c78630c05f0..7e481112aac 100644
      manifest: "AndroidManifest.xml",
      additional_manifests: ["LineageManifest.xml"],
 diff --git a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
-index 4f644784974..5e55df5eb38 100644
+index 4f644784..5e55df5e 100644
 --- a/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
 +++ b/packages/SystemUI/src/com/android/keyguard/KeyguardUpdateMonitor.java
 @@ -127,6 +127,8 @@ import java.util.function.Consumer;
@@ -69,7 +69,7 @@ index 4f644784974..5e55df5eb38 100644
          return whitelistIpcs(() -> dpm != null && (dpm.getKeyguardDisabledFeatures(null, userId)
                  & DevicePolicyManager.KEYGUARD_DISABLE_FACE) != 0
 diff --git a/services/core/Android.bp b/services/core/Android.bp
-index 55e109e3329..59f286dbe8f 100644
+index 55e109e3..59f286db 100644
 --- a/services/core/Android.bp
 +++ b/services/core/Android.bp
 @@ -142,6 +142,7 @@ java_library_static {
@@ -81,7 +81,7 @@ index 55e109e3329..59f286dbe8f 100644
  }
  
 diff --git a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
-index 5bb4d272eae..c79e9555337 100644
+index 5bb4d272..c79e9555 100644
 --- a/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 +++ b/services/core/java/com/android/server/biometrics/BiometricServiceBase.java
 @@ -718,7 +718,7 @@ public abstract class BiometricServiceBase extends SystemService
@@ -167,7 +167,7 @@ index 5bb4d272eae..c79e9555337 100644
          }
 diff --git a/services/core/java/com/android/server/biometrics/face/CustomFaceService.java b/services/core/java/com/android/server/biometrics/face/CustomFaceService.java
 new file mode 100644
-index 00000000000..1a79610e33d
+index 00000000..1a79610e
 --- /dev/null
 +++ b/services/core/java/com/android/server/biometrics/face/CustomFaceService.java
 @@ -0,0 +1,448 @@
@@ -621,7 +621,7 @@ index 00000000000..1a79610e33d
 +}
 \ No newline at end of file
 diff --git a/services/core/java/com/android/server/biometrics/face/FaceService.java b/services/core/java/com/android/server/biometrics/face/FaceService.java
-index e5a1898459a..e43f4f9e3c3 100644
+index e5a18984..e43f4f9e 100644
 --- a/services/core/java/com/android/server/biometrics/face/FaceService.java
 +++ b/services/core/java/com/android/server/biometrics/face/FaceService.java
 @@ -60,6 +60,7 @@ import android.util.Slog;

@@ -1,4 +1,4 @@
-From 81ce683a3c40ab851ef25553d50fe187a1e6ebbc Mon Sep 17 00:00:00 2001
+From ef125ef7d2571661a934bf45e78f8f354a522e22 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Wed, 17 Mar 2021 16:29:59 -0700
 Subject: [PATCH 43/63] SystemUI: Add machine learning back gesture provider
@@ -20,7 +20,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  create mode 100644 packages/SystemUI/src/org/protonaosp/systemui/CustomSystemUIFactory.kt
 
 diff --git a/packages/SystemUI/Android.bp b/packages/SystemUI/Android.bp
-index 7e481112aac..f386604af94 100644
+index 7e481112..f386604a 100644
 --- a/packages/SystemUI/Android.bp
 +++ b/packages/SystemUI/Android.bp
 @@ -74,6 +74,7 @@ android_library {
@@ -41,7 +41,7 @@ index 7e481112aac..f386604af94 100644
  
      platform_apis: true,
 diff --git a/packages/SystemUI/proguard.flags b/packages/SystemUI/proguard.flags
-index 2a2ba1b0cca..e6346489664 100644
+index 2a2ba1b0..e6346489 100644
 --- a/packages/SystemUI/proguard.flags
 +++ b/packages/SystemUI/proguard.flags
 @@ -16,6 +16,7 @@
@@ -61,7 +61,7 @@ index 2a2ba1b0cca..e6346489664 100644
 +}
 diff --git a/packages/SystemUI/src/org/protonaosp/systemui/CustomBackGestureTfClassifierProvider.kt b/packages/SystemUI/src/org/protonaosp/systemui/CustomBackGestureTfClassifierProvider.kt
 new file mode 100644
-index 00000000000..dee37d99dd5
+index 00000000..dee37d99
 --- /dev/null
 +++ b/packages/SystemUI/src/org/protonaosp/systemui/CustomBackGestureTfClassifierProvider.kt
 @@ -0,0 +1,41 @@
@@ -108,7 +108,7 @@ index 00000000000..dee37d99dd5
 +}
 diff --git a/packages/SystemUI/src/org/protonaosp/systemui/CustomSystemUIFactory.kt b/packages/SystemUI/src/org/protonaosp/systemui/CustomSystemUIFactory.kt
 new file mode 100644
-index 00000000000..66e883ec313
+index 00000000..66e883ec
 --- /dev/null
 +++ b/packages/SystemUI/src/org/protonaosp/systemui/CustomSystemUIFactory.kt
 @@ -0,0 +1,10 @@

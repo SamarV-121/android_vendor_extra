@@ -1,4 +1,4 @@
-From 836caf81cf5fc5dfa2a9e5175def9254a621b4e6 Mon Sep 17 00:00:00 2001
+From 8aaa50e58a98c694fe43cf36d1abc91b8e89af5d Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Mon, 8 Feb 2021 16:11:45 -0300
 Subject: [PATCH 25/63] LockIcon: Don't cache icon when scanning face
@@ -10,7 +10,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 6 insertions(+)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java
-index ec54b302b05..40b329d3903 100644
+index ec54b302..40b329d3 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/LockIcon.java
 @@ -56,6 +56,7 @@ public class LockIcon extends KeyguardAffordanceView {

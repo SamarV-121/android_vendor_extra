@@ -1,4 +1,4 @@
-From c250461ce36bb75b2047302e4b31f4aee258e47f Mon Sep 17 00:00:00 2001
+From e84e588a772233d333d03ba471a0ce3dc59ed223 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:39:55 -0700
 Subject: [PATCH 38/63] LocalServices: Replace ArrayMap with HashMap for
@@ -99,7 +99,7 @@ Change-Id: Ifd1f8b7940eba7723f93a73456470a84d34656ae
  1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/core/java/com/android/server/LocalServices.java b/core/java/com/android/server/LocalServices.java
-index 9c632ea725a..ca94bb08afc 100644
+index 9c632ea7..ca94bb08 100644
 --- a/core/java/com/android/server/LocalServices.java
 +++ b/core/java/com/android/server/LocalServices.java
 @@ -18,7 +18,7 @@ package com.android.server;

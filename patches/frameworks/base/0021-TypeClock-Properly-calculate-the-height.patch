@@ -1,4 +1,4 @@
-From 71d9bb02edca44952323ffbde9b05feb6c3f4103 Mon Sep 17 00:00:00 2001
+From 8aa6bdbcf11c16f249a38e323746546bf3258cc1 Mon Sep 17 00:00:00 2001
 From: El Dainosor <eldainosor@gmail.com>
 Date: Fri, 17 Apr 2020 23:35:23 +0000
 Subject: [PATCH 21/63] TypeClock: Properly calculate the height
@@ -13,7 +13,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  1 file changed, 16 insertions(+), 4 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java b/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
-index 890ba1da091..c08a43bf8ef 100644
+index 890ba1da..c08a43bf 100644
 --- a/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
 +++ b/packages/SystemUI/src/com/android/keyguard/clock/TypeClockController.java
 @@ -21,6 +21,7 @@ import android.graphics.Bitmap;

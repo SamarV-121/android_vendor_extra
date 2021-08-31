@@ -1,4 +1,4 @@
-From e97a0246e6416d19213dc79d55a8477c5c793690 Mon Sep 17 00:00:00 2001
+From afdc7f0f71dab4e41f30240da9820ca88a48e3d6 Mon Sep 17 00:00:00 2001
 From: Ethan Halsall <ethan.halsall@gmail.com>
 Date: Thu, 9 Apr 2020 23:35:54 +0100
 Subject: [PATCH 24/63] base: do not use new lockscreen layout for bypass
@@ -15,7 +15,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  2 files changed, 9 insertions(+), 6 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
-index 0e76c904f8c..20ed8491bd6 100644
+index 0e76c904..20ed8491 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/BiometricUnlockController.java
 @@ -533,7 +533,7 @@ public class BiometricUnlockController extends KeyguardUpdateMonitorCallback imp
@@ -28,7 +28,7 @@ index 0e76c904f8c..20ed8491bd6 100644
          if (!mUpdateMonitor.isDeviceInteractive()) {
              if (!mKeyguardViewController.isShowing()) {
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt
-index 0827511cac3..c01132fb5b6 100644
+index 0827511c..c01132fb 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/KeyguardBypassController.kt
 @@ -63,6 +63,8 @@ open class KeyguardBypassController : Dumpable {

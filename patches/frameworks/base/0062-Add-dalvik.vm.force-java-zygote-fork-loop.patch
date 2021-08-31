@@ -1,0 +1,41 @@
+From 1457a5a681c2960363aca169b4d1d2719bb74e95 Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Fri, 25 Jun 2021 08:37:24 -0700
+Subject: [PATCH 62/63] Add dalvik.vm.force-java-zygote-fork-loop
+
+Bug: 192020504
+Test: Check logcat with and without the flag.
+Change-Id: Ia46a011125a6e245bbd9065d708d1f905d56e3af
+---
+ core/jni/AndroidRuntime.cpp | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/core/jni/AndroidRuntime.cpp b/core/jni/AndroidRuntime.cpp
+index 3f66b797..57fce1ad 100644
+--- a/core/jni/AndroidRuntime.cpp
++++ b/core/jni/AndroidRuntime.cpp
+@@ -668,6 +668,7 @@ int AndroidRuntime::startVm(JavaVM** pJavaVM, JNIEnv** pEnv, bool zygote, bool p
+     char methodTraceFileBuf[sizeof("-Xmethod-trace-file:") + PROPERTY_VALUE_MAX];
+     char methodTraceFileSizeBuf[sizeof("-Xmethod-trace-file-size:") + PROPERTY_VALUE_MAX];
+     std::string fingerprintBuf;
++    char javaZygoteForkLoopBuf[sizeof("-XX:ForceJavaZygoteForkLoop=") + PROPERTY_VALUE_MAX];
+     char jdwpProviderBuf[sizeof("-XjdwpProvider:") - 1 + PROPERTY_VALUE_MAX];
+     char opaqueJniIds[sizeof("-Xopaque-jni-ids:") - 1 + PROPERTY_VALUE_MAX];
+     char bootImageBuf[sizeof("-Ximage:") - 1 + PROPERTY_VALUE_MAX];
+@@ -869,6 +870,13 @@ int AndroidRuntime::startVm(JavaVM** pJavaVM, JNIEnv** pEnv, bool zygote, bool p
+ 
+     parseRuntimeOption("dalvik.vm.backgroundgctype", backgroundgcOptsBuf, "-XX:BackgroundGC=");
+ 
++    /*
++     * Enable/disable zygote native fork loop.
++     */
++    parseRuntimeOption("dalvik.vm.force-java-zygote-fork-loop",
++                       javaZygoteForkLoopBuf,
++                       "-XX:ForceJavaZygoteForkLoop=");
++
+     /*
+      * Enable debugging only for apps forked from zygote.
+      */
+-- 
+2.31.1.606.gdf6c4f722c
+

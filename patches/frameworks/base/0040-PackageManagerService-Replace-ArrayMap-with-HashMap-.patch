@@ -1,4 +1,4 @@
-From 79c1c77fc4fcc307a8c1eac826138eaec31cff93 Mon Sep 17 00:00:00 2001
+From c05c0fb3133c29e60366b00b1d30c9e344562098 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:58:24 -0700
 Subject: [PATCH 40/63] PackageManagerService: Replace ArrayMap with HashMap
@@ -77,7 +77,7 @@ Change-Id: Ie888a6d88390529fde7cb4ba4758058c74b1ff01
  5 files changed, 70 insertions(+), 100 deletions(-)
 
 diff --git a/services/core/java/com/android/server/pm/AppsFilter.java b/services/core/java/com/android/server/pm/AppsFilter.java
-index 10f77144e02..553e994fab7 100644
+index 10f77144..553e994f 100644
 --- a/services/core/java/com/android/server/pm/AppsFilter.java
 +++ b/services/core/java/com/android/server/pm/AppsFilter.java
 @@ -62,6 +62,7 @@ import com.android.server.pm.parsing.pkg.AndroidPackage;
@@ -269,7 +269,7 @@ index 10f77144e02..553e994fab7 100644
                  }
              }
 diff --git a/services/core/java/com/android/server/pm/InstantAppRegistry.java b/services/core/java/com/android/server/pm/InstantAppRegistry.java
-index 0eaac4140c1..afeb654a0cb 100644
+index 0eaac414..afeb654a 100644
 --- a/services/core/java/com/android/server/pm/InstantAppRegistry.java
 +++ b/services/core/java/com/android/server/pm/InstantAppRegistry.java
 @@ -691,9 +691,7 @@ class InstantAppRegistry {
@@ -295,7 +295,7 @@ index 0eaac4140c1..afeb654a0cb 100644
              if (ps == null || !ps.getInstantApp(userId)) {
                  continue;
 diff --git a/services/core/java/com/android/server/pm/KeySetManagerService.java b/services/core/java/com/android/server/pm/KeySetManagerService.java
-index dabcc35103b..37cb093619a 100644
+index dabcc351..37cb0936 100644
 --- a/services/core/java/com/android/server/pm/KeySetManagerService.java
 +++ b/services/core/java/com/android/server/pm/KeySetManagerService.java
 @@ -64,7 +64,7 @@ public class KeySetManagerService {
@@ -326,7 +326,7 @@ index dabcc35103b..37cb093619a 100644
              if (packageName != null && !packageName.equals(keySetPackage)) {
                  continue;
 diff --git a/services/core/java/com/android/server/pm/PackageManagerService.java b/services/core/java/com/android/server/pm/PackageManagerService.java
-index a97a48b606d..dc42c6b997b 100644
+index a97a48b6..dc42c6b9 100644
 --- a/services/core/java/com/android/server/pm/PackageManagerService.java
 +++ b/services/core/java/com/android/server/pm/PackageManagerService.java
 @@ -758,7 +758,7 @@ public class PackageManagerService extends IPackageManager.Stub
@@ -477,7 +477,7 @@ index a97a48b606d..dc42c6b997b 100644
                  if (setting == null || !setting.getInstalled(userId)) {
                      continue;
 diff --git a/services/core/java/com/android/server/pm/Settings.java b/services/core/java/com/android/server/pm/Settings.java
-index 755ea6e43a0..02efbde0906 100644
+index 755ea6e4..02efbde0 100644
 --- a/services/core/java/com/android/server/pm/Settings.java
 +++ b/services/core/java/com/android/server/pm/Settings.java
 @@ -137,6 +137,7 @@ import java.util.Arrays;

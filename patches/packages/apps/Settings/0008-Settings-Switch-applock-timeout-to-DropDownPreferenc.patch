@@ -1,0 +1,65 @@
+From 5d21536c12d1312386773b7fd3008186494389b1 Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Tue, 13 Apr 2021 16:26:46 +0530
+Subject: [PATCH 8/8] Settings: Switch applock timeout to DropDownPreference
+
+ * looks better imho
+
+Signed-off-by: Adithya R <gh0strider.2k18.reborn@gmail.com>
+---
+ res/xml/security_settings_applock.xml                     | 2 +-
+ .../settings/security/applock/AppLockSettings.java        | 8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/res/xml/security_settings_applock.xml b/res/xml/security_settings_applock.xml
+index e221990..88d5376 100644
+--- a/res/xml/security_settings_applock.xml
++++ b/res/xml/security_settings_applock.xml
+@@ -21,7 +21,7 @@
+     android:title="@string/applock_title"
+     settings:keywords="@string/keywords_applock_settings">
+ 
+-    <ListPreference
++    <DropDownPreference
+         android:key="applock_lock_after"
+         android:defaultValue="0"
+         android:entries="@array/applock_lock_after_entries"
+diff --git a/src/com/android/settings/security/applock/AppLockSettings.java b/src/com/android/settings/security/applock/AppLockSettings.java
+index d572985..fae012d 100644
+--- a/src/com/android/settings/security/applock/AppLockSettings.java
++++ b/src/com/android/settings/security/applock/AppLockSettings.java
+@@ -38,7 +38,7 @@ import android.widget.SearchView;
+ import androidx.lifecycle.ViewModelProviders;
+ import androidx.preference.Preference;
+ import androidx.preference.PreferenceScreen;
+-import androidx.preference.ListPreference;
++import androidx.preference.DropDownPreference;
+ 
+ import com.android.settings.biometrics.BiometricEnrollBase;
+ import com.android.settings.R;
+@@ -101,7 +101,7 @@ public class AppLockSettings extends SubSettings {
+         private SearchView mSearchView;
+         private SearchFilter mSearchFilter;
+         private PreferenceScreen mPreferenceScreen;
+-        private ListPreference lockTimeoutPref;
++        private DropDownPreference lockTimeoutPref;
+         private Preference mLocked;
+         private Preference mUnlocked;
+         private Preference mNotifInfo;
+@@ -446,11 +446,11 @@ public class AppLockSettings extends SubSettings {
+         }
+ 
+         private void setLockTimeoutSummary() {
+-                lockTimeoutPref.setSummaryProvider(new Preference.SummaryProvider<ListPreference>() {
++                lockTimeoutPref.setSummaryProvider(new Preference.SummaryProvider<DropDownPreference>() {
+                 private String summaryText = "";
+ 
+                 @Override
+-                public CharSequence provideSummary(ListPreference preference) {
++                public CharSequence provideSummary(DropDownPreference preference) {
+                     final int selectedLockTimeout = Integer.parseInt(preference.getValue());
+                     switch (selectedLockTimeout) {
+                         case 0:
+-- 
+2.32.0
+

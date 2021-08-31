@@ -1,0 +1,103 @@
+From 1b5c289138ab2d30a5ee6deefe876cfcc3492ef4 Mon Sep 17 00:00:00 2001
+From: Steven Moreland <smoreland@google.com>
+Date: Sat, 16 Jan 2021 02:39:45 +0000
+Subject: [PATCH 3/4] libbinder - avoid pthread_cond_broadcast per call
+
+Because it uses:
+- 0.4% of system_server CPU time
+- 1% of com.android.bluetooth
+- 0.8% of com.android.phone
+
+This call is used to implement
+IPCThreadState::blockUntilThreadAvailable, but this API is actually only
+used by WatchDog.java, and due to the locking we have in place here, we
+have more information than pthread does internally to tell it when a
+broadcast would actually be useful.
+
+Future considerations: this API is actually broken in the case of poll
+calls or if too many userspace threads manually call joinRpcThreadpool.
+We could move the binder part of WatchDog.java into a separate process
+and completely remove all of the associated infrastructure. An external
+process could call pingBinder (or similar) on different services. This
+would have the same effect, but it would use the existing path of
+processing a transaction in order to detect deadlocks.
+
+Bug: 168806193
+Test: boot, manually check how often this gets called now (only when
+    the binder threadpool is saturated when this is called, so at most
+    once/30 seconds given WatchDog's current implementation)
+Change-Id: I44f8ff0d8ca2cdf236a9fa3ad1e3a0241663bfcd
+---
+ libs/binder/IPCThreadState.cpp            | 9 ++++++++-
+ libs/binder/ProcessState.cpp              | 1 +
+ libs/binder/include/binder/ProcessState.h | 5 ++++-
+ 3 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/libs/binder/IPCThreadState.cpp b/libs/binder/IPCThreadState.cpp
+index 847b73a..e5b22f0 100644
+--- a/libs/binder/IPCThreadState.cpp
++++ b/libs/binder/IPCThreadState.cpp
+@@ -481,12 +481,14 @@ void IPCThreadState::flushCommands()
+ void IPCThreadState::blockUntilThreadAvailable()
+ {
+     pthread_mutex_lock(&mProcess->mThreadCountLock);
++    mProcess->mWaitingForThreads++;
+     while (mProcess->mExecutingThreadsCount >= mProcess->mMaxThreads) {
+         ALOGW("Waiting for thread to be free. mExecutingThreadsCount=%lu mMaxThreads=%lu\n",
+                 static_cast<unsigned long>(mProcess->mExecutingThreadsCount),
+                 static_cast<unsigned long>(mProcess->mMaxThreads));
+         pthread_cond_wait(&mProcess->mThreadCountDecrement, &mProcess->mThreadCountLock);
+     }
++    mProcess->mWaitingForThreads--;
+     pthread_mutex_unlock(&mProcess->mThreadCountLock);
+ }
+ 
+@@ -526,7 +528,12 @@ status_t IPCThreadState::getAndExecuteCommand()
+             }
+             mProcess->mStarvationStartTimeMs = 0;
+         }
+-        pthread_cond_broadcast(&mProcess->mThreadCountDecrement);
++
++        // Cond broadcast can be expensive, so don't send it every time a binder
++        // call is processed. b/168806193
++        if (mProcess->mWaitingForThreads > 0) {
++            pthread_cond_broadcast(&mProcess->mThreadCountDecrement);
++        }
+         pthread_mutex_unlock(&mProcess->mThreadCountLock);
+     }
+ 
+diff --git a/libs/binder/ProcessState.cpp b/libs/binder/ProcessState.cpp
+index b9a5fbd..73a1253 100644
+--- a/libs/binder/ProcessState.cpp
++++ b/libs/binder/ProcessState.cpp
+@@ -393,6 +393,7 @@ ProcessState::ProcessState(const char *driver)
+     , mThreadCountLock(PTHREAD_MUTEX_INITIALIZER)
+     , mThreadCountDecrement(PTHREAD_COND_INITIALIZER)
+     , mExecutingThreadsCount(0)
++    , mWaitingForThreads(0)
+     , mMaxThreads(DEFAULT_MAX_BINDER_THREADS)
+     , mStarvationStartTimeMs(0)
+     , mBinderContextCheckFunc(nullptr)
+diff --git a/libs/binder/include/binder/ProcessState.h b/libs/binder/include/binder/ProcessState.h
+index 9f5346a..c45ab11 100644
+--- a/libs/binder/include/binder/ProcessState.h
++++ b/libs/binder/include/binder/ProcessState.h
+@@ -114,11 +114,14 @@ private:
+             int                 mDriverFD;
+             void*               mVMStart;
+ 
+-            // Protects thread count variable below.
++            // Protects thread count and wait variables below.
+             pthread_mutex_t     mThreadCountLock;
++            // Broadcast whenever mWaitingForThreads > 0
+             pthread_cond_t      mThreadCountDecrement;
+             // Number of binder threads current executing a command.
+             size_t              mExecutingThreadsCount;
++            // Number of threads calling IPCThreadState::blockUntilThreadAvailable()
++            size_t              mWaitingForThreads;
+             // Maximum number for binder threads allowed for this process.
+             size_t              mMaxThreads;
+             // Time when thread pool was emptied
+-- 
+2.32.0
+

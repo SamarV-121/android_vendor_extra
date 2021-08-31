@@ -1,7 +1,7 @@
-From 09805eeb741f72b01d1d501e33fa169eb599095e Mon Sep 17 00:00:00 2001
+From a248054711125c7fc929e10972eebbe9ac1eee75 Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Thu, 7 Nov 2019 19:06:00 +0100
-Subject: [PATCH 3/9] Settings: Add three-fingers-swipe to screenshot [2/2]
+Subject: [PATCH 3/8] Settings: Add three-fingers-swipe to screenshot [2/2]
 
 * Thanks Sahul Krishan for the beautiful animation
 
@@ -26572,7 +26572,7 @@ literal 0
 HcmV?d00001
 
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index c93c6e9959..822f1c8865 100644
+index c93c6e9..822f1c8 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
 @@ -159,4 +159,8 @@
@@ -26585,7 +26585,7 @@ index c93c6e9959..822f1c8865 100644
 +    <string name="three_finger_gesture_summary">Swipe down with three fingers to take a screenshot</string>
  </resources>
 diff --git a/res/xml/gestures.xml b/res/xml/gestures.xml
-index e0d91388ac..ce09c581e8 100644
+index e0d9138..ce09c58 100644
 --- a/res/xml/gestures.xml
 +++ b/res/xml/gestures.xml
 @@ -100,4 +100,11 @@
@@ -26602,7 +26602,7 @@ index e0d91388ac..ce09c581e8 100644
  </PreferenceScreen>
 diff --git a/res/xml/swipe_to_screenshot_gesture_settings.xml b/res/xml/swipe_to_screenshot_gesture_settings.xml
 new file mode 100644
-index 0000000000..90327e648f
+index 0000000..90327e6
 --- /dev/null
 +++ b/res/xml/swipe_to_screenshot_gesture_settings.xml
 @@ -0,0 +1,37 @@
@@ -26644,7 +26644,7 @@ index 0000000000..90327e648f
 +
 +</PreferenceScreen>
 diff --git a/src/com/android/settings/gestures/GesturesSettingPreferenceController.java b/src/com/android/settings/gestures/GesturesSettingPreferenceController.java
-index 9d4d538f42..cd9376e49e 100644
+index 9d4d538..cd9376e 100644
 --- a/src/com/android/settings/gestures/GesturesSettingPreferenceController.java
 +++ b/src/com/android/settings/gestures/GesturesSettingPreferenceController.java
 @@ -81,6 +81,7 @@ public class GesturesSettingPreferenceController extends BasePreferenceControlle
@@ -26657,7 +26657,7 @@ index 9d4d538f42..cd9376e49e 100644
  
 diff --git a/src/com/android/settings/gestures/SwipeToScreenshotGestureSettings.java b/src/com/android/settings/gestures/SwipeToScreenshotGestureSettings.java
 new file mode 100644
-index 0000000000..ae0f4e3ae9
+index 0000000..ae0f4e3
 --- /dev/null
 +++ b/src/com/android/settings/gestures/SwipeToScreenshotGestureSettings.java
 @@ -0,0 +1,68 @@
@@ -26731,7 +26731,7 @@ index 0000000000..ae0f4e3ae9
 +}
 diff --git a/src/com/android/settings/gestures/SwipeToScreenshotPreferenceController.java b/src/com/android/settings/gestures/SwipeToScreenshotPreferenceController.java
 new file mode 100644
-index 0000000000..121428eaae
+index 0000000..121428e
 --- /dev/null
 +++ b/src/com/android/settings/gestures/SwipeToScreenshotPreferenceController.java
 @@ -0,0 +1,62 @@
@@ -26798,5 +26798,5 @@ index 0000000000..121428eaae
 +    }
 +}
 -- 
-2.25.1
+2.32.0
 

@@ -1,7 +1,7 @@
-From 84160f37f9a1ffc0900f49d02b9399a98172b5f8 Mon Sep 17 00:00:00 2001
+From d84715b5e73002bb860e882749910492c4ad6869 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Sun, 7 Feb 2021 21:14:30 -0300
-Subject: [PATCH 4/9] Port faceunlock feature
+Subject: [PATCH 4/8] Port faceunlock feature
 
 From motorola/nio_retcn/nio:11/RRN31.Q1-20-17-1/1cbc0:user/release-keys
 
@@ -42,7 +42,7 @@ Signed-off-by: SamarV-121 <samarvispute121@gmail.com>
  create mode 100644 src/com/android/settings/custom/biometrics/face/FaceSettingsRedoPreferenceController.java
 
 diff --git a/Android.bp b/Android.bp
-index aac82c695a..b99b164015 100644
+index aac82c6..b99b164 100644
 --- a/Android.bp
 +++ b/Android.bp
 @@ -57,6 +57,7 @@ android_library {
@@ -54,7 +54,7 @@ index aac82c695a..b99b164015 100644
  
      libs: [
 diff --git a/AndroidManifest.xml b/AndroidManifest.xml
-index 6ead75a878..b06435ebf2 100644
+index 6ead75a..b06435e 100644
 --- a/AndroidManifest.xml
 +++ b/AndroidManifest.xml
 @@ -107,6 +107,10 @@
@@ -87,7 +87,7 @@ index 6ead75a878..b06435ebf2 100644
  </manifest>
 diff --git a/res/layout/face_enroll_button.xml b/res/layout/face_enroll_button.xml
 deleted file mode 100644
-index f40c42c4bf..0000000000
+index f40c42c..0000000
 --- a/res/layout/face_enroll_button.xml
 +++ /dev/null
 @@ -1,31 +0,0 @@
@@ -125,7 +125,7 @@ index f40c42c4bf..0000000000
 \ No newline at end of file
 diff --git a/res/layout/face_remove_button.xml b/res/layout/face_remove_button.xml
 deleted file mode 100644
-index 98459f0942..0000000000
+index 98459f0..0000000
 --- a/res/layout/face_remove_button.xml
 +++ /dev/null
 @@ -1,31 +0,0 @@
@@ -162,7 +162,7 @@ index 98459f0942..0000000000
 -</LinearLayout>
 \ No newline at end of file
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index 822f1c8865..77cc9d38fc 100644
+index 822f1c8..77cc9d3 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
 @@ -163,4 +163,13 @@
@@ -180,7 +180,7 @@ index 822f1c8865..77cc9d38fc 100644
 +    <string name="face_redo_warning_msg">Do you want to remove the existing face scan and create a new one?</string>
  </resources>
 diff --git a/res/xml/security_settings_face.xml b/res/xml/security_settings_face.xml
-index d450fef4de..2721278c7c 100644
+index d450fef..2721278 100644
 --- a/res/xml/security_settings_face.xml
 +++ b/res/xml/security_settings_face.xml
 @@ -27,29 +27,50 @@
@@ -263,7 +263,7 @@ index d450fef4de..2721278c7c 100644
          settings:allowDividerAbove="true"/>
  </PreferenceScreen>
 diff --git a/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java b/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java
-index d815f57a7e..cb538932fb 100644
+index d815f57..cb53893 100644
 --- a/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java
 +++ b/src/com/android/settings/biometrics/BiometricEnrollIntroduction.java
 @@ -44,7 +44,7 @@ public abstract class BiometricEnrollIntroduction extends BiometricEnrollBase
@@ -276,7 +276,7 @@ index d815f57a7e..cb538932fb 100644
      private TextView mErrorText;
      protected boolean mConfirmingCredentials;
 diff --git a/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java b/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java
-index f876bb4116..17856baa51 100644
+index f876bb4..17856ba 100644
 --- a/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java
 +++ b/src/com/android/settings/biometrics/face/FaceEnrollIntroduction.java
 @@ -18,6 +18,7 @@ package com.android.settings.biometrics.face;
@@ -372,7 +372,7 @@ index f876bb4116..17856baa51 100644
 +    }
  }
 diff --git a/src/com/android/settings/biometrics/face/FaceProfileStatusPreferenceController.java b/src/com/android/settings/biometrics/face/FaceProfileStatusPreferenceController.java
-index 56b325bdf8..a0b719d52b 100644
+index 56b325b..a0b719d 100644
 --- a/src/com/android/settings/biometrics/face/FaceProfileStatusPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceProfileStatusPreferenceController.java
 @@ -23,6 +23,8 @@ import com.android.settings.R;
@@ -395,7 +395,7 @@ index 56b325bdf8..a0b719d52b 100644
          final int isAvailable = super.getAvailabilityStatus();
          if (isAvailable != AVAILABLE) {
 diff --git a/src/com/android/settings/biometrics/face/FaceSettings.java b/src/com/android/settings/biometrics/face/FaceSettings.java
-index 04df11a17b..1f6d785ef6 100644
+index 04df11a..1f6d785 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettings.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettings.java
 @@ -49,6 +49,9 @@ import java.util.ArrayList;
@@ -459,7 +459,7 @@ index 04df11a17b..1f6d785ef6 100644
      }
  
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsAppPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsAppPreferenceController.java
-index bde146b19c..1d8325c70e 100644
+index bde146b..1d8325c 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsAppPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsAppPreferenceController.java
 @@ -26,6 +26,8 @@ import androidx.preference.Preference;
@@ -483,7 +483,7 @@ index bde146b19c..1d8325c70e 100644
              return AVAILABLE_UNSEARCHABLE;
          }
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsAttentionPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsAttentionPreferenceController.java
-index 200c0b949e..eb6291e974 100644
+index 200c0b9..eb6291e 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsAttentionPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsAttentionPreferenceController.java
 @@ -27,6 +27,8 @@ import androidx.preference.SwitchPreference;
@@ -504,7 +504,7 @@ index 200c0b949e..eb6291e974 100644
      }
  }
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsConfirmPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsConfirmPreferenceController.java
-index c515742113..da2594c60f 100644
+index c515742..da2594c 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsConfirmPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsConfirmPreferenceController.java
 @@ -26,6 +26,8 @@ import androidx.preference.Preference;
@@ -525,7 +525,7 @@ index c515742113..da2594c60f 100644
      }
  }
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsEnrollButtonPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsEnrollButtonPreferenceController.java
-index e89eca4fc2..9cc90ec842 100644
+index e89eca4..9cc90ec 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsEnrollButtonPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsEnrollButtonPreferenceController.java
 @@ -18,8 +18,6 @@ package com.android.settings.biometrics.face;
@@ -580,7 +580,7 @@ index e89eca4fc2..9cc90ec842 100644
  
      @Override
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsFooterPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsFooterPreferenceController.java
-index c66546790e..57b56e7f0d 100644
+index c665467..57b56e7 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsFooterPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsFooterPreferenceController.java
 @@ -28,6 +28,8 @@ import com.android.settings.utils.AnnotationSpan;
@@ -612,7 +612,7 @@ index c66546790e..57b56e7f0d 100644
                  mContext.getText(footerRes), linkInfo));
      }
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsKeyguardPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsKeyguardPreferenceController.java
-index 8ee7ffd57c..1d0aa4d6c1 100644
+index 8ee7ffd..1d0aa4d 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsKeyguardPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsKeyguardPreferenceController.java
 @@ -28,6 +28,8 @@ import com.android.settings.Utils;
@@ -634,7 +634,7 @@ index 8ee7ffd57c..1d0aa4d6c1 100644
  
      @Override
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsLockscreenBypassPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsLockscreenBypassPreferenceController.java
-index 0a2757b5cb..04b7a100a2 100644
+index 0a2757b..04b7a10 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsLockscreenBypassPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsLockscreenBypassPreferenceController.java
 @@ -86,7 +86,11 @@ public class FaceSettingsLockscreenBypassPreferenceController
@@ -652,7 +652,7 @@ index 0a2757b5cb..04b7a100a2 100644
          } else {
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsManagePreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsManagePreferenceController.java
 new file mode 100644
-index 0000000000..ff482dc790
+index 0000000..ff482dc
 --- /dev/null
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsManagePreferenceController.java
 @@ -0,0 +1,25 @@
@@ -683,7 +683,7 @@ index 0000000000..ff482dc790
 +}
 \ No newline at end of file
 diff --git a/src/com/android/settings/biometrics/face/FaceSettingsRemoveButtonPreferenceController.java b/src/com/android/settings/biometrics/face/FaceSettingsRemoveButtonPreferenceController.java
-index 6c9806043d..1d1b55796d 100644
+index 6c98060..1d1b557 100644
 --- a/src/com/android/settings/biometrics/face/FaceSettingsRemoveButtonPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceSettingsRemoveButtonPreferenceController.java
 @@ -25,8 +25,6 @@ import android.hardware.face.Face;
@@ -804,7 +804,7 @@ index 6c9806043d..1d1b55796d 100644
  
      public void setListener(Listener listener) {
 diff --git a/src/com/android/settings/biometrics/face/FaceStatusPreferenceController.java b/src/com/android/settings/biometrics/face/FaceStatusPreferenceController.java
-index 648da9b6ef..a8e00a56b3 100644
+index 648da9b..a8e00a5 100644
 --- a/src/com/android/settings/biometrics/face/FaceStatusPreferenceController.java
 +++ b/src/com/android/settings/biometrics/face/FaceStatusPreferenceController.java
 @@ -18,12 +18,15 @@ package com.android.settings.biometrics.face;
@@ -857,7 +857,7 @@ index 648da9b6ef..a8e00a56b3 100644
  }
 diff --git a/src/com/android/settings/custom/biometrics/FaceUtils.java b/src/com/android/settings/custom/biometrics/FaceUtils.java
 new file mode 100644
-index 0000000000..b83aec83a9
+index 0000000..b83aec8
 --- /dev/null
 +++ b/src/com/android/settings/custom/biometrics/FaceUtils.java
 @@ -0,0 +1,31 @@
@@ -894,7 +894,7 @@ index 0000000000..b83aec83a9
 +}
 diff --git a/src/com/android/settings/custom/biometrics/face/FaceEnrollActivity.java b/src/com/android/settings/custom/biometrics/face/FaceEnrollActivity.java
 new file mode 100644
-index 0000000000..3e5c1e9fb8
+index 0000000..3e5c1e9
 --- /dev/null
 +++ b/src/com/android/settings/custom/biometrics/face/FaceEnrollActivity.java
 @@ -0,0 +1,29 @@
@@ -929,7 +929,7 @@ index 0000000000..3e5c1e9fb8
 +}
 diff --git a/src/com/android/settings/custom/biometrics/face/FaceSettingsRedoPreferenceController.java b/src/com/android/settings/custom/biometrics/face/FaceSettingsRedoPreferenceController.java
 new file mode 100644
-index 0000000000..a04c8cc46a
+index 0000000..a04c8cc
 --- /dev/null
 +++ b/src/com/android/settings/custom/biometrics/face/FaceSettingsRedoPreferenceController.java
 @@ -0,0 +1,132 @@
@@ -1066,7 +1066,7 @@ index 0000000000..a04c8cc46a
 +    }
 +}
 diff --git a/src/com/android/settings/homepage/contextualcards/FaceReEnrollDialog.java b/src/com/android/settings/homepage/contextualcards/FaceReEnrollDialog.java
-index 46ba26d82d..189b6c0c06 100644
+index 46ba26d..189b6c0 100644
 --- a/src/com/android/settings/homepage/contextualcards/FaceReEnrollDialog.java
 +++ b/src/com/android/settings/homepage/contextualcards/FaceReEnrollDialog.java
 @@ -32,6 +32,8 @@ import com.android.settings.R;
@@ -1098,7 +1098,7 @@ index 46ba26d82d..189b6c0c06 100644
  
                  try {
 diff --git a/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java b/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java
-index 4a4d34511d..e0326ff137 100644
+index 4a4d345..e0326ff 100644
 --- a/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java
 +++ b/src/com/android/settings/security/TopLevelSecurityEntryPreferenceController.java
 @@ -24,6 +24,8 @@ import com.android.settings.R;
@@ -1126,5 +1126,5 @@ index 4a4d34511d..e0326ff137 100644
              return mContext.getText(R.string.security_dashboard_summary_no_fingerprint);
          }
 -- 
-2.25.1
+2.32.0
 

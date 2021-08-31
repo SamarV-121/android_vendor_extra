@@ -1,0 +1,122 @@
+From ca69951ec368db6c196753c5a439dc079871f069 Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Thu, 24 Jun 2021 17:35:50 -0700
+Subject: [PATCH 7/7] Add -XX:ForceJavaZygoteForkLoop flag
+
+Setting this to true effectively disables the zygote native fork
+loop, either for testing/measurement purposes, or as a fallback.
+
+Bug: 192020504
+Test: Check logcat with and without the flag.
+Change-Id: I83c401d21ae2797442011d9ac6f23c78990920bd
+---
+ runtime/native/dalvik_system_ZygoteHooks.cc | 16 +++++++++++-----
+ runtime/parsed_options.cc                   |  4 ++++
+ runtime/runtime.cc                          |  1 +
+ runtime/runtime.h                           |  5 +++++
+ runtime/runtime_options.def                 |  4 ++++
+ 5 files changed, 25 insertions(+), 5 deletions(-)
+
+diff --git a/runtime/native/dalvik_system_ZygoteHooks.cc b/runtime/native/dalvik_system_ZygoteHooks.cc
+index bc19503232..8beaaa109a 100644
+--- a/runtime/native/dalvik_system_ZygoteHooks.cc
++++ b/runtime/native/dalvik_system_ZygoteHooks.cc
+@@ -434,11 +434,17 @@ static void ZygoteHooks_stopZygoteNoThreadCreation(JNIEnv* env ATTRIBUTE_UNUSED,
+   Runtime::Current()->SetZygoteNoThreadSection(false);
+ }
+ 
+-static jboolean ZygoteHooks_nativeZygoteJitEnabled(JNIEnv* env ATTRIBUTE_UNUSED,
+-                                                   jclass klass ATTRIBUTE_UNUSED) {
++static jboolean ZygoteHooks_nativeZygoteLongSuspendOk(JNIEnv* env ATTRIBUTE_UNUSED,
++                                                    jclass klass ATTRIBUTE_UNUSED) {
++  // Indefinite thread suspensions are not OK if we're supposed to be JIT-compiling for other
++  // processes.  We only care about JIT compilation that affects other processes.  The zygote
++  // itself doesn't run appreciable amounts of Java code when running single-threaded, so
++  // suspending the JIT in non-jit-zygote mode is OK.
++  // TODO: Make this potentially return true once we're done with JIT compilation in JIT Zygote.
+   // Only called in zygote. Thus static is OK here.
+-  static bool result = jit::Jit::InZygoteUsingJit();
+-  return result ? JNI_TRUE : JNI_FALSE;
++  static bool isJitZygote = jit::Jit::InZygoteUsingJit();
++  static bool explicitlyDisabled = Runtime::Current()->IsJavaZygoteForkLoopRequired();
++  return (isJitZygote || explicitlyDisabled) ? JNI_FALSE : JNI_TRUE;
+ }
+ 
+ 
+@@ -447,7 +453,7 @@ static JNINativeMethod gMethods[] = {
+   NATIVE_METHOD(ZygoteHooks, nativePostZygoteFork, "()V"),
+   NATIVE_METHOD(ZygoteHooks, nativePostForkSystemServer, "(I)V"),
+   NATIVE_METHOD(ZygoteHooks, nativePostForkChild, "(JIZZLjava/lang/String;)V"),
+-  NATIVE_METHOD(ZygoteHooks, nativeZygoteJitEnabled, "()Z"),
++  NATIVE_METHOD(ZygoteHooks, nativeZygoteLongSuspendOk, "()Z"),
+   NATIVE_METHOD(ZygoteHooks, startZygoteNoThreadCreation, "()V"),
+   NATIVE_METHOD(ZygoteHooks, stopZygoteNoThreadCreation, "()V"),
+ };
+diff --git a/runtime/parsed_options.cc b/runtime/parsed_options.cc
+index c62caa98de..95b9292271 100644
+--- a/runtime/parsed_options.cc
++++ b/runtime/parsed_options.cc
+@@ -389,6 +389,10 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
+           .WithType<bool>()
+           .WithValueMap({{"false", false}, {"true", true}})
+           .IntoKey(M::VerifierMissingKThrowFatal)
++      .Define("-XX:ForceJavaZygoteForkLoop=_")
++          .WithType<bool>()
++          .WithValueMap({{"false", false}, {"true", true}})
++          .IntoKey(M::ForceJavaZygoteForkLoop)
+       .Define("-XX:PerfettoHprof=_")
+           .WithType<bool>()
+           .WithValueMap({{"false", false}, {"true", true}})
+diff --git a/runtime/runtime.cc b/runtime/runtime.cc
+index 7c6e34c4ed..94435f5334 100644
+--- a/runtime/runtime.cc
++++ b/runtime/runtime.cc
+@@ -1201,6 +1201,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
+   MemMap::Init();
+ 
+   verifier_missing_kthrow_fatal_ = runtime_options.GetOrDefault(Opt::VerifierMissingKThrowFatal);
++  force_java_zygote_fork_loop_ = runtime_options.GetOrDefault(Opt::ForceJavaZygoteForkLoop);
+   perfetto_hprof_enabled_ = runtime_options.GetOrDefault(Opt::PerfettoHprof);
+ 
+   // Try to reserve a dedicated fault page. This is allocated for clobbered registers and sentinels.
+diff --git a/runtime/runtime.h b/runtime/runtime.h
+index 822c0acdd4..34330fc39f 100644
+--- a/runtime/runtime.h
++++ b/runtime/runtime.h
+@@ -976,6 +976,10 @@ class Runtime {
+     return verifier_missing_kthrow_fatal_;
+   }
+ 
++  bool IsJavaZygoteForkLoopRequired() const {
++    return force_java_zygote_fork_loop_;
++  }
++
+   bool IsPerfettoHprofEnabled() const {
+     return perfetto_hprof_enabled_;
+   }
+@@ -1340,6 +1344,7 @@ class Runtime {
+       gc::space::ImageSpaceLoadingOrder::kSystemFirst;
+ 
+   bool verifier_missing_kthrow_fatal_;
++  bool force_java_zygote_fork_loop_;
+   bool perfetto_hprof_enabled_;
+ 
+   // Note: See comments on GetFaultMessage.
+diff --git a/runtime/runtime_options.def b/runtime/runtime_options.def
+index 5707a3332a..87df3cfb6e 100644
+--- a/runtime/runtime_options.def
++++ b/runtime/runtime_options.def
+@@ -173,6 +173,10 @@ RUNTIME_OPTIONS_KEY (gc::space::ImageSpaceLoadingOrder, \
+ RUNTIME_OPTIONS_KEY (bool,                FastClassNotFoundException,     true)
+ RUNTIME_OPTIONS_KEY (bool,                VerifierMissingKThrowFatal,     true)
+ 
++// Setting this to true causes ART to disable Zygote native fork loop. ART also
++// internally enables this if ZygoteJit is enabled.
++RUNTIME_OPTIONS_KEY (bool,                ForceJavaZygoteForkLoop,        false)
++
+ // Whether to allow loading of the perfetto hprof plugin.
+ // Even with this option set, we will still only actually load the plugin
+ // if we are on a userdebug build or the app is debuggable or profileable.
+-- 
+2.32.0
+

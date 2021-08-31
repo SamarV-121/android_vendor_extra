@@ -1,4 +1,4 @@
-From 5ca862c23d527ddb138d9710eac687302539cb0e Mon Sep 17 00:00:00 2001
+From 2d5c893848355750ccaf5b4007b5602658951933 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:32:17 -0700
 Subject: [PATCH 35/63] statsd: Disable native stats collection service
@@ -29,7 +29,7 @@ Change-Id: Ifd49c46e20ee228941d3cb470a513a791dc5fe60
  1 file changed, 1 insertion(+)
 
 diff --git a/apex/statsd/statsd.rc b/apex/statsd/statsd.rc
-index 605da2af0c1..b8d97f1fbb1 100644
+index 605da2af..b8d97f1f 100644
 --- a/apex/statsd/statsd.rc
 +++ b/apex/statsd/statsd.rc
 @@ -18,3 +18,4 @@ service statsd /apex/com.android.os.statsd/bin/statsd

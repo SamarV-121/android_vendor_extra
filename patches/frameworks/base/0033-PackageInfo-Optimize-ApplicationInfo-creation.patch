@@ -1,4 +1,4 @@
-From 65d1509e0a6b246f176f8a6fb93191dd1409aa5a Mon Sep 17 00:00:00 2001
+From 007b4a5b5bab02309efa0be65c2cb101035dfb17 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 22:00:16 -0700
 Subject: [PATCH 33/63] PackageInfo: Optimize ApplicationInfo creation
@@ -39,7 +39,7 @@ Change-Id: I475ba804c61739c7537e664b09973665f001270b
  2 files changed, 141 insertions(+), 85 deletions(-)
 
 diff --git a/core/java/android/content/pm/parsing/PackageInfoWithoutStateUtils.java b/core/java/android/content/pm/parsing/PackageInfoWithoutStateUtils.java
-index e4507483c08..7632878c320 100644
+index e4507483..7632878c 100644
 --- a/core/java/android/content/pm/parsing/PackageInfoWithoutStateUtils.java
 +++ b/core/java/android/content/pm/parsing/PackageInfoWithoutStateUtils.java
 @@ -676,58 +676,114 @@ public class PackageInfoWithoutStateUtils {
@@ -202,7 +202,7 @@ index e4507483c08..7632878c320 100644
              if (resizeableActivity) {
                  privateFlags |= ApplicationInfo.PRIVATE_FLAG_ACTIVITIES_RESIZE_MODE_RESIZEABLE;
 diff --git a/core/java/android/content/pm/parsing/ParsingPackageImpl.java b/core/java/android/content/pm/parsing/ParsingPackageImpl.java
-index 2da93ca3401..4009289e883 100644
+index 2da93ca3..4009289e 100644
 --- a/core/java/android/content/pm/parsing/ParsingPackageImpl.java
 +++ b/core/java/android/content/pm/parsing/ParsingPackageImpl.java
 @@ -369,53 +369,53 @@ public class ParsingPackageImpl implements ParsingPackage, Parcelable {

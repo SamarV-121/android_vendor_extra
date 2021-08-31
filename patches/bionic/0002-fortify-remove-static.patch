@@ -1,7 +1,7 @@
-From 789792416d8f138b8fe0d1904fca70c3e6949cf9 Mon Sep 17 00:00:00 2001
+From a656b4329b46df2fc91802f47b173fdb197ffa25 Mon Sep 17 00:00:00 2001
 From: George Burgess IV <gbiv@google.com>
 Date: Tue, 9 Jun 2020 10:42:19 -0700
-Subject: [PATCH 02/11] fortify: remove `static`
+Subject: [PATCH 02/19] fortify: remove `static`
 
 When glancing at libc.so, I noticed we had five copies of
 `__fortify_fatal` sitting around. LLVM can't inline variadic functions;
@@ -42,5 +42,5 @@ index 3c3292e58..df83360be 100644
    if (__predict_false(set_size < sizeof(fd_set))) {
      __fortify_fatal("%s: set size %zu is too small to be an fd_set", fn, set_size);
 -- 
-2.31.1
+2.32.0
 

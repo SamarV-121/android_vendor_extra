@@ -1,4 +1,4 @@
-From cb1d1a9a6dee9e1107595e7530846b1f975bbe94 Mon Sep 17 00:00:00 2001
+From a532d4fccc86b90a48347668ec951722a6c7fd5f Mon Sep 17 00:00:00 2001
 From: Tang Ding <tang.ding@tcl.com>
 Date: Thu, 18 Mar 2021 13:53:13 +0000
 Subject: [PATCH 31/63] FIx issue:
@@ -21,7 +21,7 @@ Change-Id: I2cbab9171ffbaad87a8908eef09f813cf89ad85a
  1 file changed, 1 insertion(+)
 
 diff --git a/core/java/android/widget/AbsListView.java b/core/java/android/widget/AbsListView.java
-index 16e87f8bca9..dd9985ac5f4 100644
+index 16e87f8b..dd9985ac 100644
 --- a/core/java/android/widget/AbsListView.java
 +++ b/core/java/android/widget/AbsListView.java
 @@ -4679,6 +4679,7 @@ public abstract class AbsListView extends AdapterView<ListAdapter> implements Te

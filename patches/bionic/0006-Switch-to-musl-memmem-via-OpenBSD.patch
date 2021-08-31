@@ -1,7 +1,7 @@
-From 10b966b3a0b0ff665a0ecb1880b13f0397793fcf Mon Sep 17 00:00:00 2001
+From e2fb9dddb6752a35657bf5b945248f67f00c37e8 Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Thu, 6 Aug 2020 14:32:43 -0700
-Subject: [PATCH 06/11] Switch to musl memmem (via OpenBSD).
+Subject: [PATCH 06/19] Switch to musl memmem (via OpenBSD).
 
 Similar to the musl strstr. This patch also increases test coverage for
 memmem, again similar to the strstr tests.
@@ -371,5 +371,5 @@ index 0ed0598f6..f157416c1 100644
  
  TEST(STRING_TEST, strstr_smoke) {
 -- 
-2.31.1
+2.32.0
 

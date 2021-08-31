@@ -1,7 +1,7 @@
-From 30d33e18a3b0554e4ecf998d99fa8f38662bffa3 Mon Sep 17 00:00:00 2001
+From 991483ef3e76b4ac2cb195d23f132c5ce42b1d25 Mon Sep 17 00:00:00 2001
 From: Elliott Hughes <enh@google.com>
 Date: Fri, 31 Jul 2020 11:00:10 -0700
-Subject: [PATCH 05/11] Sync with upstream OpenBSD.
+Subject: [PATCH 05/19] Sync with upstream OpenBSD.
 
 Test: treehugger
 Change-Id: I1fc649ba5d79a3d95242c6b2240dbb05c85d30e9
@@ -1414,5 +1414,5 @@ index 079d69d25..241a080e7 100644
  				mem = 0;
  				continue;
 -- 
-2.31.1
+2.32.0
 

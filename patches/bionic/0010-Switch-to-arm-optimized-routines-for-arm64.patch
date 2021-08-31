@@ -1,7 +1,7 @@
-From 09911db4370542b4af0ba7ef0d2400a4995547f2 Mon Sep 17 00:00:00 2001
+From f0e02d10b19d0d2e0788f28f7c07096050c76d5e Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Sun, 21 Mar 2021 01:51:00 -0700
-Subject: [PATCH 10/11] Switch to arm-optimized-routines for arm64
+Subject: [PATCH 10/19] Switch to arm-optimized-routines for arm64
 
 This replaces the following string functions with implementations from
 arm-optimized-routines [1]:
@@ -3331,5 +3331,5 @@ index 6409563f2..d18f0fc42 100644
 +
  #endif
 -- 
-2.31.1
+2.32.0
 

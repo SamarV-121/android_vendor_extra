@@ -1,0 +1,49 @@
+From 80d5babe700b2e32e84615199a50da8c600826bb Mon Sep 17 00:00:00 2001
+From: Hans Boehm <hboehm@google.com>
+Date: Thu, 24 Jun 2021 17:10:22 -0700
+Subject: [PATCH 2/5] Rename nativeZygoteJitEnabled
+
+... to nativeZygoteLongSuspendOk to reflect its changed semantics.
+
+Bug: 192020504
+Test: Boot and look at log with both options
+Change-Id: Id8cf5f5b9924c34ff578bf19f53fee1561f7dda6
+---
+ dalvik/src/main/java/dalvik/system/ZygoteHooks.java | 11 +++--------
+ 1 file changed, 3 insertions(+), 8 deletions(-)
+
+diff --git a/dalvik/src/main/java/dalvik/system/ZygoteHooks.java b/dalvik/src/main/java/dalvik/system/ZygoteHooks.java
+index f05ea2cca6..51a08acc6a 100644
+--- a/dalvik/src/main/java/dalvik/system/ZygoteHooks.java
++++ b/dalvik/src/main/java/dalvik/system/ZygoteHooks.java
+@@ -156,16 +156,11 @@ public final class ZygoteHooks {
+     /**
+      * Is it safe to keep all ART daemon threads stopped indefinitely in the zygote?
+      * The answer may change from false to true dynamically, but not in the other
+-     * direction.
++     * direction. Only called in Zygote.
+      */
+     @libcore.api.CorePlatformApi
+     public static boolean indefiniteThreadSuspensionOK() {
+-        // TODO: Make this return true if we're done with JIT compilation.
+-        //
+-        // We only care about JIT compilation that affects other processes.
+-        // The zygote itself doesn't run appreciable amounts of Java code when
+-        // running single-threaded.
+-        return !nativeZygoteJitEnabled();
++        return nativeZygoteLongSuspendOk();
+     }
+ 
+     // Hook for SystemServer specific early initialization post-forking.
+@@ -179,7 +174,7 @@ public final class ZygoteHooks {
+                                                    boolean isSystemServer, boolean isZygote,
+                                                    String instructionSet);
+ 
+-    private static native boolean nativeZygoteJitEnabled();
++    private static native boolean nativeZygoteLongSuspendOk();
+ 
+     /**
+      * We must not fork until we're single-threaded again. Wait until /proc shows we're
+-- 
+2.31.1.606.gdf6c4f722c
+

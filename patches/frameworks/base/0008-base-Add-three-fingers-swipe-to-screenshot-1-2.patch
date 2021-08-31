@@ -1,4 +1,4 @@
-From 8d501b9c2edf9bab33efd13e3eeb70fc747d72fa Mon Sep 17 00:00:00 2001
+From 378d3c28798f8a9cad84172ef412428432181f8f Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Sun, 9 Aug 2015 01:23:33 +0800
 Subject: [PATCH 08/63] base: Add three-fingers-swipe to screenshot [1/2]
@@ -20,7 +20,7 @@ Signed-off-by: Sujit Roy <kumarsujitroy@gmail.com>
  create mode 100644 services/core/java/com/android/server/policy/OPGesturesListener.java
 
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index fe61bc37d22..2e2ae5bc7f8 100755
+index fe61bc37..2e2ae5bc 100755
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -4473,6 +4473,12 @@ public final class Settings {
@@ -38,7 +38,7 @@ index fe61bc37d22..2e2ae5bc7f8 100755
           * if ACCELEROMETER_ROTATION is enabled.
 diff --git a/services/core/java/com/android/server/policy/OPGesturesListener.java b/services/core/java/com/android/server/policy/OPGesturesListener.java
 new file mode 100644
-index 00000000000..e4af1a03466
+index 00000000..e4af1a03
 --- /dev/null
 +++ b/services/core/java/com/android/server/policy/OPGesturesListener.java
 @@ -0,0 +1,154 @@
@@ -197,7 +197,7 @@ index 00000000000..e4af1a03466
 +    }
 +}
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 2e58c98da57..7fc3205c26e 100644
+index 2e58c98d..7fc3205c 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -656,6 +656,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {

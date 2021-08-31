@@ -1,4 +1,4 @@
-From d824f9926459f701d9d6f836f99a6aab35da2ce4 Mon Sep 17 00:00:00 2001
+From 9247b2389493943491660d2687c12d965be5f7d0 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Tue, 3 Nov 2020 22:38:49 -0800
 Subject: [PATCH 06/63] core: Remove default aspect ratio limit for old apps
@@ -23,7 +23,7 @@ Change-Id: Ic415288b24129a634476b5cc01a6f202588f4b89
  2 files changed, 4 insertions(+), 8 deletions(-)
 
 diff --git a/core/java/android/content/pm/PackageParser.java b/core/java/android/content/pm/PackageParser.java
-index 967d59bd984..c36eb0781e5 100644
+index 967d59bd..c36eb078 100644
 --- a/core/java/android/content/pm/PackageParser.java
 +++ b/core/java/android/content/pm/PackageParser.java
 @@ -4650,10 +4650,8 @@ public class PackageParser {
@@ -40,7 +40,7 @@ index 967d59bd984..c36eb0781e5 100644
          if (owner.applicationInfo.maxAspectRatio != 0) {
              // Use the application max aspect ration as default if set.
 diff --git a/core/java/android/content/pm/parsing/ParsingPackageUtils.java b/core/java/android/content/pm/parsing/ParsingPackageUtils.java
-index ab0ed51fb90..27016e8e3f0 100644
+index ab0ed51f..27016e8e 100644
 --- a/core/java/android/content/pm/parsing/ParsingPackageUtils.java
 +++ b/core/java/android/content/pm/parsing/ParsingPackageUtils.java
 @@ -2295,10 +2295,8 @@ public class ParsingPackageUtils {

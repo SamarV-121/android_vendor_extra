@@ -1,4 +1,4 @@
-From 4b7cb8620602ab577751b1566a2bf5eaab108db3 Mon Sep 17 00:00:00 2001
+From e73dcfc95fbfbfd0ab34889485dd6098f8c4f90d Mon Sep 17 00:00:00 2001
 From: Henrique Silva <jhenrique09.mcz@hotmail.com>
 Date: Wed, 8 May 2019 11:52:38 -0300
 Subject: [PATCH 10/63] base: SwipeToScreenshot: Import MIUI implementation
@@ -16,7 +16,7 @@ Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
  create mode 100644 services/core/java/com/android/server/policy/SwipeToScreenshotListener.java
 
 diff --git a/services/core/java/com/android/server/am/ActivityManagerService.java b/services/core/java/com/android/server/am/ActivityManagerService.java
-index 5c229593353..2e4083b76f0 100644
+index 5c229593..2e4083b7 100644
 --- a/services/core/java/com/android/server/am/ActivityManagerService.java
 +++ b/services/core/java/com/android/server/am/ActivityManagerService.java
 @@ -20458,7 +20458,7 @@ public class ActivityManagerService extends IActivityManager.Stub
@@ -30,7 +30,7 @@ index 5c229593353..2e4083b76f0 100644
  }
 diff --git a/services/core/java/com/android/server/policy/OPGesturesListener.java b/services/core/java/com/android/server/policy/OPGesturesListener.java
 deleted file mode 100644
-index e4af1a03466..00000000000
+index e4af1a03..00000000
 --- a/services/core/java/com/android/server/policy/OPGesturesListener.java
 +++ /dev/null
 @@ -1,154 +0,0 @@
@@ -189,7 +189,7 @@ index e4af1a03466..00000000000
 -    }
 -}
 diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 7fc3205c26e..54e7a4739b5 100644
+index 7fc3205c..54e7a473 100644
 --- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -722,7 +722,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -227,7 +227,7 @@ index 7fc3205c26e..54e7a4739b5 100644
  
 diff --git a/services/core/java/com/android/server/policy/SwipeToScreenshotListener.java b/services/core/java/com/android/server/policy/SwipeToScreenshotListener.java
 new file mode 100644
-index 00000000000..88a465b6c38
+index 00000000..88a465b6
 --- /dev/null
 +++ b/services/core/java/com/android/server/policy/SwipeToScreenshotListener.java
 @@ -0,0 +1,148 @@

@@ -1,0 +1,38 @@
+From add4e33bd490bdd154b2043b45dcc1a4d830bb91 Mon Sep 17 00:00:00 2001
+From: Aurimas Liutikas <aurimas@google.com>
+Date: Mon, 27 Jul 2020 18:47:45 -0700
+Subject: [PATCH] Check isInteresting for methods and fields in ApiLint
+
+The issue happens because we are running API lint when comparing
+between new and old APIs surface which means that visitClass for
+BigInteger does not get called (not a new class), but visitMethod
+for byteValueExact does trigger. ApiLint skip check used to only
+be called for ClassItem, which works for most cases, except for
+new methods/fields in an old class.
+
+Bug: 162035124
+Test: New test added
+Change-Id: Ia1be825fd9d51bdbb11b8d3f00edef44ddee8b59
+---
+ src/main/java/com/android/tools/metalava/ApiLint.kt | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/main/java/com/android/tools/metalava/ApiLint.kt b/src/main/java/com/android/tools/metalava/ApiLint.kt
+index 61b84cb..d438b59 100644
+--- a/src/main/java/com/android/tools/metalava/ApiLint.kt
++++ b/src/main/java/com/android/tools/metalava/ApiLint.kt
+@@ -234,7 +234,10 @@ class ApiLint(private val codebase: Codebase, private val oldCodebase: Codebase?
+     }
+ 
+     override fun skip(item: Item): Boolean {
+-        return super.skip(item) || item is ClassItem && !isInteresting(item)
++        return super.skip(item) ||
++            item is ClassItem && !isInteresting(item) ||
++            item is MethodItem && !isInteresting(item.containingClass()) ||
++            item is FieldItem && !isInteresting(item.containingClass())
+     }
+ 
+     // The previous Kotlin interop tests are also part of API lint now (though they can be
+-- 
+2.31.1.606.gdf6c4f722c
+

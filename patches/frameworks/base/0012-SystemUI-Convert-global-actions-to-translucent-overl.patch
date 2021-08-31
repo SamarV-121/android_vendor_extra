@@ -1,4 +1,4 @@
-From a5465ead2ec5bea8c365edf6c02d00d93f027a03 Mon Sep 17 00:00:00 2001
+From 119d293b2106d1397a605428551eaffe51b54008 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Thu, 29 Oct 2020 20:39:21 -0700
 Subject: [PATCH 12/63] SystemUI: Convert global actions to translucent overlay
@@ -25,7 +25,7 @@ Change-Id: I37817628deecbb23c2646fb97f96508727158c62
 
 diff --git a/packages/SystemUI/res/drawable/control_dialog_background.xml b/packages/SystemUI/res/drawable/control_dialog_background.xml
 new file mode 100644
-index 00000000000..1b73256ff43
+index 00000000..1b73256f
 --- /dev/null
 +++ b/packages/SystemUI/res/drawable/control_dialog_background.xml
 @@ -0,0 +1,33 @@
@@ -63,7 +63,7 @@ index 00000000000..1b73256ff43
 +  </item>
 +</layer-list>
 diff --git a/packages/SystemUI/res/values-night/colors.xml b/packages/SystemUI/res/values-night/colors.xml
-index cb9e178de24..1b76c34ccac 100644
+index cb9e178d..1b76c34c 100644
 --- a/packages/SystemUI/res/values-night/colors.xml
 +++ b/packages/SystemUI/res/values-night/colors.xml
 @@ -105,4 +105,7 @@
@@ -75,7 +75,7 @@ index cb9e178de24..1b76c34ccac 100644
 +
  </resources>
 diff --git a/packages/SystemUI/res/values/colors.xml b/packages/SystemUI/res/values/colors.xml
-index 994a1811026..6df2723cd7f 100644
+index 994a1811..6df2723c 100644
 --- a/packages/SystemUI/res/values/colors.xml
 +++ b/packages/SystemUI/res/values/colors.xml
 @@ -255,14 +255,15 @@
@@ -100,7 +100,7 @@ index 994a1811026..6df2723cd7f 100644
      <color name="control_enabled_default_foreground">@color/GM2_blue_300</color>
      <color name="control_enabled_cool_foreground">@color/GM2_blue_300</color>
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
-index f8f94b0bff6..70256931964 100644
+index f8f94b0b..70256931 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsDialog.java
 @@ -145,8 +145,10 @@ import com.android.systemui.plugins.ActivityStarter;
@@ -186,7 +186,7 @@ index f8f94b0bff6..70256931964 100644
              getWindow().setBackgroundDrawable(mBackgroundDrawable);
          }
 diff --git a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java
-index caa88a37203..53ef3bba052 100644
+index caa88a37..53ef3bba 100644
 --- a/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java
 +++ b/packages/SystemUI/src/com/android/systemui/globalactions/GlobalActionsPowerDialog.java
 @@ -53,7 +53,7 @@ public class GlobalActionsPowerDialog {
@@ -199,7 +199,7 @@ index caa88a37203..53ef3bba052 100644
  
          return dialog;
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
-index 0445c9879ac..20ab40570c0 100644
+index 0445c987..20ab4057 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/NotificationShadeDepthController.kt
 @@ -174,13 +174,7 @@ class NotificationShadeDepthController @Inject constructor(
