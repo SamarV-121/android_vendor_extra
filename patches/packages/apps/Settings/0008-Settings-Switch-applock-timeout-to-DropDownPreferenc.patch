@@ -1,4 +1,4 @@
-From 5d21536c12d1312386773b7fd3008186494389b1 Mon Sep 17 00:00:00 2001
+From cb6dc51402ea9d6af3fa9901ccff3209b1991241 Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Tue, 13 Apr 2021 16:26:46 +0530
 Subject: [PATCH 8/8] Settings: Switch applock timeout to DropDownPreference
@@ -61,5 +61,5 @@ index d572985..fae012d 100644
                      switch (selectedLockTimeout) {
                          case 0:
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

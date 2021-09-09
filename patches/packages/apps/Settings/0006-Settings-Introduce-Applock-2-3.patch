@@ -1,4 +1,4 @@
-From 417beaeae4f463528f123b7b2ce5649ffcd3234c Mon Sep 17 00:00:00 2001
+From e32625f02fca5b3f6cf6343e1d0c6d42794f32ba Mon Sep 17 00:00:00 2001
 From: rituj <ritujbeniwal@gmail.com>
 Date: Wed, 6 May 2020 01:47:53 -0400
 Subject: [PATCH 6/8] Settings: Introduce Applock [2/3]
@@ -51,10 +51,10 @@ Change-Id: Ic8bb812148c7a17cbecdeedd3560493bdf576bae
  create mode 100644 src/com/android/settings/widget/AppLockPreference.java
 
 diff --git a/AndroidManifest.xml b/AndroidManifest.xml
-index b06435e..80eebc3 100644
+index 1bfdba0..efbefec 100644
 --- a/AndroidManifest.xml
 +++ b/AndroidManifest.xml
-@@ -470,6 +470,19 @@
+@@ -481,6 +481,19 @@
                         android:value="com.android.settings.biometrics.fingerprint.FingerprintSettings$FingerprintSettingsFragment" />
          </activity>
  
@@ -1103,10 +1103,10 @@ index 0000000..c293059
 +        android:actionViewClass="android.widget.SearchView" />
 +</menu>
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index 8a6d7c2..f188138 100644
+index 82f23b7..9f9000e 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -170,4 +170,24 @@
+@@ -177,4 +177,24 @@
      <string name="security_dashboard_summary_face_and_fingerprint">Screen lock, fingerprint, face unlock</string>
      <string name="face_redo_confirm_btn">Redo</string>
      <string name="face_redo_warning_msg">Do you want to remove the existing face scan and create a new one?</string>
@@ -2314,5 +2314,5 @@ index 0000000..2d0e003
 +    }
 +}
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

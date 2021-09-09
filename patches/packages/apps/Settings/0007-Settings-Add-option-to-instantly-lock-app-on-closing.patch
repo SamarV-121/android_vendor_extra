@@ -1,4 +1,4 @@
-From 61a542e431e6044a99dd8500b0a69b88c578b2b5 Mon Sep 17 00:00:00 2001
+From 386462f5e48ba7b91838d29621c7d58af881275f Mon Sep 17 00:00:00 2001
 From: Pranav Kapoor <pranavkapoor001@gmail.com>
 Date: Thu, 8 Apr 2021 20:39:37 +0530
 Subject: [PATCH 7/8] Settings: Add option to instantly lock app on closing
@@ -36,10 +36,10 @@ index aeb0be1..01f0ede 100644
 +    </string-array>
  </resources>
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index f188138..977b6ae 100644
+index 9f9000e..45c0ce1 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -177,9 +177,14 @@
+@@ -184,9 +184,14 @@
      <string name="applock_unlocked">Unlocked</string>
      <string name="applock_locked_apps">Locked apps</string>
      <string name="applock_unlocked_apps">Unlocked apps</string>
@@ -162,5 +162,5 @@ index ca6045a..d572985 100644
      }
  }
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

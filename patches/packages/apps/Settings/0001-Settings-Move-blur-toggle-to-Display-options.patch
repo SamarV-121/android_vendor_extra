@@ -1,4 +1,4 @@
-From 958bd1b7adf5db5e49edeb496df632fceb4c4ee6 Mon Sep 17 00:00:00 2001
+From 8b648df70038939dc8b8494eb510c9bf3bbd09c7 Mon Sep 17 00:00:00 2001
 From: Jyotiraditya <imjyotiraditya@pm.me>
 Date: Tue, 17 Nov 2020 09:31:46 +0530
 Subject: [PATCH 1/8] Settings: Move blur toggle to Display options
@@ -136,5 +136,5 @@ index 88e0db1..7ee2edb 100644
      }
  }
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

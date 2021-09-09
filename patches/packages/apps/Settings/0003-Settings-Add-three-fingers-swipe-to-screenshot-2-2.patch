@@ -1,4 +1,4 @@
-From a248054711125c7fc929e10972eebbe9ac1eee75 Mon Sep 17 00:00:00 2001
+From 5f0b847155293929aeb8cdd5393d75193de0143b Mon Sep 17 00:00:00 2001
 From: ghbhaha <ghbhaha@gmail.com>
 Date: Thu, 7 Nov 2019 19:06:00 +0100
 Subject: [PATCH 3/8] Settings: Add three-fingers-swipe to screenshot [2/2]
@@ -26572,13 +26572,13 @@ literal 0
 HcmV?d00001
 
 diff --git a/res/values/cm_strings.xml b/res/values/cm_strings.xml
-index c93c6e9..822f1c8 100644
+index 76866ec..6be903a 100644
 --- a/res/values/cm_strings.xml
 +++ b/res/values/cm_strings.xml
-@@ -159,4 +159,8 @@
-     <!-- FastCharge feature -->
-     <string name="fast_charging_title">Fast charging</string>
-     <string name="fast_charging_summary">Disable to reduce the heat produced by the device while charging or to extend the lifespan of the battery</string>
+@@ -166,4 +166,8 @@
+ 
+     <!-- Used in SetupWizard Wi-Fi network selection page [CHAR LIMIT=60] -->
+     <string name="wifi_setup_wizard_title">Select Wi\u2011Fi network</string>
 +
 +    <!-- Three-fingers-swipe to screenshot -->
 +    <string name="three_finger_gesture">Swipe to screenshot</string>
@@ -26798,5 +26798,5 @@ index 0000000..121428e
 +    }
 +}
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 
