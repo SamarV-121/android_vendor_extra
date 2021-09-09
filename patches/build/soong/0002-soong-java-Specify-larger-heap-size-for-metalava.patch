@@ -1,7 +1,7 @@
-From 98dcbd67938b6bc85fdf5faa029c01653e0baf44 Mon Sep 17 00:00:00 2001
+From 418b305ea608747290e9c6803821e537faeda65e Mon Sep 17 00:00:00 2001
 From: Michael W <baddaemon87@gmail.com>
 Date: Thu, 31 Oct 2019 23:10:30 +0100
-Subject: [PATCH 2/8] soong: java: Specify larger heap size for metalava
+Subject: [PATCH 2/3] soong: java: Specify larger heap size for metalava
 
 filiprrs: This is needed on systems with 8GB physical ram.
 Compiling using a single job is recommended.
@@ -26,5 +26,5 @@ index b564fea01..ddc0682a1 100644
  		FlagWithArg("-source ", javaVersion.String()).
  		FlagWithRspFileInputList("@", srcs).
 -- 
-2.31.1
+2.31.1.606.gdf6c4f722c
 
