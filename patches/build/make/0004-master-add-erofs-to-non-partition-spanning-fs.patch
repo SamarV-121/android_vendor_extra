@@ -1,0 +1,29 @@
+From 7cb14d9166748af712a1ad44cd661881a3b8b2ee Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Fri, 4 Dec 2020 16:53:06 +0800
+Subject: [PATCH 4/8] [master] add erofs to non partition spanning fs
+
+Bug:174816929
+Test: sparse image size will be fixed after rebuilding erofs image
+Change-Id: I43d7b2c61c57301935981f6f1282afb685cce331
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+---
+ tools/releasetools/build_image.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/releasetools/build_image.py b/tools/releasetools/build_image.py
+index ab3f7cea1..d33472c12 100755
+--- a/tools/releasetools/build_image.py
++++ b/tools/releasetools/build_image.py
+@@ -414,7 +414,7 @@ def BuildImage(in_dir, prop_dict, out_file, target_out=None):
+   fs_type = prop_dict.get("fs_type", "")
+ 
+   fs_spans_partition = True
+-  if fs_type.startswith("squash"):
++  if fs_type.startswith("squash") or fs_type.startswith("erofs"):
+     fs_spans_partition = False
+ 
+   # Get a builder for creating an image that's to be verified by Verified Boot,
+-- 
+2.31.1.606.gdf6c4f722c
+

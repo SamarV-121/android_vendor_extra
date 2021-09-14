@@ -1,0 +1,175 @@
+From 62cbb5dc762f11d79748e0f950912e331ab1fba3 Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Mon, 2 Aug 2021 15:00:02 +0800
+Subject: [PATCH 6/6] Add EROFS support for APEX
+
+Bug: 195274797
+Test: ./apxer/runtests.sh
+Change-Id: I19019d2809496bfc37eca1964e58a4e04d8bbbe7
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+---
+ apexd/apex_file.cpp             |  3 ++-
+ apexd/apex_file_test.cpp        |  4 +++-
+ apexd/apexd_testdata/Android.bp | 22 +++++++++++++++++++++
+ apexer/Android.bp               |  1 +
+ apexer/apexer.py                | 35 +++++++++++++++++++++++++++++++--
+ apexer/runtests.sh              |  2 +-
+ 6 files changed, 62 insertions(+), 5 deletions(-)
+
+diff --git a/apexd/apex_file.cpp b/apexd/apex_file.cpp
+index abcda7d..212b295 100644
+--- a/apexd/apex_file.cpp
++++ b/apexd/apex_file.cpp
+@@ -60,7 +60,8 @@ struct FsMagic {
+   const char* magic;
+ };
+ constexpr const FsMagic kFsType[] = {{"f2fs", 1024, 4, "\x10\x20\xf5\xf2"},
+-                                     {"ext4", 1024 + 0x38, 2, "\123\357"}};
++                                     {"ext4", 1024 + 0x38, 2, "\123\357"},
++                                     {"erofs", 1024, 4, "\xe2\xe1\xf5\xe0"}};
+ 
+ Result<std::string> RetrieveFsType(borrowed_fd fd, int32_t image_offset) {
+   for (const auto& fs : kFsType) {
+diff --git a/apexd/apex_file_test.cpp b/apexd/apex_file_test.cpp
+index 9d2cf17..f8973be 100644
+--- a/apexd/apex_file_test.cpp
++++ b/apexd/apex_file_test.cpp
+@@ -42,7 +42,9 @@ struct ApexFileTestParam {
+ };
+ 
+ constexpr const ApexFileTestParam kParameters[] = {
+-    {"ext4", "apex.apexd_test"}, {"f2fs", "apex.apexd_test_f2fs"}};
++    {"ext4", "apex.apexd_test"},
++    {"f2fs", "apex.apexd_test_f2fs"},
++    {"erofs", "apex.apexd_test_erofs"}};
+ 
+ class ApexFileTest : public ::testing::TestWithParam<ApexFileTestParam> {};
+ 
+diff --git a/apexd/apexd_testdata/Android.bp b/apexd/apexd_testdata/Android.bp
+index 9c41241..ba69f71 100644
+--- a/apexd/apexd_testdata/Android.bp
++++ b/apexd/apexd_testdata/Android.bp
+@@ -43,6 +43,17 @@ apex {
+     payload_fs_type: "f2fs",
+ }
+ 
++apex {
++    name: "apex.apexd_test_erofs",
++    manifest: "manifest.json",
++    file_contexts: ":apex.test-file_contexts",
++    prebuilts: ["sample_prebuilt_file"],
++    key: "com.android.apex.test_package.key",
++    installable: false,
++    min_sdk_version: "current",
++    payload_fs_type: "erofs",
++}
++
+ apex {
+     name: "apex.apexd_test_no_hashtree",
+     manifest: "manifest.json",
+@@ -182,6 +193,17 @@ apex {
+     payload_fs_type: "f2fs",
+ }
+ 
++apex {
++    name: "apex.apexd_test_erofs_no_inst_key",
++    manifest: "manifest_no_inst_key.json",
++    file_contexts: ":apex.test-file_contexts",
++    prebuilts: ["sample_prebuilt_file"],
++    key: "com.android.apex.test_package.no_inst_key.key",
++    installable: false,
++    payload_fs_type: "erofs",
++    updatable: false,
++}
++
+ apex_key {
+     name: "com.android.apex.test_package_2.key",
+     public_key: "com.android.apex.test_package_2.avbpubkey",
+diff --git a/apexer/Android.bp b/apexer/Android.bp
+index 271e678..9dd917e 100644
+--- a/apexer/Android.bp
++++ b/apexer/Android.bp
+@@ -25,6 +25,7 @@ apexer_tools = [
+       "zipalign",
+       "make_f2fs",
+       "sload_f2fs",
++      "make_erofs",
+       // TODO(b/124476339) apex doesn't follow 'required' dependencies so we need to include this
+       // manually for 'avbtool'.
+       "fec",
+diff --git a/apexer/apexer.py b/apexer/apexer.py
+index 5d4d5c2..5a5183b 100644
+--- a/apexer/apexer.py
++++ b/apexer/apexer.py
+@@ -31,6 +31,7 @@ import sys
+ import tempfile
+ import uuid
+ import xml.etree.ElementTree as ET
++import glob
+ from apex_manifest import ValidateApexManifest
+ from apex_manifest import ApexManifestError
+ from manifest import android_ns
+@@ -105,8 +106,8 @@ def ParseArgs(argv):
+       metavar='FS_TYPE',
+       required=False,
+       default='ext4',
+-      choices=['ext4', 'f2fs'],
+-      help='type of filesystem being used for payload image "ext4" or "f2fs"')
++      choices=['ext4', 'f2fs', 'erofs'],
++      help='type of filesystem being used for payload image "ext4", "f2fs" or "erofs"')
+   parser.add_argument(
+       '--override_apk_package_name',
+       required=False,
+@@ -588,6 +589,36 @@ def CreateApex(args, work_dir):
+ 
+       # TODO(b/158453869): resize the image file to save space
+ 
++    elif args.payload_fs_type == 'erofs':
++      # mkfs.erofs doesn't support multiple input
++      tmp_input_dir = os.path.join(work_dir, 'tmp_input_dir')
++      os.mkdir(tmp_input_dir)
++      cmd = ['/bin/cp', '-ra']
++      cmd.extend(glob.glob(manifests_dir + '/*'))
++      cmd.extend(glob.glob(args.input_dir + '/*'))
++      cmd.append(tmp_input_dir)
++      RunCommand(cmd, args.verbose)
++
++      cmd = ['make_erofs']
++      cmd.extend(['-z', 'lz4hc'])
++      cmd.extend(['--fs-config-file', args.canned_fs_config])
++      cmd.extend(['--file-contexts', args.file_contexts])
++      uu = str(uuid.uuid5(uuid.NAMESPACE_URL, 'www.android.com'))
++      cmd.extend(['-U', uu])
++      cmd.extend(['-T', '0'])
++      cmd.extend([img_file, tmp_input_dir])
++      RunCommand(cmd, args.verbose)
++      shutil.rmtree(tmp_input_dir)
++
++      # The minimum image size of erofs is 4k, which will cause an error
++      # when execute generate_hash_tree in avbtool
++      cmd = ["/bin/ls", "-lgG", img_file]
++      output, _ = RunCommand(cmd, verbose=False)
++      image_size = int(output.split()[2])
++      if image_size == 4096:
++        cmd = ["/usr/bin/fallocate", "-l", "8k", img_file]
++        RunCommand(cmd, verbose=False)
++
+     if args.unsigned_payload_only:
+       shutil.copyfile(img_file, args.output)
+       if (args.verbose):
+diff --git a/apexer/runtests.sh b/apexer/runtests.sh
+index 201270e..5121122 100755
+--- a/apexer/runtests.sh
++++ b/apexer/runtests.sh
+@@ -28,7 +28,7 @@ m -j apexer
+ export APEXER_TOOL_PATH="${ANDROID_BUILD_TOP}/out/soong/host/linux-x86/bin:${ANDROID_BUILD_TOP}/prebuilts/sdk/tools/linux/bin"
+ PATH+=":${ANDROID_BUILD_TOP}/prebuilts/sdk/tools/linux/bin"
+ 
+-for fs_type in ext4 f2fs
++for fs_type in ext4 f2fs erofs
+ do
+ input_dir=$(mktemp -d)
+ output_dir=$(mktemp -d)
+-- 
+2.31.1.606.gdf6c4f722c
+

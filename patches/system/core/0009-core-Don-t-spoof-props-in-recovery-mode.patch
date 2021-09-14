@@ -1,7 +1,7 @@
-From ddeda5718966cad29aabb0cb22d31c1ae9bbaf4e Mon Sep 17 00:00:00 2001
+From 25607bb37a403694883ac06b853b9eb391029cd4 Mon Sep 17 00:00:00 2001
 From: Jarl-Penguin <jarlpenguin@outlook.com>
 Date: Wed, 16 Jun 2021 11:28:46 +0000
-Subject: [PATCH 09/10] core: Don't spoof props in recovery mode
+Subject: [PATCH 09/12] core: Don't spoof props in recovery mode
 
 Signed-off-by: Jarl-Penguin <jarlpenguin@outlook.com>
 Change-Id: Ib6d3808c3b8f3e0cffab685a24d3cdd436b0fe9b
@@ -25,5 +25,5 @@ index 48b7811..3a03602 100644
  
  bool LoadPropertyInfoFromFile(const std::string& filename,
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

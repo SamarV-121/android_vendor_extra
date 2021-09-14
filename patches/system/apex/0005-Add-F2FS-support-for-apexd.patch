@@ -1,0 +1,409 @@
+From 5a53ead5cc54219cab4dea1d6aa6e4aaa16a9eb1 Mon Sep 17 00:00:00 2001
+From: Theotime Combes <tcombes@google.com>
+Date: Wed, 8 Jul 2020 16:51:23 +0000
+Subject: [PATCH 5/6] Add F2FS support for apexd
+
+Filesystem type used for apex_payload is retrieved when opening an APEX.
+Magic bytes are read are the expected offset in the filesystem.
+If neither f2fs magic nor ext4 magic can be found, it fails.
+
+Test: boot successfuly with ext4 apexes
+install succesfuly ext4 / f2fs apexes
+atest ApexTestCases
+
+Bug: 158453869
+
+Change-Id: If8eb9f6f28f81cdb0915c63f51482827138bf9f8
+Merged-In: If8eb9f6f28f81cdb0915c63f51482827138bf9f8
+---
+ apexd/Android.bp                | 43 ++++++++++++++++++++
+ apexd/apex_file.cpp             | 38 +++++++++++++++++-
+ apexd/apex_file.h               |  8 +++-
+ apexd/apex_file_test.cpp        | 70 +++++++++++++++++++++++++--------
+ apexd/apexd.cpp                 |  4 +-
+ apexd/apexd_testdata/Android.bp | 21 ++++++++++
+ 6 files changed, 161 insertions(+), 23 deletions(-)
+
+diff --git a/apexd/Android.bp b/apexd/Android.bp
+index b2f8202..a166277 100644
+--- a/apexd/Android.bp
++++ b/apexd/Android.bp
+@@ -236,6 +236,22 @@ genrule {
+        "$(genDir)/apex.apexd_test_manifest_mismatch.apex"
+ }
+ 
++genrule {
++  // Generates an apex with a corrupted filesystem superblock, which should cause
++  // Apex::Open to fail
++  name: "gen_corrupt_superblock_apex",
++  out: ["apex.apexd_test_corrupt_superblock_apex.apex"],
++  srcs: [":apex.apexd_test"],
++  tools: ["soong_zip", "zipalign"],
++  cmd: "unzip -q $(in) -d $(genDir) && " +
++       "dd if=/dev/zero of=$(genDir)/apex_payload.img conv=notrunc bs=1024 seek=1 count=1 && " +
++       "$(location soong_zip) -d -C $(genDir) -D $(genDir) " +
++       "-s apex_manifest.pb -s apex_payload.img -s apex_pubkey " +
++       "-o $(genDir)/unaligned.apex && " +
++       "$(location zipalign) -f 4096 $(genDir)/unaligned.apex " +
++       "$(genDir)/apex.apexd_test_corrupt_superblock_apex.apex"
++}
++
+ genrule {
+   // Generates an apex with a corrupted filesystem image, which should cause
+   // dm-verity verification to fail
+@@ -252,6 +268,28 @@ genrule {
+        "$(genDir)/apex.apexd_test_corrupt_apex.apex"
+ }
+ 
++genrule {
++  // Extract the root digest with avbtool
++  name: "apex.apexd_test_digest",
++  out: ["apex.apexd_test_digest.txt"],
++  srcs: [":apex.apexd_test"],
++  tools: ["avbtool"],
++  cmd: "unzip -q $(in) -d $(genDir) apex_payload.img && " +
++       "$(location avbtool) print_partition_digests --image $(genDir)/apex_payload.img " +
++       "| cut -c 3-| tee $(out)" 
++}
++
++genrule {
++  // Extract the root digest with avbtool
++  name: "apex.apexd_test_f2fs_digest",
++  out: ["apex.apexd_test_f2fs_digest.txt"],
++  srcs: [":apex.apexd_test_f2fs"],
++  tools: ["avbtool"],
++  cmd: "unzip -q $(in) -d $(genDir) apex_payload.img && " +
++       "$(location avbtool) print_partition_digests --image $(genDir)/apex_payload.img " +
++       "| cut -c 3-| tee $(out)"  
++}
++
+ cc_test {
+   name: "ApexTestCases",
+   defaults: [
+@@ -266,10 +304,14 @@ cc_test {
+   ],
+   data: [
+     ":apex.apexd_test",
++    ":apex.apexd_test_f2fs",
++    ":apex.apexd_test_digest",
++    ":apex.apexd_test_f2fs_digest",
+     ":apex.apexd_test_different_app",
+     ":apex.apexd_test_no_hashtree",
+     ":apex.apexd_test_no_hashtree_2",
+     ":apex.apexd_test_no_inst_key",
++    ":apex.apexd_test_f2fs_no_inst_key",
+     ":apex.apexd_test_nocode",
+     ":apex.apexd_test_postinstall",
+     ":apex.apexd_test_preinstall",
+@@ -277,6 +319,7 @@ cc_test {
+     ":apex.apexd_test_v2",
+     ":apex.corrupted_b146895998",
+     ":gen_bad_apexes",
++    ":gen_corrupt_superblock_apex",
+     ":gen_corrupt_apex",
+     ":com.android.apex.cts.shim.v1_prebuilt",
+     ":com.android.apex.cts.shim.v2_prebuilt",
+diff --git a/apexd/apex_file.cpp b/apexd/apex_file.cpp
+index f91b5d1..abcda7d 100644
+--- a/apexd/apex_file.cpp
++++ b/apexd/apex_file.cpp
+@@ -37,6 +37,7 @@
+ #include "apexd_utils.h"
+ #include "string_log.h"
+ 
++using android::base::borrowed_fd;
+ using android::base::EndsWith;
+ using android::base::Error;
+ using android::base::ReadFullyAtOffset;
+@@ -52,6 +53,28 @@ namespace {
+ constexpr const char* kImageFilename = "apex_payload.img";
+ constexpr const char* kBundledPublicKeyFilename = "apex_pubkey";
+ 
++struct FsMagic {
++  const char* type;
++  int32_t offset;
++  int16_t len;
++  const char* magic;
++};
++constexpr const FsMagic kFsType[] = {{"f2fs", 1024, 4, "\x10\x20\xf5\xf2"},
++                                     {"ext4", 1024 + 0x38, 2, "\123\357"}};
++
++Result<std::string> RetrieveFsType(borrowed_fd fd, int32_t image_offset) {
++  for (const auto& fs : kFsType) {
++    char buf[fs.len];
++    if (!ReadFullyAtOffset(fd, buf, fs.len, image_offset + fs.offset)) {
++      return ErrnoError() << "Couldn't read filesystem magic";
++    }
++    if (memcmp(buf, fs.magic, fs.len) == 0) {
++      return std::string(fs.type);
++    }
++  }
++  return Error() << "Couldn't find filesystem magic";
++}
++
+ }  // namespace
+ 
+ Result<ApexFile> ApexFile::Open(const std::string& path) {
+@@ -63,7 +86,12 @@ Result<ApexFile> ApexFile::Open(const std::string& path) {
+   ZipArchiveHandle handle;
+   auto handle_guard =
+       android::base::make_scope_guard([&handle] { CloseArchive(handle); });
+-  int ret = OpenArchive(path.c_str(), &handle);
++  unique_fd fd(open(path.c_str(), O_RDONLY | O_BINARY | O_CLOEXEC));
++  if (fd < 0) {
++    return Error() << "Failed to open package " << path << ": "
++                   << "I/O error";
++  }
++  int ret = OpenArchiveFd(fd.get(), path.c_str(), &handle, false);
+   if (ret < 0) {
+     return Error() << "Failed to open package " << path << ": "
+                    << ErrorCodeString(ret);
+@@ -79,6 +107,12 @@ Result<ApexFile> ApexFile::Open(const std::string& path) {
+   image_offset = entry.offset;
+   image_size = entry.uncompressed_length;
+ 
++  auto fs_type = RetrieveFsType(fd, image_offset);
++  if (!fs_type.ok()) {
++    return Error() << "Failed to retrieve filesystem type for " << path << ": "
++                   << fs_type.error();
++  }
++
+   ret = FindEntry(handle, kManifestFilenamePb, &entry);
+   if (ret < 0) {
+     return Error() << "Could not find entry \"" << kManifestFilenamePb
+@@ -113,7 +147,7 @@ Result<ApexFile> ApexFile::Open(const std::string& path) {
+   }
+ 
+   return ApexFile(path, image_offset, image_size, std::move(*manifest), pubkey,
+-                  isPathForBuiltinApexes(path));
++                  isPathForBuiltinApexes(path), *fs_type);
+ }
+ 
+ // AVB-related code.
+diff --git a/apexd/apex_file.h b/apexd/apex_file.h
+index 0476911..88914a9 100644
+--- a/apexd/apex_file.h
++++ b/apexd/apex_file.h
+@@ -53,6 +53,7 @@ class ApexFile {
+   const ApexManifest& GetManifest() const { return manifest_; }
+   const std::string& GetBundledPublicKey() const { return apex_pubkey_; }
+   bool IsBuiltin() const { return is_builtin_; }
++  const std::string& GetFsType() const { return fs_type_; }
+   android::base::Result<ApexVerityData> VerifyApexVerity() const;
+   android::base::Result<void> VerifyManifestMatches(
+       const std::string& mount_path) const;
+@@ -60,13 +61,15 @@ class ApexFile {
+  private:
+   ApexFile(const std::string& apex_path, int32_t image_offset,
+            size_t image_size, ApexManifest manifest,
+-           const std::string& apex_pubkey, bool is_builtin)
++           const std::string& apex_pubkey, bool is_builtin,
++           const std::string& fs_type)
+       : apex_path_(apex_path),
+         image_offset_(image_offset),
+         image_size_(image_size),
+         manifest_(std::move(manifest)),
+         apex_pubkey_(apex_pubkey),
+-        is_builtin_(is_builtin) {}
++        is_builtin_(is_builtin),
++        fs_type_(fs_type) {}
+ 
+   std::string apex_path_;
+   int32_t image_offset_;
+@@ -74,6 +77,7 @@ class ApexFile {
+   ApexManifest manifest_;
+   std::string apex_pubkey_;
+   bool is_builtin_;
++  std::string fs_type_;
+ };
+ 
+ android::base::Result<std::vector<std::string>> FindApexes(
+diff --git a/apexd/apex_file_test.cpp b/apexd/apex_file_test.cpp
+index 711d024..9d2cf17 100644
+--- a/apexd/apex_file_test.cpp
++++ b/apexd/apex_file_test.cpp
+@@ -19,6 +19,8 @@
+ #include <android-base/file.h>
+ #include <android-base/logging.h>
+ #include <android-base/scopeguard.h>
++#include <android-base/strings.h>
++#include <gmock/gmock.h>
+ #include <gtest/gtest.h>
+ #include <libavb/libavb.h>
+ #include <ziparchive/zip_archive.h>
+@@ -34,8 +36,20 @@ namespace android {
+ namespace apex {
+ namespace {
+ 
+-TEST(ApexFileTest, GetOffsetOfSimplePackage) {
+-  const std::string filePath = testDataDir + "apex.apexd_test.apex";
++struct ApexFileTestParam {
++  const char* type;
++  const char* prefix;
++};
++
++constexpr const ApexFileTestParam kParameters[] = {
++    {"ext4", "apex.apexd_test"}, {"f2fs", "apex.apexd_test_f2fs"}};
++
++class ApexFileTest : public ::testing::TestWithParam<ApexFileTestParam> {};
++
++INSTANTIATE_TEST_SUITE_P(Apex, ApexFileTest, testing::ValuesIn(kParameters));
++
++TEST_P(ApexFileTest, GetOffsetOfSimplePackage) {
++  const std::string filePath = testDataDir + GetParam().prefix + ".apex";
+   Result<ApexFile> apexFile = ApexFile::Open(filePath);
+   ASSERT_TRUE(apexFile.ok());
+ 
+@@ -66,22 +80,21 @@ TEST(ApexFileTest, GetOffsetMissingFile) {
+   const std::string filePath = testDataDir + "missing.apex";
+   Result<ApexFile> apexFile = ApexFile::Open(filePath);
+   ASSERT_FALSE(apexFile.ok());
+-  EXPECT_NE(std::string::npos,
+-            apexFile.error().message().find("Failed to open package"))
+-      << apexFile.error();
++  ASSERT_THAT(apexFile.error().message(),
++              testing::HasSubstr("Failed to open package"));
+ }
+ 
+-TEST(ApexFileTest, GetApexManifest) {
+-  const std::string filePath = testDataDir + "apex.apexd_test.apex";
++TEST_P(ApexFileTest, GetApexManifest) {
++  const std::string filePath = testDataDir + GetParam().prefix + ".apex";
+   Result<ApexFile> apexFile = ApexFile::Open(filePath);
+   ASSERT_RESULT_OK(apexFile);
+   EXPECT_EQ("com.android.apex.test_package", apexFile->GetManifest().name());
+   EXPECT_EQ(1u, apexFile->GetManifest().version());
+ }
+ 
+-TEST(ApexFileTest, VerifyApexVerity) {
++TEST_P(ApexFileTest, VerifyApexVerity) {
+   ASSERT_RESULT_OK(collectPreinstalledData({"/system_ext/apex"}));
+-  const std::string filePath = testDataDir + "apex.apexd_test.apex";
++  const std::string filePath = testDataDir + GetParam().prefix + ".apex";
+   Result<ApexFile> apexFile = ApexFile::Open(filePath);
+   ASSERT_RESULT_OK(apexFile);
+ 
+@@ -93,10 +106,15 @@ TEST(ApexFileTest, VerifyApexVerity) {
+   EXPECT_EQ(std::string("368a22e64858647bc45498e92f749f85482ac468"
+                         "50ca7ec8071f49dfa47a243c"),
+             data.salt);
+-  EXPECT_EQ(
+-      std::string(
+-          "8e841019e41e8c40bca6dd6304cbf163ea257ba0a268304832c4105eba1c2747"),
+-      data.root_digest);
++
++  const std::string digestPath =
++      testDataDir + GetParam().prefix + "_digest.txt";
++  std::string rootDigest;
++  ASSERT_TRUE(android::base::ReadFileToString(digestPath, &rootDigest))
++      << "Failed to read " << digestPath;
++  rootDigest = android::base::Trim(rootDigest);
++
++  EXPECT_EQ(std::string(rootDigest), data.root_digest);
+ }
+ 
+ // TODO: May consider packaging a debug key in debug builds (again).
+@@ -109,8 +127,9 @@ TEST(ApexFileTest, DISABLED_VerifyApexVerityNoKeyDir) {
+   ASSERT_FALSE(verity_or.ok());
+ }
+ 
+-TEST(ApexFileTest, VerifyApexVerityNoKeyInst) {
+-  const std::string filePath = testDataDir + "apex.apexd_test_no_inst_key.apex";
++TEST_P(ApexFileTest, VerifyApexVerityNoKeyInst) {
++  const std::string filePath =
++      testDataDir + GetParam().prefix + "_no_inst_key.apex";
+   Result<ApexFile> apexFile = ApexFile::Open(filePath);
+   ASSERT_RESULT_OK(apexFile);
+ 
+@@ -118,8 +137,8 @@ TEST(ApexFileTest, VerifyApexVerityNoKeyInst) {
+   ASSERT_FALSE(verity_or.ok());
+ }
+ 
+-TEST(ApexFileTest, GetBundledPublicKey) {
+-  const std::string filePath = testDataDir + "apex.apexd_test.apex";
++TEST_P(ApexFileTest, GetBundledPublicKey) {
++  const std::string filePath = testDataDir + GetParam().prefix + ".apex";
+   Result<ApexFile> apexFile = ApexFile::Open(filePath);
+   ASSERT_RESULT_OK(apexFile);
+ 
+@@ -139,6 +158,23 @@ TEST(ApexFileTest, CorrutedApex_b146895998) {
+   ASSERT_FALSE(apex->VerifyApexVerity());
+ }
+ 
++TEST_P(ApexFileTest, RetrieveFsType) {
++  const std::string filePath = testDataDir + GetParam().prefix + ".apex";
++  Result<ApexFile> apexFile = ApexFile::Open(filePath);
++  ASSERT_TRUE(apexFile.ok());
++
++  EXPECT_EQ(std::string(GetParam().type), apexFile->GetFsType());
++}
++
++TEST(ApexFileTest, OpenInvalidFilesystem) {
++  const std::string filePath =
++      testDataDir + "apex.apexd_test_corrupt_superblock_apex.apex";
++  Result<ApexFile> apexFile = ApexFile::Open(filePath);
++  ASSERT_FALSE(apexFile.ok());
++  ASSERT_THAT(apexFile.error().message(),
++              testing::HasSubstr("Failed to retrieve filesystem type"));
++}
++
+ }  // namespace
+ }  // namespace apex
+ }  // namespace android
+diff --git a/apexd/apexd.cpp b/apexd/apexd.cpp
+index c302c70..c48dd4d 100644
+--- a/apexd/apexd.cpp
++++ b/apexd/apexd.cpp
+@@ -469,8 +469,8 @@ Result<MountedApexData> MountPackageImpl(const ApexFile& apex,
+     mountFlags |= MS_NOEXEC;
+   }
+ 
+-  if (mount(blockDevice.c_str(), mountPoint.c_str(), "ext4", mountFlags,
+-            nullptr) == 0) {
++  if (mount(blockDevice.c_str(), mountPoint.c_str(), apex.GetFsType().c_str(),
++            mountFlags, nullptr) == 0) {
+     LOG(INFO) << "Successfully mounted package " << full_path << " on "
+               << mountPoint;
+     auto status = VerifyMountedImage(apex, mountPoint);
+diff --git a/apexd/apexd_testdata/Android.bp b/apexd/apexd_testdata/Android.bp
+index 1f74a53..9c41241 100644
+--- a/apexd/apexd_testdata/Android.bp
++++ b/apexd/apexd_testdata/Android.bp
+@@ -32,6 +32,17 @@ apex {
+     min_sdk_version: "29",  // test requires hashtree to be present.
+ }
+ 
++apex {
++    name: "apex.apexd_test_f2fs",
++    manifest: "manifest.json",
++    file_contexts: ":apex.test-file_contexts",
++    prebuilts: ["sample_prebuilt_file"],
++    key: "com.android.apex.test_package.key",
++    installable: false,
++    min_sdk_version: "current",
++    payload_fs_type: "f2fs",
++}
++
+ apex {
+     name: "apex.apexd_test_no_hashtree",
+     manifest: "manifest.json",
+@@ -161,6 +172,16 @@ apex {
+     installable: false,
+ }
+ 
++apex {
++    name: "apex.apexd_test_f2fs_no_inst_key",
++    manifest: "manifest_no_inst_key.json",
++    file_contexts: ":apex.test-file_contexts",
++    prebuilts: ["sample_prebuilt_file"],
++    key: "com.android.apex.test_package.no_inst_key.key",
++    installable: false,
++    payload_fs_type: "f2fs",
++}
++
+ apex_key {
+     name: "com.android.apex.test_package_2.key",
+     public_key: "com.android.apex.test_package_2.avbpubkey",
+-- 
+2.31.1.606.gdf6c4f722c
+

@@ -1,0 +1,116 @@
+From 437122ee098064fe43371f0b46c1f371b0746cc5 Mon Sep 17 00:00:00 2001
+From: Gao Xiang <hsiangkao@redhat.com>
+Date: Wed, 17 Jun 2020 13:59:16 +0800
+Subject: [PATCH 3/8] [master] Allow flashing erofs system imgs
+
+Bug: 158339527
+Test: build & boot
+Signed-off-by: Gao Xiang <hsiangkao@redhat.com>
+Change-Id: Ie74db8ebcd7214ffbec49d42b305b2f3ac2e8c9d
+---
+ core/Makefile                     | 10 ++++++++++
+ core/config.mk                    |  1 +
+ tools/releasetools/Android.bp     |  1 +
+ tools/releasetools/build_image.py | 13 +++++++++++++
+ 4 files changed, 25 insertions(+)
+
+diff --git a/core/Makefile b/core/Makefile
+index 857a967af..14096fd02 100644
+--- a/core/Makefile
++++ b/core/Makefile
+@@ -1633,6 +1633,9 @@ DEFAULT_TARGET_RECOVERY_FSTYPE_MOUNT_OPTIONS := ext4=max_batch_time=0,commit=1,d
+ ifneq (true,$(TARGET_USERIMAGES_SPARSE_EXT_DISABLED))
+   INTERNAL_USERIMAGES_SPARSE_EXT_FLAG := -s
+ endif
++ifneq (true,$(TARGET_USERIMAGES_SPARSE_EROFS_DISABLED))
++  INTERNAL_USERIMAGES_SPARSE_EROFS_FLAG := -s
++endif
+ ifneq (true,$(TARGET_USERIMAGES_SPARSE_SQUASHFS_DISABLED))
+   INTERNAL_USERIMAGES_SPARSE_SQUASHFS_FLAG := -s
+ endif
+@@ -1649,6 +1652,10 @@ ifeq ($(TARGET_USERIMAGES_USE_F2FS),true)
+ INTERNAL_USERIMAGES_DEPS += $(MKF2FSUSERIMG)
+ endif
+ 
++ifneq ($(filter $(BOARD_PRODUCTIMAGE_FILE_SYSTEM_TYPE) $(BOARD_SYSTEM_EXTIMAGE_FILE_SYSTEM_TYPE) $(BOARD_ODMIMAGE_FILE_SYSTEM_TYPE) $(BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE) $(BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE),erofs),)
++INTERNAL_USERIMAGES_DEPS += $(MKEROFSUSERIMG)
++endif
++
+ ifneq ($(filter $(BOARD_PRODUCTIMAGE_FILE_SYSTEM_TYPE) $(BOARD_SYSTEM_EXTIMAGE_FILE_SYSTEM_TYPE) $(BOARD_ODMIMAGE_FILE_SYSTEM_TYPE) $(BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE) $(BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE),squashfs),)
+ INTERNAL_USERIMAGES_DEPS += $(MKSQUASHFSUSERIMG)
+ endif
+@@ -1776,6 +1783,7 @@ $(hide) echo "ext_mkuserimg=$(notdir $(MKEXTUSERIMG))" >> $(1)
+ 
+ $(if $(INTERNAL_USERIMAGES_EXT_VARIANT),$(hide) echo "fs_type=$(INTERNAL_USERIMAGES_EXT_VARIANT)" >> $(1))
+ $(if $(INTERNAL_USERIMAGES_SPARSE_EXT_FLAG),$(hide) echo "extfs_sparse_flag=$(INTERNAL_USERIMAGES_SPARSE_EXT_FLAG)" >> $(1))
++$(if $(INTERNAL_USERIMAGES_SPARSE_EROFS_FLAG),$(hide) echo "erofs_sparse_flag=$(INTERNAL_USERIMAGES_SPARSE_EROFS_FLAG)" >> $(1))
+ $(if $(INTERNAL_USERIMAGES_SPARSE_SQUASHFS_FLAG),$(hide) echo "squashfs_sparse_flag=$(INTERNAL_USERIMAGES_SPARSE_SQUASHFS_FLAG)" >> $(1))
+ $(if $(INTERNAL_USERIMAGES_SPARSE_F2FS_FLAG),$(hide) echo "f2fs_sparse_flag=$(INTERNAL_USERIMAGES_SPARSE_F2FS_FLAG)" >> $(1))
+ $(if $(BOARD_EXT4_SHARE_DUP_BLOCKS),$(hide) echo "ext4_share_dup_blocks=$(BOARD_EXT4_SHARE_DUP_BLOCKS)" >> $(1))
+@@ -4154,6 +4162,8 @@ INTERNAL_OTATOOLS_MODULES := \
+   mkbootimg \
+   mke2fs \
+   mke2fs.conf \
++  mkfs.erofs \
++  mkerofsimage.sh \
+   mkf2fsuserimg.sh \
+   mksquashfs \
+   mksquashfsimage.sh \
+diff --git a/core/config.mk b/core/config.mk
+index c9efa116f..fed4190f3 100644
+--- a/core/config.mk
++++ b/core/config.mk
+@@ -626,6 +626,7 @@ APICHECK := $(HOST_OUT_JAVA_LIBRARIES)/metalava$(COMMON_JAVA_PACKAGE_SUFFIX)
+ FS_GET_STATS := $(HOST_OUT_EXECUTABLES)/fs_get_stats$(HOST_EXECUTABLE_SUFFIX)
+ MKEXTUSERIMG := $(HOST_OUT_EXECUTABLES)/mkuserimg_mke2fs
+ MKE2FS_CONF := system/extras/ext4_utils/mke2fs.conf
++MKEROFSUSERIMG := $(HOST_OUT_EXECUTABLES)/mkerofsimage.sh
+ MKSQUASHFSUSERIMG := $(HOST_OUT_EXECUTABLES)/mksquashfsimage.sh
+ MKF2FSUSERIMG := $(HOST_OUT_EXECUTABLES)/mkf2fsuserimg.sh
+ SIMG2IMG := $(HOST_OUT_EXECUTABLES)/simg2img$(HOST_EXECUTABLE_SUFFIX)
+diff --git a/tools/releasetools/Android.bp b/tools/releasetools/Android.bp
+index dbd7dc6a3..fafb886b7 100644
+--- a/tools/releasetools/Android.bp
++++ b/tools/releasetools/Android.bp
+@@ -49,6 +49,7 @@ python_defaults {
+     required: [
+         "blk_alloc_to_base_fs",
+         "e2fsck",
++        "mkerofsimage.sh",
+         "mkuserimg_mke2fs",
+         "simg2img",
+         "tune2fs",
+diff --git a/tools/releasetools/build_image.py b/tools/releasetools/build_image.py
+index ae0dfa0ab..ab3f7cea1 100755
+--- a/tools/releasetools/build_image.py
++++ b/tools/releasetools/build_image.py
+@@ -295,6 +295,18 @@ def BuildImageMkfs(in_dir, prop_dict, out_file, target_out, fs_config):
+       build_command.extend(["--inode_size", "256"])
+     if "selinux_fc" in prop_dict:
+       build_command.append(prop_dict["selinux_fc"])
++  elif fs_type.startswith("erofs"):
++    build_command = ["mkerofsimage.sh"]
++    build_command.extend([in_dir, out_file])
++    if "erofs_sparse_flag" in prop_dict:
++      build_command.extend([prop_dict["erofs_sparse_flag"]])
++    build_command.extend(["-m", prop_dict["mount_point"]])
++    if target_out:
++      build_command.extend(["-d", target_out])
++    if fs_config:
++      build_command.extend(["-C", fs_config])
++    if "selinux_fc" in prop_dict:
++      build_command.extend(["-c", prop_dict["selinux_fc"]])
+   elif fs_type.startswith("squash"):
+     build_command = ["mksquashfsimage.sh"]
+     build_command.extend([in_dir, out_file])
+@@ -530,6 +542,7 @@ def ImagePropFromGlobalDict(glob_dict, mount_point):
+ 
+   common_props = (
+       "extfs_sparse_flag",
++      "erofs_sparse_flag",
+       "squashfs_sparse_flag",
+       "f2fs_sparse_flag",
+       "skip_fsck",
+-- 
+2.31.1.606.gdf6c4f722c
+

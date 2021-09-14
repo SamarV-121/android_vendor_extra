@@ -1,0 +1,33 @@
+From 4ffd41bb24c88171c647b8c5d13b9ffbfbd3b2b6 Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Fri, 4 Dec 2020 15:16:17 +0800
+Subject: [PATCH 11/12] Add erofs to supported fs type
+
+Since erofs image has been supported, we should add erofs to supported
+fs type so that it can be mounted in recovery mode.
+
+Bug: 174816929
+Test: mount erofs image in recovery on cuttlefish
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+Change-Id: I4199ff87acfc179a2b83d98b1675fc898144878b
+---
+ fs_mgr/fs_mgr_roots.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/fs_mgr/fs_mgr_roots.cpp b/fs_mgr/fs_mgr_roots.cpp
+index a54cbb1..9422ec3 100644
+--- a/fs_mgr/fs_mgr_roots.cpp
++++ b/fs_mgr/fs_mgr_roots.cpp
+@@ -111,7 +111,8 @@ bool EnsurePathMounted(Fstab* fstab, const std::string& path, const std::string&
+         return true;
+     }
+ 
+-    static const std::vector<std::string> supported_fs{"ext4", "squashfs", "vfat", "f2fs", "none"};
++    static const std::vector<std::string> supported_fs{"ext4", "squashfs", "vfat", "f2fs", "erofs",
++                                                       "none"};
+     if (std::find(supported_fs.begin(), supported_fs.end(), rec->fs_type) == supported_fs.end()) {
+         LERROR << "unknown fs_type \"" << rec->fs_type << "\" for " << mount_point;
+         return false;
+-- 
+2.31.1.606.gdf6c4f722c
+

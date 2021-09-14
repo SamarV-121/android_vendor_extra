@@ -1,0 +1,32 @@
+From daf2f76ca501ed1c55bb53339f795be6072eebd7 Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Fri, 19 Feb 2021 16:48:31 +0800
+Subject: [PATCH 6/8] [master] support pre-defined timestamp and uuid when
+ bulid EROFS images
+
+Bug:180682930
+Test: erofs image can be set to input timestamp and UUID
+Change-Id: I71e455350db51096e18ab5a03123500d56ebe252
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+---
+ tools/releasetools/build_image.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/tools/releasetools/build_image.py b/tools/releasetools/build_image.py
+index 086d80ffe..a992ad632 100755
+--- a/tools/releasetools/build_image.py
++++ b/tools/releasetools/build_image.py
+@@ -307,6 +307,10 @@ def BuildImageMkfs(in_dir, prop_dict, out_file, target_out, fs_config):
+       build_command.extend(["-C", fs_config])
+     if "selinux_fc" in prop_dict:
+       build_command.extend(["-c", prop_dict["selinux_fc"]])
++    if "timestamp" in prop_dict:
++      build_command.extend(["-T", str(prop_dict["timestamp"])])
++    if "uuid" in prop_dict:
++      build_command.extend(["-U", prop_dict["uuid"]])
+   elif fs_type.startswith("squash"):
+     build_command = ["mksquashfsimage.sh"]
+     build_command.extend([in_dir, out_file])
+-- 
+2.31.1.606.gdf6c4f722c
+

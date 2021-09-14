@@ -1,0 +1,43 @@
+From b16033a7896df2ab5ba03647b5acd6c22d145d98 Mon Sep 17 00:00:00 2001
+From: alk3pInjection <webmaster@raspii.tech>
+Date: Sat, 11 Sep 2021 17:40:20 +0800
+Subject: [PATCH 8/8] releasetools: Properly handle map files
+
+For squashfs or erofs, we currently don't have a system.map.
+Instead of bailing out, set the mappath to None to fix build.
+
+Change-Id: Ie04c060177f39d0e0cf711d28ea38b11dc40d3ab
+Signed-off-by: alk3pInjection <webmaster@raspii.tech>
+---
+ tools/releasetools/common.py | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/tools/releasetools/common.py b/tools/releasetools/common.py
+index 76c2c97cb..e40cbd75a 100644
+--- a/tools/releasetools/common.py
++++ b/tools/releasetools/common.py
+@@ -1614,7 +1614,9 @@ def GetNonSparseImage(which, tmpdir, hashtree_info_generator=None):
+ 
+   # The image and map files must have been created prior to calling
+   # ota_from_target_files.py (since LMP).
+-  assert os.path.exists(path) and os.path.exists(mappath)
++  assert os.path.exists(path)
++  if not os.path.exists(mappath):
++    mappath = None
+ 
+   return images.FileImage(path, hashtree_info_generator=hashtree_info_generator)
+ 
+@@ -1643,7 +1645,9 @@ def GetSparseImage(which, tmpdir, input_zip, allow_shared_blocks,
+ 
+   # The image and map files must have been created prior to calling
+   # ota_from_target_files.py (since LMP).
+-  assert os.path.exists(path) and os.path.exists(mappath)
++  assert os.path.exists(path)
++  if not os.path.exists(mappath):
++    mappath = None
+ 
+   # In ext4 filesystems, block 0 might be changed even being mounted R/O. We add
+   # it to clobbered_blocks so that it will be written to the target
+-- 
+2.31.1.606.gdf6c4f722c
+

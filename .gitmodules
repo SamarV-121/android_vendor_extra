@@ -7,3 +7,6 @@
 [submodule "packages/apps/FaceUnlockService"]
 	path = packages/apps/FaceUnlockService
 	url = https://github.com/PixelExperience/packages_apps_FaceUnlockService
+[submodule "external/erofs-utils"]
+	path = external/erofs-utils
+	url = https://github.com/Project-1CE/external_erofs-utils

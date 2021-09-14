@@ -1,0 +1,29 @@
+From acb8dbe548bfc3de2094b641704a06c1d16f356e Mon Sep 17 00:00:00 2001
+From: Yifan Hong <elsk@google.com>
+Date: Tue, 25 Aug 2020 16:15:16 -0700
+Subject: [PATCH 2/8] [master] build_image relies on mkuserimg_mke2fs.
+
+Add missing dependency.
+
+Test: TH
+Bug: 162921175
+Change-Id: Ide1fe0b823e5e7a06c6c0252a5bef7bfaf6f7c28
+---
+ tools/releasetools/Android.bp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/releasetools/Android.bp b/tools/releasetools/Android.bp
+index 4bacddc35..dbd7dc6a3 100644
+--- a/tools/releasetools/Android.bp
++++ b/tools/releasetools/Android.bp
+@@ -49,6 +49,7 @@ python_defaults {
+     required: [
+         "blk_alloc_to_base_fs",
+         "e2fsck",
++        "mkuserimg_mke2fs",
+         "simg2img",
+         "tune2fs",
+     ],
+-- 
+2.31.1.606.gdf6c4f722c
+

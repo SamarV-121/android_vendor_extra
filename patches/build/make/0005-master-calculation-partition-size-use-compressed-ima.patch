@@ -1,0 +1,45 @@
+From d3c6175a765be33a22720b6850fc3b11b40e33da Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Fri, 4 Dec 2020 16:58:24 +0800
+Subject: [PATCH 5/8] [master] calculation partition size use compressed image
+ size
+
+If dynamic partitioning is enabled and the partition size is not set,
+du will be used to calculate the partition size.
+
+For compressed file systems, it's better to use the compressed size
+to avoid wasting space.
+
+Bug:174816929
+Test: erofs image size is smaller than the original file
+Change-Id: I1deda85d312c19620680531223fffcfb815e5fd4
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+---
+ tools/releasetools/build_image.py | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/tools/releasetools/build_image.py b/tools/releasetools/build_image.py
+index d33472c12..086d80ffe 100755
+--- a/tools/releasetools/build_image.py
++++ b/tools/releasetools/build_image.py
+@@ -424,7 +424,16 @@ def BuildImage(in_dir, prop_dict, out_file, target_out=None):
+   if (prop_dict.get("use_dynamic_partition_size") == "true" and
+       "partition_size" not in prop_dict):
+     # If partition_size is not defined, use output of `du' + reserved_size.
+-    size = GetDiskUsage(in_dir)
++    # For compressed file system, it's better to use the compressed size to avoid wasting space.
++    if fs_type.startswith("erofs"):
++      tmp_dict = prop_dict.copy()
++      if "erofs_sparse_flag" in tmp_dict:
++        tmp_dict.pop("erofs_sparse_flag")
++      BuildImageMkfs(in_dir, tmp_dict, out_file, target_out, fs_config)
++      size = GetDiskUsage(out_file)
++      os.remove(out_file)
++    else:
++      size = GetDiskUsage(in_dir)
+     logger.info(
+         "The tree size of %s is %d MB.", in_dir, size // BYTES_IN_MB)
+     # If not specified, give us 16MB margin for GetDiskUsage error ...
+-- 
+2.31.1.606.gdf6c4f722c
+

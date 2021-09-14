@@ -1,7 +1,7 @@
-From 09cf5b100fd80a0bfb30c0314cfeea2d29ae9aaa Mon Sep 17 00:00:00 2001
+From 3068a4fd165928e697d839ee1b4f20a7db9a3bf2 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 5 Apr 2021 23:20:49 -0700
-Subject: [PATCH 08/10] init.rc: Disable native stats collection service
+Subject: [PATCH 08/12] init.rc: Disable native stats collection service
 
 When opening and closing activities in Settings, a measurably
 significant amount of CPU time is spent processing and logging stats
@@ -58,5 +58,5 @@ index a9af0b0..228f03b 100644
      start zygote
      start zygote_secondary
 -- 
-2.32.0
+2.31.1.606.gdf6c4f722c
 

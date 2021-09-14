@@ -1,0 +1,35 @@
+From 043732a9ade8212584fe61194e68055e617e4d2b Mon Sep 17 00:00:00 2001
+From: mailonghua <mailonghua@oppo.com>
+Date: Fri, 4 Dec 2020 16:26:48 +0800
+Subject: [PATCH 3/6] apexd: fallback to buffered IO on overlayfs
+
+Even though we have used buffered IO on squashfs and erofs, apexd will
+still fail to loop mount after adb remount. So we should allow to
+use buffered IO on overlayfs.
+
+Bug:174816929
+Test: Boot with erofs or squashfs images after adb remount
+
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+Change-Id: I2ad68bb7b1c9d9ff241a496120602ff5558c34e0
+---
+ apexd/apexd_loop.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/apexd/apexd_loop.cpp b/apexd/apexd_loop.cpp
+index aaeeaff..58a3843 100644
+--- a/apexd/apexd_loop.cpp
++++ b/apexd/apexd_loop.cpp
+@@ -175,7 +175,8 @@ Result<void> configureLoopDevice(const int device_fd, const std::string& target,
+     // let's give another try with buffered I/O for EROFS and squashfs
+     if (statfs(target.c_str(), &stbuf) != 0 ||
+         (stbuf.f_type != EROFS_SUPER_MAGIC_V1 &&
+-         stbuf.f_type != SQUASHFS_MAGIC)) {
++         stbuf.f_type != SQUASHFS_MAGIC &&
++         stbuf.f_type != OVERLAYFS_SUPER_MAGIC)) {
+       return Error(saved_errno) << "Failed to open " << target;
+     }
+     LOG(WARNING) << "Fallback to buffered I/O for " << target;
+-- 
+2.31.1.606.gdf6c4f722c
+

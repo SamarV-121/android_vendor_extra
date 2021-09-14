@@ -1,0 +1,90 @@
+From f45552b56377f459245d2bb48240fd072247a1df Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Mon, 2 Aug 2021 15:02:17 +0800
+Subject: [PATCH 5/5] Add EROFS support for APEX build system
+
+Bug: 195274797
+Test: mmm system/apex/apexer/testdata
+Change-Id: I21dbe8b1bfe02d267c710f3c0dd4abaa737cffe0
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+---
+ apex/apex.go    | 12 +++++++++---
+ apex/builder.go |  3 ++-
+ 2 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/apex/apex.go b/apex/apex.go
+index 84a32015e..90b834f09 100644
+--- a/apex/apex.go
++++ b/apex/apex.go
+@@ -46,6 +46,7 @@ const (
+ 
+ 	ext4FsType = "ext4"
+ 	f2fsFsType = "f2fs"
++	erofsFsType = "erofs"
+ )
+ 
+ type dependencyTag struct {
+@@ -1142,8 +1143,8 @@ type apexBundleProperties struct {
+ 	// The minimum SDK version that this apex must be compatible with.
+ 	Min_sdk_version *string
+ 
+-	// The type of filesystem to use for an image apex. Either 'ext4' or 'f2fs'.
+-	// Default 'ext4'.
++	// The type of filesystem to use for an image apex. Either 'ext4', 'f2fs'
++	// or 'erofs'. Default 'ext4'.
+ 	Payload_fs_type *string
+ }
+ 
+@@ -1349,6 +1350,7 @@ type fsType int
+ const (
+ 	ext4 fsType = iota
+ 	f2fs
++	erofs
+ )
+ 
+ func (f fsType) string() string {
+@@ -1357,6 +1359,8 @@ func (f fsType) string() string {
+ 		return ext4FsType
+ 	case f2fs:
+ 		return f2fsFsType
++	case erofs:
++		return erofsFsType
+ 	default:
+ 		panic(fmt.Errorf("unknown APEX payload type %d", f))
+ 	}
+@@ -2280,8 +2284,10 @@ func (a *apexBundle) GenerateAndroidBuildActions(ctx android.ModuleContext) {
+ 		a.payloadFsType = ext4
+ 	case f2fsFsType:
+ 		a.payloadFsType = f2fs
++	case erofsFsType:
++		a.payloadFsType = erofs
+ 	default:
+-		ctx.PropertyErrorf("payload_fs_type", "%q is not a valid filesystem for apex [ext4, f2fs]", *a.properties.Payload_fs_type)
++		ctx.PropertyErrorf("payload_fs_type", "%q is not a valid filesystem for apex [ext4, f2fs, erofs]", *a.properties.Payload_fs_type)
+ 	}
+ 
+ 	if a.properties.ApexType != zipApex {
+diff --git a/apex/builder.go b/apex/builder.go
+index ab84236e6..7aa194a4c 100644
+--- a/apex/builder.go
++++ b/apex/builder.go
+@@ -64,6 +64,7 @@ func init() {
+ 	pctx.HostBinToolVariable("extract_apks", "extract_apks")
+ 	pctx.HostBinToolVariable("make_f2fs", "make_f2fs")
+ 	pctx.HostBinToolVariable("sload_f2fs", "sload_f2fs")
++	pctx.HostBinToolVariable("make_erofs", "make_erofs")
+ }
+ 
+ var (
+@@ -117,7 +118,7 @@ var (
+ 			`--payload_type image ` +
+ 			`--key ${key} ${opt_flags} ${image_dir} ${out} `,
+ 		CommandDeps: []string{"${apexer}", "${avbtool}", "${e2fsdroid}", "${merge_zips}",
+-			"${mke2fs}", "${resize2fs}", "${sefcontext_compile}", "${make_f2fs}", "${sload_f2fs}",
++			"${mke2fs}", "${resize2fs}", "${sefcontext_compile}", "${make_f2fs}", "${sload_f2fs}", "${make_erofs}",
+ 			"${soong_zip}", "${zipalign}", "${aapt2}", "prebuilts/sdk/current/public/android.jar"},
+ 		Rspfile:        "${out}.copy_commands",
+ 		RspfileContent: "${copy_commands}",
+-- 
+2.31.1.606.gdf6c4f722c
+

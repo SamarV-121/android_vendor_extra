@@ -1,0 +1,47 @@
+From ec98ed7d953a53a2dfaca509ab7a529b9f5d532e Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Thu, 29 Apr 2021 15:24:50 +0800
+Subject: [PATCH 7/8] [master] Avoid to print undefined image_size and
+ partition_size
+
+If dynamic partitioning is enabled and the partition size is not set,
+we will get a KeyError before image_size or partition_size is calculated
+when we try to catch exception in BuildImageMkfs.
+
+Bug: 186704243
+Test: build_image.py can correctly throw exception
+Change-Id: I3d8c143ad5603d07fe94afb8bb911ead244f0bf7
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+---
+ tools/releasetools/build_image.py | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/tools/releasetools/build_image.py b/tools/releasetools/build_image.py
+index a992ad632..7f4984586 100755
+--- a/tools/releasetools/build_image.py
++++ b/tools/releasetools/build_image.py
+@@ -374,13 +374,14 @@ def BuildImageMkfs(in_dir, prop_dict, out_file, target_out, fs_config):
+             in_dir, du_str,
+             int(prop_dict.get("partition_reserved_size", 0)),
+             int(prop_dict.get("partition_reserved_size", 0)) // BYTES_IN_MB))
+-    print(
+-        "The max image size for filesystem files is {} bytes ({} MB), out of a "
+-        "total partition size of {} bytes ({} MB).".format(
+-            int(prop_dict["image_size"]),
+-            int(prop_dict["image_size"]) // BYTES_IN_MB,
+-            int(prop_dict["partition_size"]),
+-            int(prop_dict["partition_size"]) // BYTES_IN_MB))
++    if ("image_size" in prop_dict and "partition_size" in prop_dict):
++      print(
++          "The max image size for filesystem files is {} bytes ({} MB), "
++          "out of a total partition size of {} bytes ({} MB).".format(
++              int(prop_dict["image_size"]),
++              int(prop_dict["image_size"]) // BYTES_IN_MB,
++              int(prop_dict["partition_size"]),
++              int(prop_dict["partition_size"]) // BYTES_IN_MB))
+     raise
+ 
+   if run_e2fsck and prop_dict.get("skip_fsck") != "true":
+-- 
+2.31.1.606.gdf6c4f722c
+

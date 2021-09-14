@@ -1,0 +1,42 @@
+From 6ea3c9b024c50c7be70c9bc63163642a070628d2 Mon Sep 17 00:00:00 2001
+From: Junichi Uekawa <uekawa@google.com>
+Date: Wed, 16 Sep 2020 18:12:35 +0900
+Subject: [PATCH 2/6] apexd: Allow mounting on squashfs.
+
+O_DIRECT does not work on squashfs file systems, and will return EINVAL. Try
+without O_DIRECT.
+
+On boards with `BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE := squashfs` apexd will fail
+to loop mount.  Unfortunately O_DIRECT is not possible because image is
+compressed on disk and we do need the buffering.
+
+Bug: 167309455
+Bug: 168746790
+Test: tast run kukui-arc-r arc.Boot.vm
+Change-Id: I9da1af535cb18cebed751ecab0e250780e2df377
+---
+ apexd/apexd_loop.cpp | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/apexd/apexd_loop.cpp b/apexd/apexd_loop.cpp
+index d97ab34..aaeeaff 100644
+--- a/apexd/apexd_loop.cpp
++++ b/apexd/apexd_loop.cpp
+@@ -172,10 +172,11 @@ Result<void> configureLoopDevice(const int device_fd, const std::string& target,
+   if (target_fd.get() == -1) {
+     struct statfs stbuf;
+     int saved_errno = errno;
+-    // let's give another try with buffered I/O for EROFS
++    // let's give another try with buffered I/O for EROFS and squashfs
+     if (statfs(target.c_str(), &stbuf) != 0 ||
+-        stbuf.f_type != EROFS_SUPER_MAGIC_V1) {
+-        return Error(saved_errno) << "Failed to open " << target;
++        (stbuf.f_type != EROFS_SUPER_MAGIC_V1 &&
++         stbuf.f_type != SQUASHFS_MAGIC)) {
++      return Error(saved_errno) << "Failed to open " << target;
+     }
+     LOG(WARNING) << "Fallback to buffered I/O for " << target;
+     target_fd.reset(open(target.c_str(), O_RDONLY | O_CLOEXEC));
+-- 
+2.31.1.606.gdf6c4f722c
+

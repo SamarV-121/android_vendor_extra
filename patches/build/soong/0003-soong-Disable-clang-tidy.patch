@@ -1,7 +1,7 @@
-From 099ffc0723b00d5958be43afc96cf79c3e242a59 Mon Sep 17 00:00:00 2001
+From 0bafcdff10c3565f1bd80da8a9561d7958629929 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Mon, 1 Mar 2021 23:11:06 -0800
-Subject: [PATCH 3/3] soong: Disable clang-tidy
+Subject: [PATCH 3/5] soong: Disable clang-tidy
 
 Running clang-tidy on all the AOSP code is of little use for us, but it
 takes a substantial amount of build time. Disable it to reduce build

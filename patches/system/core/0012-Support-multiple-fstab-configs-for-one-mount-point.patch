@@ -1,0 +1,105 @@
+From e808ff0bd706396d85418f72725fb88d890ac3dd Mon Sep 17 00:00:00 2001
+From: Huang Jianan <huangjianan@oppo.com>
+Date: Fri, 6 Aug 2021 18:13:16 +0800
+Subject: [PATCH 12/12] Support multiple fstab configs for one mount point
+
+This allows us to mount with such fstab:
+/dev/block/by-name/system /system ext4  ro slotselect
+/dev/block/by-name/system /system erofs ro slotselect
+This will be used when mount partition through ensure_path_mounted
+in recovery.
+
+Bug: 195726623
+Test: mount with different image on the same fstab
+Change-Id: I7761489a3e2bf46331563e872b6dfaa8b685a082
+Signed-off-by: Huang Jianan <huangjianan@oppo.com>
+---
+ fs_mgr/fs_mgr_roots.cpp | 47 +++++++++++++++++++++++++++++------------
+ 1 file changed, 33 insertions(+), 14 deletions(-)
+
+diff --git a/fs_mgr/fs_mgr_roots.cpp b/fs_mgr/fs_mgr_roots.cpp
+index 9422ec3..f84f91a 100644
+--- a/fs_mgr/fs_mgr_roots.cpp
++++ b/fs_mgr/fs_mgr_roots.cpp
+@@ -14,6 +14,7 @@
+  * limitations under the License.
+  */
+ 
++#include "android-base/file.h"
+ #include "fs_mgr/roots.h"
+ 
+ #include <sys/mount.h>
+@@ -39,18 +40,26 @@ FstabEntry* GetEntryForPath(Fstab* fstab, const std::string& path) {
+     while (true) {
+         auto entry = GetEntryForMountPointTryDetectFs(fstab, str);
+         if (entry != nullptr) return entry;
+-        if (str == "/") break;
+-        auto slash = str.find_last_of('/');
+-        if (slash == std::string::npos) break;
+-        if (slash == 0) {
+-            str = "/";
+-        } else {
+-            str = str.substr(0, slash);
+-        }
++        str = android::base::Dirname(str);
++        if (!str.compare(".") || !str.compare("/")) break;
+     }
+     return nullptr;
+ }
+ 
++std::vector<FstabEntry*> GetEntriesForPath(Fstab* fstab, const std::string& path) {
++    std::vector<FstabEntry*> entries;
++    if (path.empty()) return entries;
++
++    std::string str(path);
++    while (true) {
++        entries = GetEntriesForMountPoint(fstab, str);
++        if (!entries.empty()) return entries;
++        str = android::base::Dirname(str);
++        if (!str.compare(".") || !str.compare("/")) break;
++    }
++    return entries;
++}
++
+ enum class MountState {
+     ERROR = -1,
+     NOT_MOUNTED = 0,
+@@ -71,12 +80,7 @@ static MountState GetMountState(const std::string& mount_point) {
+     return MountState::NOT_MOUNTED;
+ }
+ 
+-bool EnsurePathMounted(Fstab* fstab, const std::string& path, const std::string& mount_pt) {
+-    auto rec = GetEntryForPath(fstab, path);
+-    if (rec == nullptr) {
+-        LERROR << "unknown volume for path [" << path << "]";
+-        return false;
+-    }
++bool TryPathMount(FstabEntry* rec, const std::string& mount_pt) {
+     if (rec->fs_type == "ramdisk") {
+         // The ramdisk is always mounted.
+         return true;
+@@ -127,6 +131,21 @@ bool EnsurePathMounted(Fstab* fstab, const std::string& path, const std::string&
+     return true;
+ }
+ 
++bool EnsurePathMounted(Fstab* fstab, const std::string& path, const std::string& mount_point) {
++    auto entries = GetEntriesForPath(fstab, path);
++    if (entries.empty()) {
++        LERROR << "unknown volume for path [" << path << "]";
++        return false;
++    }
++
++    for (auto entry : entries) {
++        if (TryPathMount(entry, mount_point)) return true;
++    }
++
++    LERROR << "Failed to mount for path [" << path << "]";
++    return false;
++}
++
+ bool EnsurePathUnmounted(Fstab* fstab, const std::string& path) {
+     auto rec = GetEntryForPath(fstab, path);
+     if (rec == nullptr) {
+-- 
+2.31.1.606.gdf6c4f722c
+

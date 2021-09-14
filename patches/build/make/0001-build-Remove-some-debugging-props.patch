@@ -1,7 +1,7 @@
-From 88f11299f55d7b21fa76e855362247eb4618a640 Mon Sep 17 00:00:00 2001
+From 350d3aabb2da1c5db10b2b0fead3302ce878cb9c Mon Sep 17 00:00:00 2001
 From: Henrique Silva <jhenrique09.mcz@hotmail.com>
 Date: Thu, 17 Jan 2019 00:36:22 -0200
-Subject: [PATCH] build: Remove some debugging props
+Subject: [PATCH 1/8] build: Remove some debugging props
 
 * Workaround for some banking apps wrongly telling that we are rooted
 
@@ -12,7 +12,7 @@ Change-Id: I96ef74a6d69cd44867b22bfbd0e788aabdf21662
  2 files changed, 5 insertions(+), 11 deletions(-)
 
 diff --git a/core/Makefile b/core/Makefile
-index 4f047bd..834c029 100644
+index 4a7c84cf1..857a967af 100644
 --- a/core/Makefile
 +++ b/core/Makefile
 @@ -319,16 +319,7 @@ BUILD_VERSION_TAGS := $(BUILD_VERSION_TAGS)
@@ -34,7 +34,7 @@ index 4f047bd..834c029 100644
  BUILD_VERSION_TAGS := $(subst $(space),$(comma),$(sort $(BUILD_VERSION_TAGS)))
  
 diff --git a/core/main.mk b/core/main.mk
-index b91c51a..f550909 100644
+index 5b39e8da4..d6b286231 100644
 --- a/core/main.mk
 +++ b/core/main.mk
 @@ -258,7 +258,10 @@ endif
@@ -50,5 +50,5 @@ index b91c51a..f550909 100644
  tags_to_install :=
  ifneq (,$(user_variant))
 -- 
-2.29.2
+2.31.1.606.gdf6c4f722c
 
