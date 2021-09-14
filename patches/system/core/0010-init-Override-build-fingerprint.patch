@@ -1,0 +1,34 @@
+From d3e92ed888b5d6af8cec1bc67487683e4cce2095 Mon Sep 17 00:00:00 2001
+From: SamarV-121 <samarvispute121@pm.me>
+Date: Mon, 13 Sep 2021 14:19:40 +0530
+Subject: [PATCH 10/10] init: Override build fingerprint
+
+Change-Id: I77bafb8a275ff5f1a1a33dfa522f33ac45df3f56
+Signed-off-by: SamarV-121 <samarvispute121@pm.me>
+---
+ init/property_service.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/init/property_service.cpp b/init/property_service.cpp
+index 3a03602..0f10c3a 100644
+--- a/init/property_service.cpp
++++ b/init/property_service.cpp
+@@ -796,6 +796,7 @@ static const char *snet_prop_key[] = {
+     "ro.vendor.warranty_bit",
+     "vendor.boot.vbmeta.device_state",
+     "vendor.boot.verifiedbootstate",
++    "ro.build.fingerprint",
+     NULL
+ };
+ 
+@@ -822,6 +823,7 @@ static const char *snet_prop_value[] = {
+     "0", // ro.vendor.warranty_bit
+     "locked", // vendor.boot.vbmeta.device_state
+     "green", // vendor.boot.verifiedbootstate
++    "google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys", // ro.build.fingerprint
+     NULL
+ };
+ 
+-- 
+2.32.0
+

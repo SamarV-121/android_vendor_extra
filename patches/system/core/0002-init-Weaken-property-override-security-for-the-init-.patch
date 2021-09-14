@@ -1,7 +1,7 @@
-From 624921a8f1d7f2dd29808382b9af394b6ee0b412 Mon Sep 17 00:00:00 2001
+From d40051c24b0e47bb7334fa5e32cf807a7b4b0a70 Mon Sep 17 00:00:00 2001
 From: Alex Naidis <alex.naidis@linux.com>
 Date: Sun, 9 Apr 2017 01:29:27 +0200
-Subject: [PATCH 2/9] init: Weaken property override security for the init
+Subject: [PATCH 02/10] init: Weaken property override security for the init
  extension
 
 Sometimes we need to override ro.* properties by using our vendor init

@@ -1,7 +1,7 @@
-From 5cd53e277f165cecc0381dbab70c22403f8fd39a Mon Sep 17 00:00:00 2001
+From b9b5d82f1347187eb54c37d36ad3d900fb6b25da Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 20 Nov 2020 11:34:54 -0300
-Subject: [PATCH 5/9] init: Weaken property override security only when
+Subject: [PATCH 05/10] init: Weaken property override security only when
  spoofing safetynet
 
 Change-Id: I740afaa27de82bec1e6d58b58d431141ca6b4e3f

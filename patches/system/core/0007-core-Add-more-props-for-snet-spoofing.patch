@@ -1,7 +1,7 @@
-From fee20baf7e1dc5be84d7bf531b79f0e083ba3293 Mon Sep 17 00:00:00 2001
+From 4aaf250ad7e4a1afa0cd5ad44a10f983dada20c0 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Tue, 1 Dec 2020 18:46:03 -0300
-Subject: [PATCH 7/9] core: Add more props for snet spoofing
+Subject: [PATCH 07/10] core: Add more props for snet spoofing
 
 Also reformat code
 

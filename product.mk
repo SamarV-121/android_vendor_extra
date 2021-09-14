@@ -1,7 +1,3 @@
-# Build fingerprint
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.build.fingerprint=google/walleye/walleye:8.1.0/OPM1.171019.011/4448085:user/release-keys
-
 # Build system
 BUILD_BROKEN_DUP_RULES := true
 

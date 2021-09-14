@@ -1,7 +1,7 @@
-From e207e8090abeb45bb5ab7fb913903734fe2f1c8e Mon Sep 17 00:00:00 2001
+From 80cb868a38f67d072b6493118b4609b1075adaf2 Mon Sep 17 00:00:00 2001
 From: Park Ju Hyung <qkrwngud825@gmail.com>
 Date: Mon, 6 Nov 2017 20:30:39 +0900
-Subject: [PATCH 3/9] init: workaround SafetyNet check
+Subject: [PATCH 03/10] init: workaround SafetyNet check
 
 Doing this in the userspace allows more properties to be spoofed
 and eliminate the needs for a hack in the kernel.

@@ -1,7 +1,7 @@
-From 33dc7f491db85d7678ca3ae6518e5c46af8a9d4a Mon Sep 17 00:00:00 2001
+From f229e0826f727f93762d0531c37305500d119fb6 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 20 Nov 2020 20:33:21 -0300
-Subject: [PATCH 6/9] init: Only set safetynet props if not eng build
+Subject: [PATCH 06/10] init: Only set safetynet props if not eng build
 
 Change-Id: Ic07539b4a7a97316720defd000425d1b6d15fd67
 
