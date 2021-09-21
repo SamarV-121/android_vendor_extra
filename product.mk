@@ -21,6 +21,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.disable_rescue=true
 
+# Recovery
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.vendor.recovery_update=true
+
 ## Signing
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
 
