@@ -1,0 +1,2 @@
+# Recovery
+BOARD_USES_FULL_RECOVERY_IMAGE := true
