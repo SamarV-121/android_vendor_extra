@@ -9,6 +9,11 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     vintf
 
+## Fonts
+PRODUCT_COPY_FILES += \
+    $(call find-copy-subdir-files,*,$(LOCAL_PATH)/prebuilt/fonts/ttf,$(TARGET_COPY_OUT_PRODUCT)/fonts) \
+    $(LOCAL_PATH)/prebuilt/fonts/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml
+
 ## Google Apps
 ifeq ($(WITH_GMS), true)
 $(call inherit-product, vendor/gapps/common/common-vendor.mk)
