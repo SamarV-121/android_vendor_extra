@@ -45,5 +45,13 @@
 
    <!-- Set icon mask to circle -->
    <string name="config_icon_mask" translatable="false">"M50 0A50 50,0,1,1,50 100A50 50,0,1,1,50 0"</string>
+
+    <string name="config_bodyFontFamily">google-sans-text</string>
+    <string name="config_bodyFontFamilyMedium">google-sans-text-medium</string>
+
+    <!-- Name of a font family to use for headlines. If empty, falls back to platform default -->
+    <string name="config_headlineFontFamily">google-sans</string>
+    <string name="config_headlineFontFamilyMedium">google-sans-medium</string>
+    <string name="config_headlineFontFeatureSettings">ss03</string>
 </resources>
 
