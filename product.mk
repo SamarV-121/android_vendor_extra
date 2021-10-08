@@ -1,3 +1,7 @@
+# Init
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/init/debugging.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/debugging.rc
+
 # Overlays
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 
