@@ -1,3 +1,8 @@
+# Google Apps
+ifeq ($(WITH_GMS), true)
+$(call inherit-product, vendor/gapps/common/common-vendor.mk)
+endif
+
 # Init
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/init/debugging.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/debugging.rc
