@@ -26,6 +26,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.disable_rescue=true
 
+# Radio
+PRODUCT_PRODUCT_PROPERTIES += \
+    persist.sys.fflag.override.settings_provider_model=false
+
 # Recovery
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.vendor.recovery_update=true
