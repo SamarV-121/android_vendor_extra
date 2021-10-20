@@ -22,6 +22,10 @@ endif
 ## Overlays
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 
+## PixelLauncher
+PRODUCT_PACKAGES += \
+    NexusLauncherRelease
+
 ## Properties
 # Default ADB shell prompt
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
