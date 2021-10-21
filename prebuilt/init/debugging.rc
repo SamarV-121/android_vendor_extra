@@ -10,7 +10,7 @@ service debug_kernel /system/bin/sh -c "cat /proc/kmsg > /data/debug.kernel.txt"
     user root
     oneshot
 
-service debug_logcat /system/bin/logcat -f /data/debug.logcat.txt -v threadtime
+service debug_logcat /system/bin/logcat -f /data/misc/logd/debug.logcat.txt -v threadtime
     class main
     user root
     group system

@@ -9,8 +9,10 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/fonts/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml
 
 # Init
+ifeq ($(TARGET_BUILD_VARIANT),eng)
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/init/debugging.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/debugging.rc
+endif
 
 # Overlays
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
