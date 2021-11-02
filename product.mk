@@ -9,6 +9,11 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     vintf
 
+## Google Apps
+ifeq ($(WITH_GMS), true)
+$(call inherit-product, vendor/gapps/common/common-vendor.mk)
+endif
+
 ## Overlays
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 
