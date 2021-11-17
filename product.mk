@@ -9,6 +9,10 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     vintf
 
+## Extra
+PRODUCT_PACKAGES += \
+    MarkupGoogle
+
 ## Fonts
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/prebuilt/fonts/ttf,$(TARGET_COPY_OUT_PRODUCT)/fonts) \

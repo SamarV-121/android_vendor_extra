@@ -44,3 +44,18 @@ prebuilt_etc {
     sub_dir: "permissions",
     filename_from_src: true,
 }
+
+android_app_import {
+    name: "MarkupGoogle",
+    apk: "MarkupGoogle.apk",
+    presigned: true,
+    dex_preopt: {
+        enabled: false,
+    },
+    privileged: true,
+    product_specific: true,
+    required: [
+        "FrameworksOverlayMarkup",
+        "SystemUIOverlayMarkup",
+    ],
+}
