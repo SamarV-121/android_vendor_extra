@@ -11,6 +11,7 @@ PRODUCT_PACKAGES += \
 
 ## Extra
 PRODUCT_PACKAGES += \
+    LatinIMEGooglePrebuilt \
     MarkupGoogle
 
 ## Fonts

@@ -59,3 +59,14 @@ android_app_import {
         "SystemUIOverlayMarkup",
     ],
 }
+
+android_app_import {
+    name: "LatinIMEGooglePrebuilt",
+    apk: "LatinIMEGooglePrebuilt.apk",
+    presigned: true,
+    dex_preopt: {
+        enabled: false,
+    },
+    overrides: ["LatinIME"],
+    product_specific: true,
+}
