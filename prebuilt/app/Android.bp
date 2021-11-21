@@ -1,22 +1,4 @@
 android_app_import {
-    name: "NexusLauncherRelease",
-    apk: "NexusLauncherRelease.apk",
-    presigned: true,
-    dex_preopt: {
-        enabled: false,
-    },
-    privileged: true,
-    system_ext_specific: true,
-    overrides: ["TrebuchetQuickStep"],
-    required: [
-        "NexusLauncherOverlay",
-        "PixelThemesStub",
-        "WallpaperPickerGoogleRelease",
-        "privapp_whitelist_com.google.android.apps.nexuslauncher",
-    ],
-}
-
-android_app_import {
     name: "PixelThemesStub",
     apk: "PixelThemesStub.apk",
     presigned: true,
@@ -35,12 +17,16 @@ android_app_import {
     },
     privileged: true,
     system_ext_specific: true,
+    required: [
+        "PixelThemesStub",
+        "privapp_whitelist_com.google.android.apps.wallpaper",
+    ],
 }
 
 prebuilt_etc {
-    name: "privapp_whitelist_com.google.android.apps.nexuslauncher",
+    name: "privapp_whitelist_com.google.android.apps.wallpaper",
     system_ext_specific: true,
-    src: "privapp_whitelist_com.google.android.apps.nexuslauncher.xml",
+    src: "privapp_whitelist_com.google.android.apps.wallpaper.xml",
     sub_dir: "permissions",
     filename_from_src: true,
 }
@@ -58,15 +44,4 @@ android_app_import {
         "FrameworksOverlayMarkup",
         "SystemUIOverlayMarkup",
     ],
-}
-
-android_app_import {
-    name: "LatinIMEGooglePrebuilt",
-    apk: "LatinIMEGooglePrebuilt.apk",
-    presigned: true,
-    dex_preopt: {
-        enabled: false,
-    },
-    overrides: ["LatinIME"],
-    product_specific: true,
 }

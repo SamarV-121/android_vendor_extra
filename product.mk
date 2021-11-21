@@ -16,8 +16,8 @@ PRODUCT_PACKAGES += \
 
 ## Extra
 PRODUCT_PACKAGES += \
-    LatinIMEGooglePrebuilt \
-    MarkupGoogle
+    MarkupGoogle \
+    WallpaperPickerGoogleRelease
 
 ## Fonts
 PRODUCT_COPY_FILES += \
@@ -32,10 +32,6 @@ endif
 ## Overlays
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay
-
-## PixelLauncher
-PRODUCT_PACKAGES += \
-    NexusLauncherRelease
 
 ## Properties
 # Default ADB shell prompt
