@@ -50,8 +50,10 @@ PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.fflag.override.settings_provider_model=false
 
 # Recovery
+ifeq ($(filter %RM6785,$(TARGET_PRODUCT)),)
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.vendor.recovery_update=true
+endif
 
 ## Signing
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
