@@ -56,6 +56,13 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.vendor.recovery_update=true
 endif
 
+## Safetynet Hax
+PRODUCT_PACKAGES += \
+    ih8sn
+
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/etc/ih8sn.conf:$(TARGET_COPY_OUT_SYSTEM)/etc/ih8sn.conf
+
 ## Signing
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
 
