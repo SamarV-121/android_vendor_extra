@@ -26,7 +26,7 @@ PRODUCT_COPY_FILES += \
 
 ## Google Apps
 ifeq ($(WITH_GMS), true)
-$(call inherit-product, vendor/gapps/common/common-vendor.mk)
+$(call inherit-product, vendor/gms/products/gms.mk)
 endif
 
 ## Overlays
