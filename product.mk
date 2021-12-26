@@ -11,6 +11,8 @@ PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/charger,$(TARGET_COPY_OUT_PRODUCT)/etc/res)
 
 ## Debugging
+$(call inherit-product-if-exists, external/tools/tools.mk)
+
 PRODUCT_PACKAGES += \
     vintf
 
