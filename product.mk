@@ -60,6 +60,10 @@ $(call inherit-product, vendor/gms/products/gms.mk)
    SettingsOverlayCustom
 endif
 
+## Misc
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/prebuilt/etc/pixel_2016_exclusive.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/sysconfig/pixel_2016_exclusive.xml
+
 ## Overlays
 PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay/no-rro
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay/common $(LOCAL_PATH)/overlay/no-rro
