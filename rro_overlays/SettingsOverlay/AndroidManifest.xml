@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.android.settings.overlay.custom">
+    <overlay
+        android:isStatic="true"
+        android:priority="1"
+        android:targetPackage="com.android.settings" />
+</manifest>

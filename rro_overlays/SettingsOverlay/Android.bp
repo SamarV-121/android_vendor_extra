@@ -1,0 +1,4 @@
+runtime_resource_overlay {
+    name: "SettingsOverlayCustom",
+    product_specific: true
+}
