@@ -58,6 +58,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.vendor.recovery_update=true
 endif
 
+## Repainter integration
+PRODUCT_PACKAGES += \
+    RepainterServicePriv
+
 ## Safetynet Hax
 PRODUCT_PACKAGES += \
     ih8sn
