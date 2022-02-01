@@ -18,6 +18,12 @@ PRODUCT_PACKAGES += \
 ## Build system
 BUILD_BROKEN_DUP_RULES := true
 
+## Camera
+ifneq ($(filter %m20lte,$(TARGET_PRODUCT)),)
+PRODUCT_PACKAGES += \
+    Camera
+endif
+
 ## Charger
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/charger,$(TARGET_COPY_OUT_PRODUCT)/etc/res)
