@@ -15,9 +15,6 @@ PRODUCT_PRODUCT_PROPERTIES := \
 PRODUCT_PACKAGES += \
     SoundPickerPrebuilt
 
-## Build system
-BUILD_BROKEN_DUP_RULES := true
-
 ## Camera
 ifneq ($(filter %m20lte,$(TARGET_PRODUCT)),)
 PRODUCT_PACKAGES += \

@@ -13,5 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-## Recovery
+# Build system
+BUILD_BROKEN_DUP_RULES := true
+BUILD_BROKEN_DUP_SYSPROP := true
+
+# Recovery
 BOARD_USES_FULL_RECOVERY_IMAGE := true
