@@ -68,7 +68,7 @@ PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay
 ## Properties
 # Default ADB shell prompt
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-    persist.sys.adb.shell=/system/xbin/bash
+    persist.sys.adb.shell=/system_ext/bin/bash
 
 # Disable RescueParty due to high risk of data loss
 PRODUCT_PRODUCT_PROPERTIES += \
