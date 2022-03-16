@@ -67,6 +67,10 @@ PRODUCT_PRODUCT_PROPERTIES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.sys.fflag.override.settings_provider_model=false
 
+# Updater
+PRODUCT_PRODUCT_PROPERTIES += \
+    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
+
 # Recovery
 ifeq ($(filter %RM6785,$(TARGET_PRODUCT)),)
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
@@ -88,5 +92,5 @@ PRODUCT_COPY_FILES += \
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
 
 ## Updater
-PRODUCT_PROPERTY_OVERRIDES += \
+PRODUCT_PRODUCT_PROPERTIES += \
     lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
