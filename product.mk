@@ -102,6 +102,11 @@ PRODUCT_COPY_FILES += \
 ## Signing
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
 
+## Themed Icons
+PRODUCT_PACKAGES += \
+    Launcher3OverlayThemedIcons \
+    NexusLauncherOverlayThemedIcons
+
 ## Updater
 PRODUCT_PRODUCT_PROPERTIES += \
     lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
