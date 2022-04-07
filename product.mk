@@ -62,8 +62,10 @@ $(call inherit-product, vendor/gms/products/gms.mk)
 endif
 
 ## Overlays
-PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
-PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay
+PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay/no-rro
+PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay/common $(LOCAL_PATH)/overlay/no-rro
+PRODUCT_PACKAGES += \
+    FrameworksOverlayWallpaper
 
 ## Properties
 # Default ADB shell prompt
