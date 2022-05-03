@@ -1,6 +1,5 @@
 ## ADB keys
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/adb_keys:$(TARGET_RECOVERY_ROOT_OUT)/root/adb_keys \
     $(LOCAL_PATH)/adb_keys:$(TARGET_ROOT_OUT)/adb_keys
 
 ## Audio
