@@ -1,0 +1,3 @@
+# App Lock
+add_service(system_server, app_lock_service);
+

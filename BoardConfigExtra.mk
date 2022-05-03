@@ -19,3 +19,7 @@ BUILD_BROKEN_DUP_SYSPROP := true
 
 # Recovery
 BOARD_USES_FULL_RECOVERY_IMAGE := true
+
+# SEPolicy
+SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += \
+    vendor/extra/sepolicy/private
