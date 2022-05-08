@@ -52,6 +52,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/prebuilt/fonts/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml
 
 PRODUCT_PACKAGES += \
+    FontHarmonyOsSansOverlay \
     FontInterOverlay \
     FontLinotteSourceOverlay \
     FontManropeOverlay \
