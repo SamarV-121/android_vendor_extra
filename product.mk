@@ -15,10 +15,8 @@ PRODUCT_PACKAGES += \
     SoundPickerPrebuilt
 
 ## Camera
-ifneq ($(filter %m20lte,$(TARGET_PRODUCT)),)
 PRODUCT_PACKAGES += \
     Camera
-endif
 
 ## Charger
 PRODUCT_COPY_FILES += \
@@ -62,10 +60,9 @@ PRODUCT_PACKAGES += \
 ## Google Apps
 ifeq ($(WITH_GMS), true)
 $(call inherit-product, vendor/gms/products/gms.mk)
-
-# Overlay
-# PRODUCT_PACKAGES += \
-   SettingsOverlayCustom
+DEVICE := $(LINEAGE_BUILD)_gms
+else
+DEVICE := $(LINEAGE_BUILD)
 endif
 
 ## Misc
@@ -93,7 +90,7 @@ PRODUCT_PRODUCT_PROPERTIES += \
 
 # Updater
 PRODUCT_PRODUCT_PROPERTIES += \
-    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
+    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(DEVICE).json
 
 # Recovery
 ifeq ($(filter %RM6785,$(TARGET_PRODUCT)),)
@@ -119,7 +116,3 @@ PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
 PRODUCT_PACKAGES += \
     Launcher3OverlayThemedIcons \
     NexusLauncherOverlayThemedIcons
-
-## Updater
-PRODUCT_PRODUCT_PROPERTIES += \
-    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
