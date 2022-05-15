@@ -73,7 +73,8 @@ PRODUCT_COPY_FILES += \
 PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay/no-rro
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay/common $(LOCAL_PATH)/overlay/no-rro
 PRODUCT_PACKAGES += \
-    FrameworksOverlayWallpaper
+    FrameworksOverlayWallpaper \
+    FrameworksOverlayLocationIndiacators
 
 ## Properties
 # Default ADB shell prompt
