@@ -60,7 +60,8 @@ PRODUCT_PACKAGES += \
     FontLinotteSourceOverlay \
     FontManropeOverlay \
     FontOnePlusSansOverlay \
-    FontOneplusSlateSourceOverlay
+    FontOneplusSlateSourceOverlay \
+    FontOppoSansOverlay
 
 ## Google Apps
 ifeq ($(WITH_GMS), true)
