@@ -79,7 +79,8 @@ PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += $(LOCAL_PATH)/overlay/no-rro
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay/common $(LOCAL_PATH)/overlay/no-rro
 PRODUCT_PACKAGES += \
     FrameworksOverlayWallpaper \
-    FrameworksOverlayLocationIndiacators
+    FrameworksOverlayLocationIndiacators \
+    NavigationBarNoHintExtra
 
 ## Properties
 # Default ADB shell prompt
