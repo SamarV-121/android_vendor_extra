@@ -39,9 +39,6 @@
     <!-- System-provided radius for inner views on app widgets. The resolved value of this resource may change at runtime. -->
     <dimen name="system_app_widget_inner_radius">20dp</dimen>
 
-    <!-- the number of the max cached processes in the system. -->
-    <integer name="config_customizedMaxCachedProcesses">64</integer>
-
     <!-- Enables or disables haptic effect when the text insertion/selection handle is moved
          manually by the user. Off by default, since the expected haptic feedback may not be
          available on some devices. -->
