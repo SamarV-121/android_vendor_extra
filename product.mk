@@ -6,3 +6,7 @@ ifeq ($(filter RM6785,$(LINEAGE_BUILD)),)
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.vendor.recovery_update=true
 endif
+
+# Updater
+PRODUCT_PRODUCT_PROPERTIES += \
+    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
