@@ -1,3 +1,11 @@
+# GMS
+ifeq ($(WITH_GMS), true)
+$(call inherit-product, vendor/gms/common/common-vendor.mk)
+DEVICE := $(LINEAGE_BUILD)_gms
+else
+DEVICE := $(LINEAGE_BUILD)
+endif
+
 # Overlay
 PRODUCT_PACKAGE_OVERLAYS += $(LOCAL_PATH)/overlay
 
@@ -14,4 +22,4 @@ endif
 
 # Updater
 PRODUCT_PRODUCT_PROPERTIES += \
-    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(LINEAGE_BUILD).json
+    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(DEVICE).json
