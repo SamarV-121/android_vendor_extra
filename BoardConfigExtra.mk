@@ -1,6 +1,6 @@
 # Kernel
 ifeq ($(PREBUILT_KERNEL), true)
-include device/*/$(LINEAGE_BUILD)-kernel/BoardConfigKernel.mk
+include device/*/$(TARGET_DEVICE)-kernel/BoardConfigKernel.mk
 endif
 
 # Recovery

@@ -1,9 +1,11 @@
 # GMS
+ifneq ($(LINEAGE_BUILD),)
 ifeq ($(WITH_GMS), true)
 $(call inherit-product, vendor/gms/common/common-vendor.mk)
 DEVICE := $(LINEAGE_BUILD)_gms
 else
 DEVICE := $(LINEAGE_BUILD)
+endif
 endif
 
 # ih8sn
