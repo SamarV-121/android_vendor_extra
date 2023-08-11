@@ -28,7 +28,7 @@ endif
 
 # Updater
 PRODUCT_PRODUCT_PROPERTIES += \
-    lineage.updater.uri=https://raw.githubusercontent.com/SamarV-121/lineage_OTA/master/$(DEVICE).json
+    lineage.updater.uri=https://lineage.samarv121.dev/ota/$(DEVICE)
 
 PRODUCT_PACKAGES += \
     UpdaterOverlay
