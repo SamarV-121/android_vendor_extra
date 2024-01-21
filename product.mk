@@ -32,3 +32,6 @@ PRODUCT_PRODUCT_PROPERTIES += \
 
 PRODUCT_PACKAGES += \
     UpdaterOverlay
+
+# Private vendor
+$(call inherit-product-if-exists, vendor/priv/product.mk)
