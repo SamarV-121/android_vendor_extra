@@ -23,7 +23,11 @@ endif
 
 # Signing
 ifeq ($(SIGN_BUILD), true)
+ifneq ("$(wildcard  vendor/lineage-priv/keys)","")
+PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/lineage-priv/keys/releasekey
+else
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/certs/releasekey
+endif
 endif
 
 # Updater
