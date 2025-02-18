@@ -15,6 +15,13 @@ PRODUCT_PACKAGES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/ih8sn.conf:$(TARGET_COPY_OUT_SYSTEM)/etc/ih8sn.conf
 
+# MotCamera
+ifeq ($(TARGET_INCLUDE_MOTCAMERA), true)
+ifneq ($(filter eqe,$(LINEAGE_BUILD)),)
+$(call inherit-product-if-exists, vendor/motorola/eqe-motcamera/eqe-motcamera-vendor.mk)
+endif
+endif
+
 # Recovery
 ifeq ($(filter RM6785,$(LINEAGE_BUILD)),)
 PRODUCT_PRODUCT_PROPERTIES += \
